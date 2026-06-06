@@ -3,8 +3,8 @@
   "private": true,
   "packageManager": "pnpm@10.0.0",
   "scripts": {
-    "frontend:dev": "pnpm --dir frontend dev",
-    "frontend:build": "pnpm --dir frontend build",
-    "frontend:test": "pnpm --dir frontend test"
+    "frontend:dev": "corepack pnpm --dir frontend dev",
+    "frontend:build": "corepack pnpm --dir frontend build",
+    "frontend:test": "corepack pnpm --dir frontend test"
   }
 }
