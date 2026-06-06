@@ -3,6 +3,7 @@ import type {
   Factions,
   GameSessions,
   LlmRequests,
+  Personnel,
   Proposals,
   TurnSummaries,
 } from '../module_bindings/types';
@@ -55,6 +56,54 @@ function faction(overrides: Partial<Factions> & { slotKey: 'player_a' | 'player_
     readyForTurn: false,
     ...overrides,
   } as Factions;
+}
+
+function proposal({
+  id,
+  factionId,
+  ...overrides
+}: Partial<Proposals> & { id: number; factionId: number }): Proposals {
+  return {
+    id,
+    factionId,
+    turn: 3,
+    proposingPersonnelId: 81,
+    department: 'Fleet',
+    title: `Proposal ${id}`,
+    body: `Private proposal ${id}`,
+    resourceCost: 30,
+    confidence: 'HIGH',
+    status: 'pending',
+    decision: undefined,
+    ...overrides,
+  } as Proposals;
+}
+
+function personnel({
+  id,
+  factionId,
+  ...overrides
+}: Partial<Personnel> & { id: number; factionId: number }): Personnel {
+  return {
+    id,
+    factionId,
+    name: `Officer ${id}`,
+    role: 'Commander',
+    department: 'Fleet',
+    postingCityId: undefined,
+    competence: 80,
+    creativity: 70,
+    reliability: 75,
+    ambition: 45,
+    politicalSkill: 50,
+    communication: 60,
+    loyalty: 70,
+    autonomyTolerance: 65,
+    morale: 72,
+    burnout: 8,
+    salary: 12,
+    ...overrides,
+  } as Personnel;
 }
 
 describe('buildLiveSnapshot', () => {
@@ -129,6 +178,49 @@ describe('buildLiveSnapshot', () => {
       resources: { credits: 700, political_capital: 50 },
       visibility: 'ownFaction',
     });
+  });
+
+  it('keeps cross-browser private live rows scoped while shared world rows match', () => {
+    const factions = [
+      faction({ slotKey: 'player_a', ownerHex: identityHex, credits: 700 }),
+      faction({ slotKey: 'player_b', ownerHex: otherIdentityHex, credits: 200 }),
+    ];
+    const proposals = [
+      proposal({ id: 501, factionId: 101, title: 'Earth private order' }),
+      proposal({ id: 502, factionId: 102, title: 'Mars private order' }),
+    ];
+    const personnelRows = [
+      personnel({ id: 701, factionId: 101, name: 'Earth Officer' }),
+      personnel({ id: 702, factionId: 102, name: 'Mars Officer' }),
+    ];
+
+    const browserA = buildLiveSnapshot({
+      sessions: [session({ currentTurn: 4, turnPhase: 'orders' })],
+      factions,
+      proposals,
+      personnel: personnelRows,
+      turnSummaries: [],
+      llmRequests: [],
+      identity: identityHex,
+    });
+    const browserB = buildLiveSnapshot({
+      sessions: [session({ currentTurn: 4, turnPhase: 'orders' })],
+      factions,
+      proposals,
+      personnel: personnelRows,
+      turnSummaries: [],
+      llmRequests: [],
+      identity: otherIdentityHex,
+    });
+
+    expect(browserA.sessions).toEqual(browserB.sessions);
+    expect(browserA.publicFactions).toEqual(browserB.publicFactions);
+    expect(browserA.privateFactionStates?.map(row => row.factionId)).toEqual(['101']);
+    expect(browserB.privateFactionStates?.map(row => row.factionId)).toEqual(['102']);
+    expect(browserA.proposals?.map(row => row.title)).toEqual(['Earth private order']);
+    expect(browserB.proposals?.map(row => row.title)).toEqual(['Mars private order']);
+    expect(browserA.personnel?.map(row => row.name)).toEqual(['Earth Officer']);
+    expect(browserB.personnel?.map(row => row.name)).toEqual(['Mars Officer']);
   });
 
   it('joins proposals to their session via the parent faction so the store can route by sessionId', () => {

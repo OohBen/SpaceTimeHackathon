@@ -1472,14 +1472,14 @@ function seedLocalDemoSession(playerName: string, playerSlot: PlayerSlot): Sessi
       },
     ],
     privateFactionStates: [
-      ...Object.values(LOCAL_DEMO_SLOTS).map((slot) => ({
+      {
         sessionId: String(LOCAL_DEMO_SESSION_ID),
-        factionId: String(slot.factionId),
-        resources: slot.resources,
-        morale: slot.morale,
-        doctrine: slot.doctrine,
-        visibility: 'ownFaction' as const,
-      })),
+        factionId: String(selected.factionId),
+        resources: selected.resources,
+        morale: selected.morale,
+        doctrine: selected.doctrine,
+        visibility: 'ownFaction',
+      },
     ],
     factions: [
       {
