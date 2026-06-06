@@ -13,6 +13,8 @@ export const SESSION_SUBSCRIPTION_QUERIES = [
   'SELECT * FROM public_factions',
   'SELECT * FROM private_faction_state',
   'SELECT * FROM proposals',
+  'SELECT * FROM turn_summaries',
+  'SELECT * FROM llm_requests',
 ] as const;
 
 export interface SessionSubscriptionBridge {

@@ -5,8 +5,10 @@ import type { SpacetimeClient } from '../../spacetime/client';
 import type { ReducerCallDescriptor } from '../../spacetime/reducers';
 import {
   createSessionStore,
+  type LlmRequestRow,
   type ProposalRow,
   type SessionStore,
+  type TurnSummaryRow,
 } from '../../state/session-store';
 
 function seedStore(options: {
@@ -105,6 +107,44 @@ function seedDecisionStore(
     ],
   });
   return store;
+}
+
+function makeLlmRequest(overrides: Partial<LlmRequestRow> = {}): LlmRequestRow {
+  return {
+    id: 'llm-1',
+    sessionId: 'session-1',
+    factionId: '7',
+    requestType: 'proposals',
+    status: 'completed',
+    responseJson: '{"source":"deterministic_fallback","proposal_ids":[101]}',
+    error: null,
+    errorCode: null,
+    attemptCount: 1,
+    createdTurn: 4,
+    updatedTurn: 4,
+    ...overrides,
+  };
+}
+
+function makeTurnSummary(overrides: Partial<TurnSummaryRow> = {}): TurnSummaryRow {
+  return {
+    id: 'summary-1',
+    sessionId: '9001',
+    factionId: '7',
+    turn: 4,
+    summaryJson: JSON.stringify({
+      event: 'turn_summary',
+      faction_name: 'Earth Directorate',
+      proposal_outcomes: { approved: 1, rejected: 1, deferred: 0, auto_deferred: 0 },
+      simulation_outputs: {
+        narrative: 'Ceres shipyards stabilized the convoy route.',
+      },
+      victory: { result: 'ongoing' },
+    }),
+    acknowledged: false,
+    acknowledgedAt: null,
+    ...overrides,
+  };
 }
 
 function fakeClient(onCall: (call: ReducerCallDescriptor) => void): SpacetimeClient {
@@ -516,5 +556,96 @@ describe('Inbox component', () => {
     expect(screen.getByText(/auto-deferred by timeout/i)).toBeDefined();
     const controls = within(screen.getByRole('region', { name: /proposal decision controls/i }));
     expect(controls.getByRole('button', { name: /^defer$/i })).toBeDisabled();
+  });
+
+  it('lets the current player start deliberation and still renders delayed orchestrator fallback status', () => {
+    const calls: ReducerCallDescriptor[] = [];
+    const store = seedDecisionStore(
+      { status: 'unread', decision: null },
+      { credits: 40, metals: 15 },
+      { phase: 'deliberation' },
+    );
+    store.getState().actions.hydrateSubscription({
+      llmRequests: [
+        makeLlmRequest({
+          status: 'queued',
+          responseJson: null,
+          attemptCount: 0,
+        }),
+      ],
+    });
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient((call) => calls.push(call))}
+        selectedProposalId="101"
+      />,
+    );
+
+    expect(screen.getByTestId('orchestrator-status')).toHaveTextContent(/queued/i);
+    expect(screen.getByTestId('orchestrator-status')).toHaveTextContent(
+      /deterministic fallback keeps the command flow playable/i,
+    );
+    expect(screen.getByTestId('proposal-reader-101')).toHaveTextContent(/Expand Ceres refinery/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /generate proposals/i }));
+
+    expect(calls).toContainEqual({ reducer: 'run_deliberation', args: { factionId: 7 } });
+    expect(screen.getByTestId('deliberation-status')).toHaveTextContent(/requesting proposals/i);
+  });
+
+  it('runs resolution, renders current faction summary narrative, and acknowledges it', () => {
+    const calls: ReducerCallDescriptor[] = [];
+    const store = seedDecisionStore(
+      { status: 'approved', decision: '{"decision":"approved","allocation":25}' },
+      { credits: 40, metals: 15 },
+      { sessionId: '9001', phase: 'resolution' },
+    );
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient((call) => calls.push(call))}
+        selectedProposalId="101"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /run resolution/i }));
+
+    expect(calls).toContainEqual({ reducer: 'simulate_turn', args: { sessionId: 9001 } });
+    expect(screen.getByTestId('resolution-status')).toHaveTextContent(/running resolution/i);
+
+    act(() => {
+      store.getState().actions.completeReducerCall('simulateTurn:9001');
+      store.getState().actions.applySubscriptionEvent({
+        table: 'sessions',
+        op: 'upsert',
+        row: {
+          id: '9001',
+          code: 'SOL-001',
+          status: 'active',
+          currentTurn: 4,
+          phase: 'summary',
+        },
+      });
+      store.getState().actions.applySubscriptionEvent({
+        table: 'turnSummaries',
+        op: 'upsert',
+        row: makeTurnSummary(),
+      });
+    });
+
+    expect(screen.getByTestId('resolution-summary')).toHaveTextContent(
+      /Ceres shipyards stabilized the convoy route/i,
+    );
+    expect(screen.getByTestId('resolution-summary')).toHaveTextContent(/approved: 1/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /acknowledge resolution/i }));
+
+    expect(calls).toContainEqual({ reducer: 'ack_resolution', args: { factionId: 7 } });
+    expect(screen.getByTestId('resolution-ack-status')).toHaveTextContent(
+      /acknowledging resolution/i,
+    );
   });
 });

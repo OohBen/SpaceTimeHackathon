@@ -81,6 +81,30 @@ export interface ProposalRow {
   decision: string | null;
 }
 
+export interface TurnSummaryRow {
+  id: string;
+  sessionId: string;
+  factionId: string;
+  turn: number;
+  summaryJson: string;
+  acknowledged: boolean;
+  acknowledgedAt: string | null;
+}
+
+export interface LlmRequestRow {
+  id: string;
+  sessionId: string;
+  factionId: string;
+  requestType: string;
+  status: string;
+  responseJson: string | null;
+  error: string | null;
+  errorCode: string | null;
+  attemptCount: number;
+  createdTurn: number;
+  updatedTurn: number;
+}
+
 export type SubscriptionLoadStatus =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -94,6 +118,8 @@ export interface SubscriptionSnapshot {
   publicFactions?: PublicFactionRow[];
   privateFactionStates?: PrivateFactionStateRow[];
   proposals?: ProposalRow[];
+  turnSummaries?: TurnSummaryRow[];
+  llmRequests?: LlmRequestRow[];
 }
 
 export type SubscriptionEvent =
@@ -108,7 +134,11 @@ export type SubscriptionEvent =
   | { table: 'privateFactionStates'; op: 'upsert'; row: PrivateFactionStateRow }
   | { table: 'privateFactionStates'; op: 'delete'; sessionId: string; factionId: string }
   | { table: 'proposals'; op: 'upsert'; row: ProposalRow }
-  | { table: 'proposals'; op: 'delete'; id: string };
+  | { table: 'proposals'; op: 'delete'; id: string }
+  | { table: 'turnSummaries'; op: 'upsert'; row: TurnSummaryRow }
+  | { table: 'turnSummaries'; op: 'delete'; id: string }
+  | { table: 'llmRequests'; op: 'upsert'; row: LlmRequestRow }
+  | { table: 'llmRequests'; op: 'delete'; id: string };
 
 export interface OptimisticSessionUpdate {
   kind: 'session';
@@ -133,6 +163,8 @@ export interface SessionState {
   publicFactionsByKey: Record<string, PublicFactionRow>;
   privateFactionStateByKey: Record<string, PrivateFactionStateRow>;
   proposalsById: Record<string, ProposalRow>;
+  turnSummariesById: Record<string, TurnSummaryRow>;
+  llmRequestsById: Record<string, LlmRequestRow>;
   proposalsSubscription: SubscriptionLoadStatus;
   reducerCalls: Record<string, ReducerCallState>;
   actions: SessionStoreActions;
@@ -175,6 +207,8 @@ export function createSessionStore(): SessionStore {
     publicFactionsByKey: {},
     privateFactionStateByKey: {},
     proposalsById: {},
+    turnSummariesById: {},
+    llmRequestsById: {},
     proposalsSubscription: { status: 'idle' },
     reducerCalls: {},
     actions: {
@@ -201,6 +235,8 @@ export function createSessionStore(): SessionStore {
           const publicFactionsByKey = { ...state.publicFactionsByKey };
           const privateFactionStateByKey = { ...state.privateFactionStateByKey };
           const proposalsById = { ...state.proposalsById };
+          const turnSummariesById = { ...state.turnSummariesById };
+          const llmRequestsById = { ...state.llmRequestsById };
 
           for (const session of snapshot.sessions ?? []) {
             sessionsById[session.id] = session;
@@ -222,6 +258,12 @@ export function createSessionStore(): SessionStore {
           for (const proposal of snapshot.proposals ?? []) {
             proposalsById[proposal.id] = proposal;
           }
+          for (const summary of snapshot.turnSummaries ?? []) {
+            turnSummariesById[summary.id] = summary;
+          }
+          for (const request of snapshot.llmRequests ?? []) {
+            llmRequestsById[request.id] = request;
+          }
 
           const proposalsSubscription: SubscriptionLoadStatus =
             snapshot.proposals !== undefined ? { status: 'ready' } : state.proposalsSubscription;
@@ -233,6 +275,8 @@ export function createSessionStore(): SessionStore {
             publicFactionsByKey,
             privateFactionStateByKey,
             proposalsById,
+            turnSummariesById,
+            llmRequestsById,
             proposalsSubscription,
             activeSessionId: nextActiveSessionId(state.activeSessionId, sessionsById),
           };
@@ -379,6 +423,39 @@ export function selectProposalById(state: SessionState, id: string): ProposalRow
   return state.proposalsById[id] ?? null;
 }
 
+export function selectTurnSummaryForCurrentPlayer(state: SessionState): TurnSummaryRow | null {
+  const activeSession = selectActiveSession(state);
+  const slot = selectCurrentPlayerSlot(state);
+  if (!activeSession || !slot) return null;
+
+  return (
+    Object.values(state.turnSummariesById)
+      .filter(
+        (summary) =>
+          summary.sessionId === activeSession.id &&
+          summary.factionId === slot.factionId &&
+          summary.turn === activeSession.currentTurn,
+      )
+      .sort((a, b) => a.id.localeCompare(b.id))[0] ?? null
+  );
+}
+
+export function selectLlmRequestsForCurrentPlayer(state: SessionState): LlmRequestRow[] {
+  const activeSessionId = state.activeSessionId;
+  const slot = selectCurrentPlayerSlot(state);
+  if (!activeSessionId || !slot) return [];
+
+  return Object.values(state.llmRequestsById)
+    .filter(
+      (request) =>
+        request.sessionId === activeSessionId && request.factionId === slot.factionId,
+    )
+    .sort((a, b) => {
+      if (a.updatedTurn !== b.updatedTurn) return b.updatedTurn - a.updatedTurn;
+      return b.id.localeCompare(a.id);
+    });
+}
+
 export function selectInboxProposalsForCurrentPlayer(state: SessionState): ProposalRow[] {
   const activeSessionId = state.activeSessionId;
   const slot = selectCurrentPlayerSlot(state);
@@ -452,6 +529,26 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
         event.row;
     }
     return { privateFactionStateByKey };
+  }
+
+  if (event.table === 'turnSummaries') {
+    const turnSummariesById = { ...state.turnSummariesById };
+    if (event.op === 'delete') {
+      delete turnSummariesById[event.id];
+    } else {
+      turnSummariesById[event.row.id] = event.row;
+    }
+    return { turnSummariesById };
+  }
+
+  if (event.table === 'llmRequests') {
+    const llmRequestsById = { ...state.llmRequestsById };
+    if (event.op === 'delete') {
+      delete llmRequestsById[event.id];
+    } else {
+      llmRequestsById[event.row.id] = event.row;
+    }
+    return { llmRequestsById };
   }
 
   const proposalsById = { ...state.proposalsById };

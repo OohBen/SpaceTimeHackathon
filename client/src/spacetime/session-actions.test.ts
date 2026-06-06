@@ -120,4 +120,38 @@ describe('session reducer actions', () => {
     expect(selectReducerCall(store.getState(), 'submitTurn:7')?.status).toBe('loading');
     expect(selectReducerCall(store.getState(), 'expireTurn:9001')?.status).toBe('loading');
   });
+
+  it('builds typed deliberation, simulation, and acknowledgement reducer descriptors', () => {
+    expect(reducerRegistry.runDeliberation({ factionId: 7 })).toEqual({
+      reducer: 'run_deliberation',
+      args: { factionId: 7 },
+    });
+    expect(reducerRegistry.simulateTurn({ sessionId: 9001 })).toEqual({
+      reducer: 'simulate_turn',
+      args: { sessionId: 9001 },
+    });
+    expect(reducerRegistry.ackResolution({ factionId: 7 })).toEqual({
+      reducer: 'ack_resolution',
+      args: { factionId: 7 },
+    });
+  });
+
+  it('dispatches deliberation, simulation, and acknowledgement with scoped reducer state keys', () => {
+    const calls: ReducerCallDescriptor[] = [];
+    const store = createSessionStore();
+    const client = fakeClient((call) => calls.push(call));
+
+    sessionActions.runDeliberationAction(store, client, { factionId: 7 });
+    sessionActions.simulateTurnAction(store, client, { sessionId: 9001 });
+    sessionActions.ackResolutionAction(store, client, { factionId: 7 });
+
+    expect(calls).toEqual([
+      { reducer: 'run_deliberation', args: { factionId: 7 } },
+      { reducer: 'simulate_turn', args: { sessionId: 9001 } },
+      { reducer: 'ack_resolution', args: { factionId: 7 } },
+    ]);
+    expect(selectReducerCall(store.getState(), 'runDeliberation:7')?.status).toBe('loading');
+    expect(selectReducerCall(store.getState(), 'simulateTurn:9001')?.status).toBe('loading');
+    expect(selectReducerCall(store.getState(), 'ackResolution:7')?.status).toBe('loading');
+  });
 });

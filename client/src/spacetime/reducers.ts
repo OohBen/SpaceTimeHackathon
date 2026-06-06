@@ -29,6 +29,18 @@ export interface ExpireTurnArgs {
   sessionId: number;
 }
 
+export interface RunDeliberationArgs {
+  factionId: number;
+}
+
+export interface SimulateTurnArgs {
+  sessionId: number;
+}
+
+export interface AckResolutionArgs {
+  factionId: number;
+}
+
 export const reducerRegistry = {
   createSession(args: CreateSessionArgs): ReducerCallDescriptor<CreateSessionArgs> {
     return { reducer: 'create_session', args };
@@ -50,5 +62,17 @@ export const reducerRegistry = {
 
   expireTurn(args: ExpireTurnArgs): ReducerCallDescriptor<ExpireTurnArgs> {
     return { reducer: 'expire_turn', args };
+  },
+
+  runDeliberation(args: RunDeliberationArgs): ReducerCallDescriptor<RunDeliberationArgs> {
+    return { reducer: 'run_deliberation', args };
+  },
+
+  simulateTurn(args: SimulateTurnArgs): ReducerCallDescriptor<SimulateTurnArgs> {
+    return { reducer: 'simulate_turn', args };
+  },
+
+  ackResolution(args: AckResolutionArgs): ReducerCallDescriptor<AckResolutionArgs> {
+    return { reducer: 'ack_resolution', args };
   },
 } as const;

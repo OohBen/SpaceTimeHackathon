@@ -10,6 +10,8 @@ import {
   selectProposalsSubscriptionStatus,
   selectPublicGameState,
   selectReducerCall,
+  selectLlmRequestsForCurrentPlayer,
+  selectTurnSummaryForCurrentPlayer,
 } from './session-store';
 
 describe('session store', () => {
@@ -324,5 +326,81 @@ describe('session store', () => {
       id: 'prop-evt',
     });
     expect(selectInboxProposalsForCurrentPlayer(store.getState())).toHaveLength(0);
+  });
+
+  it('hydrates LLM request audits and current-player turn summaries', () => {
+    const store = createSessionStore();
+    store.getState().actions.setConnection({
+      status: 'connected',
+      identity: 'identity-player-1',
+    });
+    store.getState().actions.hydrateSubscription({
+      sessions: [
+        {
+          id: 'session-summary',
+          code: 'SOL-summary',
+          status: 'active',
+          currentTurn: 8,
+          phase: 'summary',
+        },
+      ],
+      playerSlots: [
+        {
+          sessionId: 'session-summary',
+          slot: 1,
+          identity: 'identity-player-1',
+          factionId: '7',
+          factionName: 'Earth Directorate',
+          playerName: 'Atlas',
+          occupied: true,
+          visibility: 'own',
+        },
+      ],
+      turnSummaries: [
+        {
+          id: 'summary-1',
+          sessionId: 'session-summary',
+          factionId: '7',
+          turn: 8,
+          summaryJson: '{"event":"turn_summary","proposal_outcomes":{"approved":1}}',
+          acknowledged: false,
+          acknowledgedAt: null,
+        },
+      ],
+      llmRequests: [
+        {
+          id: 'llm-1',
+          sessionId: 'session-summary',
+          factionId: '7',
+          requestType: 'proposals',
+          status: 'completed',
+          responseJson: '{"source":"deterministic_fallback","proposal_ids":[101]}',
+          error: null,
+          errorCode: null,
+          attemptCount: 1,
+          createdTurn: 8,
+          updatedTurn: 8,
+        },
+      ],
+    });
+
+    expect(selectTurnSummaryForCurrentPlayer(store.getState())?.id).toBe('summary-1');
+    expect(selectLlmRequestsForCurrentPlayer(store.getState())).toHaveLength(1);
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'turnSummaries',
+      op: 'upsert',
+      row: {
+        id: 'summary-1',
+        sessionId: 'session-summary',
+        factionId: '7',
+        turn: 8,
+        summaryJson: '{"event":"turn_summary","proposal_outcomes":{"approved":2}}',
+        acknowledged: true,
+        acknowledgedAt: '2026-06-06T12:00:00Z',
+      },
+    });
+
+    expect(selectTurnSummaryForCurrentPlayer(store.getState())?.acknowledged).toBe(true);
   });
 });
