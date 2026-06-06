@@ -33,8 +33,8 @@ describe('foundational schema', () => {
     });
   }
 
-  it('module.ts imports from schema', () => {
-    const src = readFileSync(resolve(serverRoot, 'src/module.ts'), 'utf8');
+  it('CLI entrypoint imports from schema', () => {
+    const src = readFileSync(resolve(serverRoot, 'src/index.ts'), 'utf8');
     expect(src).toMatch(/from ['"]\.\/schema/);
   });
 });
