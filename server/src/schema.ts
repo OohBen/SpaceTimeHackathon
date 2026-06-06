@@ -283,4 +283,12 @@ export const tables = {
       updated_turn: t.u32(),
     }
   ),
+
+  module_settings: table(
+    { public: true },
+    {
+      id: t.u32().primaryKey(),
+      deliberation_mode: t.string(),
+    }
+  ),
 };

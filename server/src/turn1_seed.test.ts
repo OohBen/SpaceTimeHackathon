@@ -219,6 +219,10 @@ describe('Turn 1 deterministic seed', () => {
     expect(plan[0]).toEqual({ table: 'game_sessions', rows: turn1Seed.game_sessions });
     expect(plan[1]).toEqual({ table: 'factions', rows: turn1Seed.factions });
     expect(plan[3]).toEqual({ table: 'cities', rows: turn1Seed.cities });
-    expect(plan.at(-1)).toEqual({ table: 'llm_requests', rows: turn1Seed.llm_requests });
+    expect(plan.at(-1)).toEqual({ table: 'module_settings', rows: turn1Seed.module_settings });
+    expect(plan.find((batch) => batch.table === 'llm_requests')).toEqual({
+      table: 'llm_requests',
+      rows: turn1Seed.llm_requests,
+    });
   });
 });
