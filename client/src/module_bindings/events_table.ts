@@ -17,4 +17,5 @@ export default __t.row({
   turn: __t.u32(),
   eventType: __t.string().name("event_type"),
   payload: __t.string(),
+  narrativeJson: __t.option(__t.string()).name("narrative_json"),
 });

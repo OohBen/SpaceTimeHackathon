@@ -17,6 +17,7 @@ export default __t.row({
   fromPersonnelId: __t.u32().name("from_personnel_id"),
   subject: __t.string(),
   body: __t.string(),
+  narrativeJson: __t.option(__t.string()).name("narrative_json"),
   requiresDecision: __t.bool().name("requires_decision"),
   status: __t.string(),
 });

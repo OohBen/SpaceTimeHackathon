@@ -118,6 +118,26 @@ export type {
   FixtureScenario,
 } from "./fixture_llm_provider.js";
 export {
+  NARRATIVE_CONTENT_LIMITS,
+  NARRATIVE_PAYLOAD_SCHEMA_VERSION,
+  NARRATIVE_REQUEST_CONTRACTS,
+  NARRATIVE_REQUEST_TYPES,
+  buildFallbackNarrativePayload,
+  buildNarrativePrompt,
+  validateNarrativePayload,
+} from "./narrative_contract.js";
+export type {
+  NarrativePayload,
+  NarrativePayloadMetadata,
+  NarrativeRequestContract,
+  NarrativeRequestType,
+  NarrativeSource,
+  NarrativeSurface,
+  NarrativeValidationFailure,
+  NarrativeValidationOutcome,
+  NarrativeValidationSuccess,
+} from "./narrative_contract.js";
+export {
   PROPOSAL_PROMPT_LIMITS,
   buildProposalPrompt,
 } from "./proposal_prompt.js";

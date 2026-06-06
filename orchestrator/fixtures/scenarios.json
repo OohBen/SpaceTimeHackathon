@@ -59,39 +59,80 @@
       "request_type": "inbox",
       "scenario_id": "default",
       "response": {
-        "items": [
-          {
-            "body": "Fixture inbox: Executive officer reports steady supply and an approved logistics initiative. No decision required this turn.",
-            "requires_decision": false,
-            "subject": "Daily Operations Brief"
-          }
-        ],
-        "schema_version": 1
+        "authoritative": false,
+        "display_only": true,
+        "headline": "Daily Operations Brief",
+        "metadata": {
+          "faction_id": 1,
+          "privacy_scope": "own_faction",
+          "session_id": 1,
+          "turn": 1
+        },
+        "prose": "Fixture inbox: Executive officer reports steady supply and an approved logistics initiative. No decision required this turn.",
+        "request_type": "inbox",
+        "schema_version": 1,
+        "source": "fixture",
+        "surface": "inbox"
       }
     },
     {
       "request_type": "event_narrative",
       "scenario_id": "default",
       "response": {
-        "narrative": "Fixture narrative: A quiet shift over the Belt. Drone patrols complete their rotation without incident. The newsroom prepares a standard briefing for the commander.",
-        "schema_version": 1
+        "authoritative": false,
+        "display_only": true,
+        "headline": "Resolution Pulse",
+        "metadata": {
+          "faction_id": 1,
+          "privacy_scope": "own_faction",
+          "session_id": 1,
+          "turn": 1
+        },
+        "prose": "Fixture narrative: A quiet shift over the Belt. Drone patrols complete their rotation without incident. The newsroom prepares a standard briefing for the commander.",
+        "request_type": "event_narrative",
+        "schema_version": 1,
+        "source": "fixture",
+        "surface": "resolution"
       }
     },
     {
       "request_type": "event_narrative",
       "scenario_id": "colony-arrival",
       "response": {
-        "narrative": "Fixture narrative: Your colony ship completes docking at Callisto. Ground crews report nominal life-support and begin establishment-phase construction immediately.",
-        "schema_version": 1
+        "authoritative": false,
+        "display_only": true,
+        "headline": "Colony Arrival",
+        "metadata": {
+          "faction_id": 1,
+          "privacy_scope": "own_faction",
+          "session_id": 1,
+          "turn": 1
+        },
+        "prose": "Fixture narrative: Your colony ship completes docking at Callisto. Ground crews report nominal life-support and begin establishment-phase construction immediately.",
+        "request_type": "event_narrative",
+        "schema_version": 1,
+        "source": "fixture",
+        "surface": "resolution"
       }
     },
     {
       "request_type": "resume_briefing",
       "scenario_id": "default",
       "response": {
-        "headline": "Resume Briefing — Standby",
-        "summary": "Fixture resume: Last session ended on turn 5 with both colonies stable. Pending proposals are queued for review.",
-        "schema_version": 1
+        "authoritative": false,
+        "display_only": true,
+        "headline": "Resume Briefing - Standby",
+        "metadata": {
+          "faction_id": 1,
+          "privacy_scope": "own_faction",
+          "session_id": 1,
+          "turn": 1
+        },
+        "prose": "Fixture resume: Last session ended on turn 5 with both colonies stable. Pending proposals are queued for review.",
+        "request_type": "resume_briefing",
+        "schema_version": 1,
+        "source": "fixture",
+        "surface": "resume"
       }
     }
   ]

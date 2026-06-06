@@ -7,6 +7,7 @@ import {
   stableContextHash,
   stableJson,
 } from "./llm_mode_provider.js";
+import { buildFallbackNarrativePayload } from "./narrative_contract.js";
 
 const DEPARTMENTS = ["Executive", "Industry", "Research", "Defense"] as const;
 const CONFIDENCES = ["HIGH", "MEDIUM", "LOW"] as const;
@@ -50,11 +51,11 @@ function buildResponsePayload(request: LlmModeRequest, seed: number): unknown {
     case "proposals":
       return buildMockProposals(request, seed);
     case "inbox":
-      return buildMockInbox(request, seed);
+      return buildFallbackNarrativePayload(request, "mock");
     case "event_narrative":
-      return buildMockEventNarrative(request, seed);
+      return buildFallbackNarrativePayload(request, "mock");
     case "resume_briefing":
-      return buildMockResumeBriefing(request, seed);
+      return buildFallbackNarrativePayload(request, "mock");
   }
 }
 
@@ -82,50 +83,6 @@ function buildMockProposals(request: LlmModeRequest, seed: number): unknown {
   return {
     proposals,
     schema_version: 1,
-  };
-}
-
-function buildMockInbox(request: LlmModeRequest, seed: number): unknown {
-  return {
-    items: [
-      {
-        body: [
-          `Mock briefing for faction ${request.faction_id} on turn ${request.turn}.`,
-          `Reference seed ${seed}.`,
-        ].join(" "),
-        requires_decision: false,
-        subject: `Turn ${request.turn} Briefing`,
-      },
-    ],
-    schema_version: 1,
-  };
-}
-
-function buildMockEventNarrative(
-  request: LlmModeRequest,
-  seed: number
-): unknown {
-  return {
-    narrative: [
-      `Mock narrative beat for faction ${request.faction_id}`,
-      `on turn ${request.turn}.`,
-      `Reference seed ${seed}.`,
-    ].join(" "),
-    schema_version: 1,
-  };
-}
-
-function buildMockResumeBriefing(
-  request: LlmModeRequest,
-  seed: number
-): unknown {
-  return {
-    headline: `Resume briefing — turn ${request.turn}`,
-    schema_version: 1,
-    summary: [
-      `Mock resume briefing for faction ${request.faction_id}.`,
-      `Reference seed ${seed}.`,
-    ].join(" "),
   };
 }
 
