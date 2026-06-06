@@ -13,6 +13,10 @@ import {
 
 function seedStore(options: {
   factionId?: string;
+  factionName?: string;
+  identity?: string;
+  playerName?: string;
+  slot?: number;
   resources?: Record<string, number>;
   sessionId?: string;
   phase?: string;
@@ -25,11 +29,12 @@ function seedStore(options: {
   }>;
 } = {}): SessionStore {
   const factionId = options.factionId ?? 'earth';
+  const identity = options.identity ?? 'identity-player-1';
   const sessionId = options.sessionId ?? 'session-1';
   const store = createSessionStore();
   store.getState().actions.setConnection({
     status: 'connected',
-    identity: 'identity-player-1',
+    identity,
   });
   store.getState().actions.hydrateSubscription({
     sessions: [
@@ -44,11 +49,11 @@ function seedStore(options: {
     playerSlots: [
       {
         sessionId,
-        slot: 1,
-        identity: 'identity-player-1',
+        slot: options.slot ?? 1,
+        identity,
         factionId,
-        factionName: 'Earth Directorate',
-        playerName: 'Atlas',
+        factionName: options.factionName ?? 'Earth Directorate',
+        playerName: options.playerName ?? 'Atlas',
         occupied: true,
         visibility: 'own',
       },
@@ -409,6 +414,207 @@ describe('Inbox component', () => {
     expect(controls.getByRole('button', { name: /defer/i })).toBeDisabled();
   });
 
+  it('does not render a controlled selected proposal outside the current faction inbox', () => {
+    const store = seedDecisionStore();
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'proposals',
+      op: 'upsert',
+      row: makeProposal({
+        id: '303',
+        sessionId: 'session-1',
+        factionId: 'mars',
+        title: 'Mars private strike',
+        body: 'Opponent-only private action.',
+      }),
+    });
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient(() => undefined)}
+        selectedProposalId="303"
+      />,
+    );
+
+    expect(screen.queryByText(/Mars private strike/i)).toBeNull();
+    expect(screen.queryByText(/opponent-only private action/i)).toBeNull();
+    expect(screen.getByTestId('proposal-reader-empty')).toHaveTextContent(
+      /select a proposal/i,
+    );
+  });
+
+  it('lets two browser stores decide and submit the same match without shared reducer state', () => {
+    const callsA: ReducerCallDescriptor[] = [];
+    const callsB: ReducerCallDescriptor[] = [];
+    const publicFactions = [
+      {
+        id: '202',
+        sessionId: '9001',
+        name: 'Solar Republic',
+        controlScore: 52,
+        readyForTurn: false,
+      },
+      {
+        id: '303',
+        sessionId: '9001',
+        name: 'Martian League',
+        controlScore: 38,
+        readyForTurn: false,
+      },
+    ];
+    const browserA = seedStore({
+      sessionId: '9001',
+      phase: 'decision',
+      factionId: '202',
+      factionName: 'Solar Republic',
+      identity: 'demo-browser-a',
+      playerName: 'Browser A Commander',
+      resources: { credits: 150, minerals: 30 },
+      publicFactions,
+    });
+    const browserB = seedStore({
+      sessionId: '9001',
+      phase: 'decision',
+      factionId: '303',
+      factionName: 'Martian League',
+      identity: 'demo-browser-b',
+      playerName: 'Browser B Commander',
+      slot: 2,
+      resources: { credits: 90, minerals: 42 },
+      publicFactions,
+    });
+
+    browserA.getState().actions.hydrateSubscription({
+      proposals: [
+        makeProposal({
+          id: '9701',
+          sessionId: '9001',
+          factionId: '202',
+          title: 'Solar orbital yard expansion',
+          resourceCost: 45,
+          status: 'unread',
+        }),
+        makeProposal({
+          id: '9801',
+          sessionId: '9001',
+          factionId: '303',
+          title: 'Mars dust lane interdiction',
+          resourceCost: 35,
+          status: 'unread',
+        }),
+      ],
+    });
+    browserB.getState().actions.hydrateSubscription({
+      proposals: [
+        makeProposal({
+          id: '9701',
+          sessionId: '9001',
+          factionId: '202',
+          title: 'Solar orbital yard expansion',
+          resourceCost: 45,
+          status: 'unread',
+        }),
+        makeProposal({
+          id: '9801',
+          sessionId: '9001',
+          factionId: '303',
+          title: 'Mars dust lane interdiction',
+          resourceCost: 35,
+          status: 'unread',
+        }),
+      ],
+    });
+
+    render(
+      <div>
+        <section aria-label="Browser A inbox">
+          <Inbox
+            store={browserA}
+            client={fakeClient((call) => callsA.push(call))}
+            selectedProposalId="9701"
+          />
+        </section>
+        <section aria-label="Browser B inbox">
+          <Inbox
+            store={browserB}
+            client={fakeClient((call) => callsB.push(call))}
+            selectedProposalId="9801"
+          />
+        </section>
+      </div>,
+    );
+
+    const paneA = within(screen.getByLabelText('Browser A inbox'));
+    const paneB = within(screen.getByLabelText('Browser B inbox'));
+    expect(paneA.getAllByText(/Solar orbital yard expansion/i).length).toBeGreaterThan(0);
+    expect(paneA.queryByText(/Mars dust lane interdiction/i)).toBeNull();
+    expect(paneB.getAllByText(/Mars dust lane interdiction/i).length).toBeGreaterThan(0);
+    expect(paneB.queryByText(/Solar orbital yard expansion/i)).toBeNull();
+
+    fireEvent.click(paneA.getByRole('button', { name: /approve/i }));
+    fireEvent.click(paneB.getByRole('button', { name: /reject/i }));
+
+    expect(callsA).toEqual([
+      {
+        reducer: 'commander_decision',
+        args: {
+          factionId: 202,
+          proposalId: 9701,
+          decision: 'approved',
+          allocation: 45,
+        },
+      },
+    ]);
+    expect(callsB).toEqual([
+      {
+        reducer: 'commander_decision',
+        args: {
+          factionId: 303,
+          proposalId: 9801,
+          decision: 'rejected',
+          allocation: 0,
+        },
+      },
+    ]);
+
+    act(() => {
+      browserA.getState().actions.applySubscriptionEvent({
+        table: 'proposals',
+        op: 'upsert',
+        row: makeProposal({
+          id: '9701',
+          sessionId: '9001',
+          factionId: '202',
+          title: 'Solar orbital yard expansion',
+          resourceCost: 45,
+          status: 'approved',
+          decision: '{"decision":"approved","allocation":45}',
+        }),
+      });
+      browserB.getState().actions.applySubscriptionEvent({
+        table: 'proposals',
+        op: 'upsert',
+        row: makeProposal({
+          id: '9801',
+          sessionId: '9001',
+          factionId: '303',
+          title: 'Mars dust lane interdiction',
+          resourceCost: 35,
+          status: 'rejected',
+          decision: '{"decision":"rejected","allocation":0}',
+        }),
+      });
+    });
+
+    fireEvent.click(paneA.getByRole('button', { name: /submit turn/i }));
+    expect(callsA).toContainEqual({ reducer: 'submit_turn', args: { factionId: 202 } });
+    expect(paneB.getByRole('button', { name: /submit turn/i })).toBeEnabled();
+
+    fireEvent.click(paneB.getByRole('button', { name: /submit turn/i }));
+    expect(callsB).toContainEqual({ reducer: 'submit_turn', args: { factionId: 303 } });
+  });
+
   it('enables turn submit only after current player decisions are resolved', () => {
     const calls: ReducerCallDescriptor[] = [];
     const store = seedDecisionStore(
@@ -647,5 +853,107 @@ describe('Inbox component', () => {
     expect(screen.getByTestId('resolution-ack-status')).toHaveTextContent(
       /acknowledging resolution/i,
     );
+  });
+
+  it('renders the same authoritative resolution outcome for both browser stores', () => {
+    const callsA: ReducerCallDescriptor[] = [];
+    const callsB: ReducerCallDescriptor[] = [];
+    const summaryJson = JSON.stringify({
+      event: 'turn_summary',
+      proposal_outcomes: { approved: 1, rejected: 1 },
+      simulation_outputs: {
+        narrative: 'Authoritative Callisto route outcome synced to both clients.',
+      },
+    });
+    const publicFactions = [
+      {
+        id: '202',
+        sessionId: '9001',
+        name: 'Solar Republic',
+        controlScore: 54,
+        readyForTurn: true,
+      },
+      {
+        id: '303',
+        sessionId: '9001',
+        name: 'Martian League',
+        controlScore: 41,
+        readyForTurn: true,
+      },
+    ];
+    const browserA = seedStore({
+      sessionId: '9001',
+      phase: 'summary',
+      factionId: '202',
+      factionName: 'Solar Republic',
+      identity: 'demo-browser-a',
+      playerName: 'Browser A Commander',
+      resources: { credits: 105 },
+      publicFactions,
+    });
+    const browserB = seedStore({
+      sessionId: '9001',
+      phase: 'summary',
+      factionId: '303',
+      factionName: 'Martian League',
+      identity: 'demo-browser-b',
+      playerName: 'Browser B Commander',
+      slot: 2,
+      resources: { credits: 55 },
+      publicFactions,
+    });
+
+    browserA.getState().actions.hydrateSubscription({
+      proposals: [],
+      turnSummaries: [
+        makeTurnSummary({
+          id: 'summary-202',
+          sessionId: '9001',
+          factionId: '202',
+          turn: 4,
+          summaryJson,
+        }),
+      ],
+    });
+    browserB.getState().actions.hydrateSubscription({
+      proposals: [],
+      turnSummaries: [
+        makeTurnSummary({
+          id: 'summary-303',
+          sessionId: '9001',
+          factionId: '303',
+          turn: 4,
+          summaryJson,
+        }),
+      ],
+    });
+
+    render(
+      <div>
+        <section aria-label="Browser A resolution">
+          <Inbox store={browserA} client={fakeClient((call) => callsA.push(call))} />
+        </section>
+        <section aria-label="Browser B resolution">
+          <Inbox store={browserB} client={fakeClient((call) => callsB.push(call))} />
+        </section>
+      </div>,
+    );
+
+    const paneA = within(screen.getByLabelText('Browser A resolution'));
+    const paneB = within(screen.getByLabelText('Browser B resolution'));
+    expect(paneA.getByTestId('resolution-summary')).toHaveTextContent(
+      /Authoritative Callisto route outcome synced to both clients/i,
+    );
+    expect(paneB.getByTestId('resolution-summary')).toHaveTextContent(
+      /Authoritative Callisto route outcome synced to both clients/i,
+    );
+    expect(paneA.getByTestId('resolution-summary')).toHaveTextContent(/approved: 1/i);
+    expect(paneB.getByTestId('resolution-summary')).toHaveTextContent(/rejected: 1/i);
+
+    fireEvent.click(paneA.getByRole('button', { name: /acknowledge resolution/i }));
+    fireEvent.click(paneB.getByRole('button', { name: /acknowledge resolution/i }));
+
+    expect(callsA).toContainEqual({ reducer: 'ack_resolution', args: { factionId: 202 } });
+    expect(callsB).toContainEqual({ reducer: 'ack_resolution', args: { factionId: 303 } });
   });
 });

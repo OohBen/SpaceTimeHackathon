@@ -558,6 +558,36 @@ export function createSessionStore(): SessionStore {
 
 export const sessionStore = createSessionStore();
 
+export function resetSessionStoreData(store: SessionStore = sessionStore): void {
+  store.setState({
+    connection: {
+      ...initialConnection,
+      diagnostics: { ...initialConnection.diagnostics },
+    },
+    activeSessionId: null,
+    sessionsById: {},
+    playerSlotsByKey: {},
+    publicGameStateBySessionId: {},
+    privateFactionStateByKey: {},
+    publicFactionsByKey: {},
+    worldBodiesById: {},
+    publicFactionsById: {},
+    publicCitiesById: {},
+    publicFleetsById: {},
+    publicColonyShipsById: {},
+    publicEventsById: {},
+    proposalsById: {},
+    proposalsSubscription: { status: 'idle' },
+    factionsById: {},
+    personnelById: {},
+    intelligenceRecordsById: {},
+    eventsById: {},
+    turnSummariesById: {},
+    llmRequestsById: {},
+    reducerCalls: {},
+  });
+}
+
 export function selectConnectionStatus(state: SessionState): ConnectionStatus {
   return state.connection.status;
 }

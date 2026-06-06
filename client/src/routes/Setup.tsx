@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { SessionBackend } from '../session/spacetime';
-import type { PlayerSlot, SessionMode, SetupState } from './types';
+import type { PlayerSlot, SessionMode, SetupState, SlotChoice } from './types';
 
 interface SetupProps {
   mode: SessionMode;
@@ -15,6 +15,23 @@ const MODE_LABELS: Record<SessionMode, string> = {
   demo: 'Local Demo',
 };
 
+const DEMO_SLOT_CHOICES: SlotChoice[] = [
+  {
+    key: 'player_a',
+    label: 'P1',
+    factionName: 'Solar Republic',
+    status: 'available',
+    recovery: 'Browser A enters as the Solar Republic commander.',
+  },
+  {
+    key: 'player_b',
+    label: 'P2',
+    factionName: 'Martian League',
+    status: 'available',
+    recovery: 'Browser B enters as the Martian League commander.',
+  },
+];
+
 export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
   const firstSessionId = backend?.getSessionChoices()[0]?.id.toString() ?? '';
   const [playerName, setPlayerName] = useState('');
@@ -24,7 +41,12 @@ export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedSessionId = sessionId.trim() === '' ? undefined : Number(sessionId);
-  const slotChoices = mode === 'resume' ? backend?.getSlotChoices(selectedSessionId) ?? [] : [];
+  const slotChoices =
+    mode === 'resume'
+      ? backend?.getSlotChoices(selectedSessionId) ?? []
+      : mode === 'demo'
+        ? DEMO_SLOT_CHOICES
+        : [];
   const selectedSlot = slotChoices.find(slot => slot.key === playerSlot);
 
   async function handleConfirm() {
@@ -40,6 +62,9 @@ export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
         state.sessionId = Number(sessionId);
         state.playerSlot = playerSlot;
       }
+      if (mode === 'demo') {
+        state.playerSlot = playerSlot;
+      }
       await onSubmit(state);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -53,7 +78,8 @@ export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
     (backend?.isConnected ?? true) &&
     playerName.trim() !== '' &&
     (mode !== 'resume' ||
-      (sessionId.trim() !== '' && selectedSlot?.status !== 'occupied'));
+      (sessionId.trim() !== '' && selectedSlot?.status !== 'occupied')) &&
+    (mode !== 'demo' || selectedSlot?.status !== 'occupied');
 
   return (
     <div>
@@ -93,34 +119,41 @@ export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
         </div>
       )}
 
-      {mode === 'resume' && (
+      {(mode === 'resume' || mode === 'demo') && (
         <>
-          <div>
-            <label htmlFor="session-id">Session ID</label>
-            <input
-              id="session-id"
-              type="number"
-              value={sessionId}
-              onChange={e => setSessionId(e.target.value)}
-              disabled={loading}
-            />
-          </div>
+          {mode === 'resume' && (
+            <div>
+              <label htmlFor="session-id">Session ID</label>
+              <input
+                id="session-id"
+                type="number"
+                value={sessionId}
+                onChange={e => setSessionId(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+          )}
           <div>
             <p id="slot-picker-label">Player Slot</p>
             <div aria-labelledby="slot-picker-label">
-              {slotChoices.map(slot => (
-                <div key={slot.key}>
-                  <button
-                    type="button"
-                    aria-pressed={playerSlot === slot.key}
-                    disabled={loading || slot.status === 'occupied'}
-                    onClick={() => setPlayerSlot(slot.key)}
-                  >
-                    {slot.label} {slot.factionName} {slot.status}
-                  </button>
-                  <p>{slot.recovery}</p>
-                </div>
-              ))}
+              {slotChoices.map(slot => {
+                const demoBrowser = slot.key === 'player_a' ? 'Browser A' : 'Browser B';
+                const prefix = mode === 'demo' ? `${demoBrowser} ` : '';
+
+                return (
+                  <div key={slot.key}>
+                    <button
+                      type="button"
+                      aria-pressed={playerSlot === slot.key}
+                      disabled={loading || slot.status === 'occupied'}
+                      onClick={() => setPlayerSlot(slot.key)}
+                    >
+                      {prefix}{slot.label} {slot.factionName} {slot.status}
+                    </button>
+                    <p>{slot.recovery}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>
