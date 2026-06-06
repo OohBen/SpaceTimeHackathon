@@ -8,8 +8,11 @@ describe('session subscription wiring', () => {
     const subscribedQueries: string[][] = [];
     const client: SpacetimeClient = {
       connect: () => ({ disconnect: () => undefined }),
+      reconnect: () => ({ disconnect: () => undefined }),
+      disconnect: () => undefined,
       subscribe: (queries) => subscribedQueries.push(queries),
       callReducer: () => undefined,
+      diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
     };
     const store = createSessionStore();
 
@@ -35,8 +38,11 @@ describe('session subscription wiring', () => {
   it('routes individual subscription events through the same store bridge', () => {
     const client: SpacetimeClient = {
       connect: () => ({ disconnect: () => undefined }),
+      reconnect: () => ({ disconnect: () => undefined }),
+      disconnect: () => undefined,
       subscribe: () => undefined,
       callReducer: () => undefined,
+      diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
     };
     const store = createSessionStore();
     const bridge = wireSessionSubscriptions(store, client);

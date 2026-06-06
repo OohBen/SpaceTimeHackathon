@@ -7,8 +7,11 @@ import { createSessionAction, joinSessionAction } from './session-actions';
 function fakeClient(onCall: (call: ReducerCallDescriptor) => void): SpacetimeClient {
   return {
     connect: () => ({ disconnect: () => undefined }),
+    reconnect: () => ({ disconnect: () => undefined }),
+    disconnect: () => undefined,
     subscribe: () => undefined,
     callReducer: onCall,
+    diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
   };
 }
 
