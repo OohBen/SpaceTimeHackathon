@@ -42,6 +42,15 @@ function resetSessionStore() {
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
     privateFactionStateByKey: {},
+    publicFactionsByKey: {},
+    worldBodiesById: {},
+    publicFactionsById: {},
+    publicCitiesById: {},
+    publicFleetsById: {},
+    publicColonyShipsById: {},
+    publicEventsById: {},
+    proposalsById: {},
+    proposalsSubscription: { status: 'idle' },
     factionsById: {},
     personnelById: {},
     intelligenceRecordsById: {},
@@ -357,7 +366,7 @@ describe('Command Center shell', () => {
 
     it('shows placeholder content for panels not yet implemented', () => {
       enterStoredGameContext();
-      usePanelStore.getState().setPanel('map');
+      usePanelStore.getState().setPanel('strategic');
 
       render(<AppRouter backend={backend()} />);
 

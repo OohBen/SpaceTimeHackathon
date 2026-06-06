@@ -79,6 +79,11 @@ function makeDecisionCtx(
         },
       },
       proposals: {
+        iter: () => rows.proposals.values(),
+        insert: row => {
+          rows.proposals.push(row);
+          return row;
+        },
         id: {
           find: id => rows.proposals.find(proposal => proposal.id === id) ?? null,
           update: row => {
@@ -87,12 +92,6 @@ function makeDecisionCtx(
             rows.proposals[idx] = row;
             return row;
           },
-        },
-        iter: () => rows.proposals.values(),
-        insert: row => {
-          const inserted = { ...row, id: rows.proposals.length + 1 };
-          rows.proposals.push(inserted);
-          return inserted;
         },
       },
       cities: {
@@ -120,9 +119,8 @@ function makeDecisionCtx(
           },
         },
         insert: row => {
-          const inserted = { ...row };
-          rows.moduleSettings.push(inserted);
-          return inserted;
+          rows.moduleSettings.push(row);
+          return row;
         },
       },
     },

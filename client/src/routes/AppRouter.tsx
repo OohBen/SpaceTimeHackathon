@@ -31,6 +31,7 @@ import {
 import { useHudData, type HudData } from './hud';
 import type { PlayerSlot, SetupParams, SetupState } from './types';
 import { usePanelStore, CORE_PANELS, findPanelDef, type PanelId } from './panels';
+import { WorldMapPanel } from './WorldMapPanel';
 import './CommandCenterShell.css';
 
 type View = 'landing' | 'setup' | 'game';
@@ -346,6 +347,10 @@ function PanelContent({
         </p>
       </div>
     );
+  }
+
+  if (panel === 'map') {
+    return <WorldMapPanel sessionId={session.sessionId} />;
   }
 
   if (panel === 'personnel') {

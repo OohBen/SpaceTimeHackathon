@@ -4,9 +4,10 @@ import {
   selectActiveSession,
   selectConnectionStatus,
   selectCurrentPlayerSlot,
-  selectIntelligenceRecords,
-  selectPersonnelRoster,
+  selectInboxProposalsForCurrentPlayer,
   selectPrivateFactionState,
+  selectProposalById,
+  selectProposalsSubscriptionStatus,
   selectPublicGameState,
   selectReducerCall,
 } from './session-store';
@@ -148,150 +149,6 @@ describe('session store', () => {
     expect(selectPrivateFactionState(store.getState(), 'mars')?.resources.metals).toBe(140);
   });
 
-  it('selects faction personnel rosters and intelligence records from hydrated private feeds', () => {
-    const store = createSessionStore();
-
-    store.getState().actions.hydrateSubscription({
-      sessions: [
-        {
-          id: 'session-4',
-          code: 'SOL-004',
-          status: 'active',
-          currentTurn: 5,
-          phase: 'planning',
-        },
-      ],
-      personnel: [
-        {
-          id: 'p-1',
-          factionId: 'earth',
-          name: 'Ada Watanabe',
-          role: 'Chief Scientist',
-          department: 'Research',
-          postingCityId: 'city-1',
-          competence: 88,
-          creativity: 91,
-          reliability: 76,
-          ambition: 45,
-          politicalSkill: 50,
-          communication: 72,
-          loyalty: 84,
-          autonomyTolerance: 68,
-          morale: 73,
-          burnout: 12,
-          salary: 18,
-        },
-        {
-          id: 'p-2',
-          factionId: 'mars',
-          name: 'Vera Okoye',
-          role: 'Defense Liaison',
-          department: 'Defense',
-          postingCityId: null,
-          competence: 80,
-          creativity: 55,
-          reliability: 89,
-          ambition: 64,
-          politicalSkill: 70,
-          communication: 67,
-          loyalty: 78,
-          autonomyTolerance: 40,
-          morale: 66,
-          burnout: 19,
-          salary: 15,
-        },
-      ],
-      intelligenceRecords: [
-        {
-          id: 'intel-1',
-          observerFactionId: 'earth',
-          targetFactionId: 'mars',
-          intelType: 'scouting',
-          value: '{"visible_bodies":["Mars","Luna"],"known_cities":["Pavonis"]}',
-          accuracy: 82,
-          acquiredTurn: 5,
-        },
-        {
-          id: 'intel-2',
-          observerFactionId: 'mars',
-          targetFactionId: 'earth',
-          intelType: 'signals',
-          value: '{"known_cities":["New Geneva"]}',
-          accuracy: 74,
-          acquiredTurn: 4,
-        },
-      ],
-    });
-
-    expect(selectPersonnelRoster(store.getState(), 'earth').map((person) => person.name)).toEqual([
-      'Ada Watanabe',
-    ]);
-    expect(selectPersonnelRoster(store.getState(), 'earth')[0].morale).toBe(73);
-    expect(selectPersonnelRoster(store.getState(), 'earth')[0].burnout).toBe(12);
-    expect(selectIntelligenceRecords(store.getState(), 'earth').map((intel) => intel.intelType)).toEqual([
-      'scouting',
-    ]);
-    expect(selectIntelligenceRecords(store.getState(), 'earth')[0].accuracy).toBe(82);
-  });
-
-  it('applies personnel and intelligence upsert/delete events', () => {
-    const store = createSessionStore();
-
-    store.getState().actions.applySubscriptionEvent({
-      table: 'personnel',
-      op: 'upsert',
-      row: {
-        id: 'p-3',
-        factionId: 'earth',
-        name: 'Morgan Lee',
-        role: 'Logistics Director',
-        department: 'Logistics',
-        postingCityId: null,
-        competence: 77,
-        creativity: 62,
-        reliability: 86,
-        ambition: 51,
-        politicalSkill: 48,
-        communication: 73,
-        loyalty: 81,
-        autonomyTolerance: 57,
-        morale: 69,
-        burnout: 21,
-        salary: 16,
-      },
-    });
-    store.getState().actions.applySubscriptionEvent({
-      table: 'intelligenceRecords',
-      op: 'upsert',
-      row: {
-        id: 'intel-3',
-        observerFactionId: 'earth',
-        targetFactionId: 'mars',
-        intelType: 'survey',
-        value: '{"body":"Callisto"}',
-        accuracy: 67,
-        acquiredTurn: 6,
-      },
-    });
-
-    expect(selectPersonnelRoster(store.getState(), 'earth')).toHaveLength(1);
-    expect(selectIntelligenceRecords(store.getState(), 'earth')).toHaveLength(1);
-
-    store.getState().actions.applySubscriptionEvent({
-      table: 'personnel',
-      op: 'delete',
-      id: 'p-3',
-    });
-    store.getState().actions.applySubscriptionEvent({
-      table: 'intelligenceRecords',
-      op: 'delete',
-      id: 'intel-3',
-    });
-
-    expect(selectPersonnelRoster(store.getState(), 'earth')).toHaveLength(0);
-    expect(selectIntelligenceRecords(store.getState(), 'earth')).toHaveLength(0);
-  });
-
   it('tracks reducer loading, optimism, success, and errors coherently', () => {
     const store = createSessionStore();
 
@@ -324,5 +181,148 @@ describe('session store', () => {
 
     expect(selectReducerCall(store.getState(), 'joinSession')?.status).toBe('error');
     expect(selectReducerCall(store.getState(), 'joinSession')?.error).toBe('session not found');
+  });
+
+  it('exposes proposals for the current player faction and ignores other factions', () => {
+    const store = createSessionStore();
+    store.getState().actions.setConnection({
+      status: 'connected',
+      identity: 'identity-player-1',
+    });
+    store.getState().actions.hydrateSubscription({
+      sessions: [
+        {
+          id: 'session-prop',
+          code: 'SOL-prop',
+          status: 'active',
+          currentTurn: 5,
+          phase: 'planning',
+        },
+      ],
+      playerSlots: [
+        {
+          sessionId: 'session-prop',
+          slot: 1,
+          identity: 'identity-player-1',
+          factionId: 'earth',
+          factionName: 'Earth Directorate',
+          playerName: 'Atlas',
+          occupied: true,
+          visibility: 'own',
+        },
+      ],
+      proposals: [
+        {
+          id: 'prop-1',
+          sessionId: 'session-prop',
+          factionId: 'earth',
+          turn: 5,
+          proposingPersonnelId: 'officer-1',
+          department: 'Industry',
+          title: 'Refit Ceres',
+          body: 'Refit details',
+          resourceCost: 10,
+          confidence: 'high',
+          status: 'pending',
+          decision: null,
+        },
+        {
+          id: 'prop-2',
+          sessionId: 'session-prop',
+          factionId: 'mars',
+          turn: 5,
+          proposingPersonnelId: 'officer-9',
+          department: 'Espionage',
+          title: 'Sabotage convoy',
+          body: 'Mars internal proposal',
+          resourceCost: 4,
+          confidence: 'medium',
+          status: 'pending',
+          decision: null,
+        },
+      ],
+    });
+
+    const proposals = selectInboxProposalsForCurrentPlayer(store.getState());
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]!.id).toBe('prop-1');
+    expect(selectProposalById(store.getState(), 'prop-1')?.title).toBe('Refit Ceres');
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({ status: 'ready' });
+  });
+
+  it('tracks proposal subscription loading and error states', () => {
+    const store = createSessionStore();
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({ status: 'idle' });
+
+    store.getState().actions.setProposalsSubscription({ status: 'loading' });
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({ status: 'loading' });
+
+    store.getState().actions.setProposalsSubscription({
+      status: 'error',
+      error: 'subscription closed',
+    });
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({
+      status: 'error',
+      error: 'subscription closed',
+    });
+  });
+
+  it('applies proposal upsert and delete events through the subscription bridge', () => {
+    const store = createSessionStore();
+    store.getState().actions.setConnection({
+      status: 'connected',
+      identity: 'identity-player-1',
+    });
+    store.getState().actions.hydrateSubscription({
+      sessions: [
+        {
+          id: 'session-evt',
+          code: 'SOL-evt',
+          status: 'active',
+          currentTurn: 6,
+          phase: 'planning',
+        },
+      ],
+      playerSlots: [
+        {
+          sessionId: 'session-evt',
+          slot: 1,
+          identity: 'identity-player-1',
+          factionId: 'earth',
+          factionName: 'Earth Directorate',
+          playerName: 'Atlas',
+          occupied: true,
+          visibility: 'own',
+        },
+      ],
+    });
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'proposals',
+      op: 'upsert',
+      row: {
+        id: 'prop-evt',
+        sessionId: 'session-evt',
+        factionId: 'earth',
+        turn: 6,
+        proposingPersonnelId: 'officer-3',
+        department: 'Diplomacy',
+        title: 'Open trade with Callisto',
+        body: 'Send envoys to Callisto',
+        resourceCost: 8,
+        confidence: 'medium',
+        status: 'pending',
+        decision: null,
+      },
+    });
+
+    expect(selectInboxProposalsForCurrentPlayer(store.getState())).toHaveLength(1);
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'proposals',
+      op: 'delete',
+      id: 'prop-evt',
+    });
+    expect(selectInboxProposalsForCurrentPlayer(store.getState())).toHaveLength(0);
   });
 });
