@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { Timestamp } from 'spacetimedb';
+import { Identity, Timestamp } from 'spacetimedb';
 import { describe, expect, it } from 'vitest';
 import {
   buildSessionLifecycleRows,
@@ -10,10 +10,12 @@ import {
   INITIAL_TURN,
   INITIAL_TURN_PHASE,
   INITIAL_YEAR,
+  joinOrResumeSessionReducer,
   normalizeCreateSessionInput,
   type CreateSessionInput,
   type FactionRow,
   type GameSessionRow,
+  type JoinOrResumeContext,
   type SessionLifecycleContext,
 } from './session_lifecycle.js';
 
@@ -195,5 +197,127 @@ describe('create_session reducer', () => {
         player_b_name: 'United   Earth Authority',
       })
     ).toThrow(/already exists/);
+  });
+});
+
+function makeJoinResumeCtx(
+  sender: Identity,
+  sessions: GameSessionRow[],
+  factions: FactionRow[]
+): JoinOrResumeContext {
+  return {
+    sender,
+    timestamp,
+    db: {
+      game_sessions: {
+        id: {
+          find: id => sessions.find(s => s.id === id),
+          update: row => {
+            const idx = sessions.findIndex(s => s.id === row.id);
+            if (idx === -1) throw new Error(`session ${row.id} not found`);
+            sessions[idx] = row;
+            return row;
+          },
+        },
+      },
+      factions: {
+        id: {
+          find: id => factions.find(f => f.id === id),
+          update: row => {
+            const idx = factions.findIndex(f => f.id === row.id);
+            if (idx === -1) throw new Error(`faction ${row.id} not found`);
+            factions[idx] = row;
+            return row;
+          },
+        },
+      },
+    },
+  };
+}
+
+describe('join_or_resume_session reducer', () => {
+  const playerA = Identity.fromString('a'.padStart(64, '0'));
+  const playerB = Identity.fromString('b'.padStart(64, '0'));
+  const playerC = Identity.fromString('c'.padStart(64, '0'));
+
+  function setupSession() {
+    const ctx = makeFakeContext();
+    createSessionReducer(ctx, {
+      player_a_name: 'United Earth Authority',
+      player_b_name: 'Mars Compact',
+    });
+    return { sessions: ctx.sessions, factions: ctx.factions };
+  }
+
+  it('joins an available slot and returns bootstrap state', () => {
+    const { sessions, factions } = setupSession();
+    const ctx = makeJoinResumeCtx(playerA, sessions, factions);
+
+    const result = joinOrResumeSessionReducer(ctx, { session_id: 1, player_slot: 'player_a' });
+
+    expect(result.session_id).toBe(1);
+    expect(result.slot_key).toBe('player_a');
+    expect(result.is_resume).toBe(false);
+
+    const faction = factions.find(f => f.id === result.faction_id)!;
+    expect(faction.player_id.toHexString()).toBe(playerA.toHexString());
+    expect(JSON.parse(faction.doctrine_vector).slot.claim_status).toBe('claimed');
+  });
+
+  it('resumes an already-claimed slot without mutation', () => {
+    const { sessions, factions } = setupSession();
+
+    joinOrResumeSessionReducer(makeJoinResumeCtx(playerA, sessions, factions), {
+      session_id: 1,
+      player_slot: 'player_a',
+    });
+    const hexBefore = factions.map(f => f.player_id.toHexString());
+
+    const result = joinOrResumeSessionReducer(makeJoinResumeCtx(playerA, sessions, factions), {
+      session_id: 1,
+      player_slot: 'player_a',
+    });
+
+    expect(result.is_resume).toBe(true);
+    expect(factions.map(f => f.player_id.toHexString())).toEqual(hexBefore);
+  });
+
+  it('rejects joining a slot already claimed by another player', () => {
+    const { sessions, factions } = setupSession();
+
+    joinOrResumeSessionReducer(makeJoinResumeCtx(playerA, sessions, factions), {
+      session_id: 1,
+      player_slot: 'player_a',
+    });
+
+    expect(() =>
+      joinOrResumeSessionReducer(makeJoinResumeCtx(playerC, sessions, factions), {
+        session_id: 1,
+        player_slot: 'player_a',
+      })
+    ).toThrow(/already claimed/);
+  });
+
+  it('transitions session to active when both slots are claimed', () => {
+    const { sessions, factions } = setupSession();
+
+    joinOrResumeSessionReducer(makeJoinResumeCtx(playerA, sessions, factions), {
+      session_id: 1,
+      player_slot: 'player_a',
+    });
+    expect(sessions[0].state).toBe(INITIAL_SESSION_STATE);
+
+    joinOrResumeSessionReducer(makeJoinResumeCtx(playerB, sessions, factions), {
+      session_id: 1,
+      player_slot: 'player_b',
+    });
+    expect(sessions[0].state).toBe('active');
+  });
+
+  it('registers join_or_resume_session reducer in index.ts', () => {
+    const src = readFileSync(srcPath('index.ts'), 'utf8');
+    expect(src).toMatch(/export\s+const\s+join_or_resume_session\s*=/);
+    expect(src).toContain('session_id: t.u32()');
+    expect(src).toContain('player_slot: t.string()');
   });
 });

@@ -141,7 +141,7 @@ These are coarse planning waves, not parallel-safe topological layers. Use each 
 ## Gaps And Ambiguities
 
 - `#40` issue body still says `Epic branch: $branch`; actual branch is `epic/33-solar-dominion`.
-- `#39` had open `## Blocked By` dependencies but was missing the additive `blocked` label. Repaired on 2026-06-06; keep it blocked until #41, #42, and #43 close.
+- `#39` had open `## Blocked By` dependencies but was missing the additive `blocked` label. Its blockers #40 through #43 are now closed, and PR #197 merged to close #39 and #33.
 - Epic issue bodies for `#23` through `#32` have several markdown headings flattened onto single lines in GitHub output. Strict section parsers can miss `Dependencies` or `Child Issues`; prefer issue-number dependency cells in this file or normalize those bodies in a follow-up maintenance task.
 - Project container issues `#1` through `#5` carry `ai-approved`; claim logic must exclude label `project`.
 - Epic dependency fields use names, while task dependency fields use issue numbers. This file maps names to issue numbers for stable handoff.
