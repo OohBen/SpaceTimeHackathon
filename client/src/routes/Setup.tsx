@@ -82,88 +82,93 @@ export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
     (mode !== 'demo' || selectedSlot?.status !== 'occupied');
 
   return (
-    <div>
-      <h2>{MODE_LABELS[mode]}</h2>
+    <div className="setup-screen fl-stage">
+      <div className="setup-screen__card glass">
+        <header className="setup-screen__head">
+          <p className="setup-screen__kicker">Solar Dominion</p>
+          <h2>{MODE_LABELS[mode]}</h2>
+        </header>
 
-      {mode === 'demo' && (
-        <p>
-          Two-browser local demo: open this app in two browser windows on the
-          same machine. Each window plays one faction simultaneously.
-        </p>
-      )}
+        {mode === 'demo' && (
+          <p className="setup-screen__copy">
+            Two-browser local demo: open this app in two browser windows on the
+            same machine. Each window plays one faction simultaneously.
+          </p>
+        )}
 
-      {loading && <p>Loading...</p>}
-      {error && <p role="alert">{error}</p>}
+        {loading && <p className="setup-screen__copy">Loading...</p>}
+        {error && <p className="setup-screen__error" role="alert">{error}</p>}
 
-      <div>
-        <label htmlFor="player-name">Player Name</label>
-        <input
-          id="player-name"
-          type="text"
-          value={playerName}
-          onChange={e => setPlayerName(e.target.value)}
-          disabled={loading}
-        />
-      </div>
-
-      {mode === 'create' && (
-        <div>
-          <label htmlFor="opponent-name">Opponent Name</label>
+        <div className="setup-screen__field">
+          <label htmlFor="player-name">Player Name</label>
           <input
-            id="opponent-name"
+            id="player-name"
             type="text"
-            value={opponentName}
-            onChange={e => setOpponentName(e.target.value)}
+            value={playerName}
+            onChange={e => setPlayerName(e.target.value)}
             disabled={loading}
           />
         </div>
-      )}
 
-      {(mode === 'resume' || mode === 'demo') && (
-        <>
-          {mode === 'resume' && (
-            <div>
-              <label htmlFor="session-id">Session ID</label>
-              <input
-                id="session-id"
-                type="number"
-                value={sessionId}
-                onChange={e => setSessionId(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-          )}
-          <div>
-            <p id="slot-picker-label">Player Slot</p>
-            <div aria-labelledby="slot-picker-label">
-              {slotChoices.map(slot => {
-                const demoBrowser = slot.key === 'player_a' ? 'Browser A' : 'Browser B';
-                const prefix = mode === 'demo' ? `${demoBrowser} ` : '';
-
-                return (
-                  <div key={slot.key}>
-                    <button
-                      type="button"
-                      aria-pressed={playerSlot === slot.key}
-                      disabled={loading || slot.status === 'occupied'}
-                      onClick={() => setPlayerSlot(slot.key)}
-                    >
-                      {prefix}{slot.label} {slot.factionName} {slot.status}
-                    </button>
-                    <p>{slot.recovery}</p>
-                  </div>
-                );
-              })}
-            </div>
+        {mode === 'create' && (
+          <div className="setup-screen__field">
+            <label htmlFor="opponent-name">Opponent Name</label>
+            <input
+              id="opponent-name"
+              type="text"
+              value={opponentName}
+              onChange={e => setOpponentName(e.target.value)}
+              disabled={loading}
+            />
           </div>
-        </>
-      )}
+        )}
 
-      <div>
-        <button onClick={onBack} disabled={loading}>Back</button>
-        <button onClick={handleConfirm} disabled={!canConfirm}>
-          {mode === 'resume' ? 'Join Slot' : 'Start'}
-        </button>
+        {(mode === 'resume' || mode === 'demo') && (
+          <>
+            {mode === 'resume' && (
+              <div className="setup-screen__field">
+                <label htmlFor="session-id">Session ID</label>
+                <input
+                  id="session-id"
+                  type="number"
+                  value={sessionId}
+                  onChange={e => setSessionId(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            )}
+            <div>
+              <p className="setup-screen__slot-label" id="slot-picker-label">Player Slot</p>
+              <div className="setup-screen__slots" aria-labelledby="slot-picker-label">
+                {slotChoices.map(slot => {
+                  const demoBrowser = slot.key === 'player_a' ? 'Browser A' : 'Browser B';
+                  const prefix = mode === 'demo' ? `${demoBrowser} ` : '';
+
+                  return (
+                    <div className="setup-screen__slot glass" key={slot.key}>
+                      <button
+                        type="button"
+                        aria-pressed={playerSlot === slot.key}
+                        disabled={loading || slot.status === 'occupied'}
+                        onClick={() => setPlayerSlot(slot.key)}
+                      >
+                        {prefix}{slot.label} {slot.factionName} {slot.status}
+                      </button>
+                      <p>{slot.recovery}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        <footer className="setup-screen__actions">
+          <button onClick={onBack} disabled={loading}>Back</button>
+          <button className="landing__action--primary" onClick={handleConfirm} disabled={!canConfirm}>
+            {mode === 'resume' ? 'Join Slot' : 'Start'}
+          </button>
+        </footer>
       </div>
     </div>
   );

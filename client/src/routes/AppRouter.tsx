@@ -370,6 +370,7 @@ function CommandCenterShell({
   onBack: () => void;
 }) {
   const activeDef = findPanelDef(activePanel);
+  const panelTitle = activePanel === 'map' ? 'Commander Inbox' : activeDef.label;
   const hud = useHudData(String(session.factionId));
 
   useEffect(() => {
@@ -379,44 +380,88 @@ function CommandCenterShell({
   }, [session.playerSlot, session.sessionId]);
 
   return (
-    <div className="command-shell">
-      <header className="command-shell__header" aria-label="Command Center header" role="banner">
+    <div
+      className={`command-shell command-shell--${activePanel} ${activePanel === 'map' ? 'command-shell--map-active' : 'command-shell--workspace-active'}`}
+    >
+      <div className="command-shell__ambient-map" aria-label="Solar theater">
+        <WorldMapPanel sessionId={session.sessionId} />
+      </div>
+
+      <header className="command-shell__identity glass" aria-label="Command identity" role="banner">
+        <div className="command-shell__crest" aria-hidden="true">
+          {session.playerSlot === 'player_b' ? 'B' : 'A'}
+        </div>
         <div className="command-shell__title-block">
           <p className="command-shell__eyebrow">Command Center</p>
-          <h2>Command Center</h2>
-          <p className="command-shell__session-line">Session {session.sessionId}</p>
+          <h2>{session.playerName}</h2>
+          <p className="command-shell__session-line">
+            Session {session.sessionId} · {session.playerSlot}
+          </p>
         </div>
-        <GlobalHud hud={hud} factionId={session.factionId} playerSlot={session.playerSlot} playerName={session.playerName} />
-        <button className="command-shell__back" type="button" onClick={onBack}>
-          Back to Menu
-        </button>
       </header>
 
-      <div className="command-shell__body">
-        <aside className="command-shell__sidebar" aria-label="Command sidebar">
-          <nav className="command-shell__nav" aria-label="Command panels">
-            {CORE_PANELS.map((panel) => (
-              <button
-                key={panel.id}
-                type="button"
-                className="command-shell__nav-button"
-                aria-pressed={activePanel === panel.id}
-                onClick={() => onPanelChange(panel.id)}
-              >
-                {panel.label}
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        <section className="command-shell__panel" aria-label="Command content panel">
-          <div className="command-shell__panel-heading">
-            <p className="command-shell__eyebrow">Active panel</p>
-            <h3>{activeDef.label}</h3>
-          </div>
-          <PanelContent panel={activePanel} session={session} sessionClient={sessionClient} />
-        </section>
+      <div className="command-shell__turn-cluster glass" aria-label="Turn state">
+        <div>
+          <span>Turn</span>
+          <strong>{hud.turn ?? '-'}</strong>
+        </div>
+        <div>
+          <span>Year</span>
+          <strong>{hud.year ?? '-'}</strong>
+        </div>
+        <div>
+          <span>Phase</span>
+          <strong className="command-shell__phase"><i />{hud.phase ?? 'Unknown'}</strong>
+        </div>
       </div>
+
+      <GlobalHud
+        hud={hud}
+        factionId={session.factionId}
+        playerSlot={session.playerSlot}
+        playerName={session.playerName}
+      />
+
+      <button className="command-shell__back glass" type="button" onClick={onBack}>
+        Main Menu
+      </button>
+
+      <aside className="command-shell__sidebar glass" aria-label="Command sidebar">
+        <nav className="command-shell__nav" aria-label="Command panels">
+          {CORE_PANELS.map((panel) => (
+            <button
+              key={panel.id}
+              type="button"
+              className="command-shell__nav-button"
+              aria-pressed={activePanel === panel.id}
+              title={panel.label}
+              onClick={() => onPanelChange(panel.id)}
+            >
+              <span className="command-shell__nav-glyph" aria-hidden="true">
+                {panelGlyph(panel.id)}
+              </span>
+              <span className="command-shell__nav-label">{panel.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <button
+        className="command-shell__submit-dock glass"
+        type="button"
+        onClick={() => onPanelChange('turn-controls')}
+      >
+        Turn Controls
+        <span>{hud.phase ?? 'Unknown'} phase</span>
+      </button>
+
+      <section className="command-shell__panel glass" aria-label="Command content panel">
+        <div className="command-shell__panel-heading">
+          <p className="command-shell__eyebrow">Active panel</p>
+          <h3>{panelTitle}</h3>
+        </div>
+        <PanelContent panel={activePanel} session={session} sessionClient={sessionClient} />
+      </section>
     </div>
   );
 }
@@ -427,6 +472,25 @@ type SessionRouteState = SessionStoreState & {
   playerSlot: PlayerSlot;
   playerName: string;
 };
+
+function panelGlyph(panel: PanelId): string {
+  const glyphs: Record<PanelId, string> = {
+    overview: 'OV',
+    'session-brief': 'BR',
+    map: 'MAP',
+    inbox: 'IN',
+    'turn-controls': 'TC',
+    strategic: 'SV',
+    personnel: 'PR',
+    resources: 'RS',
+    intelligence: 'IX',
+    diplomacy: 'DP',
+    doctrine: 'DC',
+    resolution: 'TR',
+    'end-game': 'EG',
+  };
+  return glyphs[panel];
+}
 
 function PanelContent({
   panel,
@@ -497,7 +561,7 @@ function PanelContent({
   }
 
   if (panel === 'map') {
-    return <WorldMapPanel sessionId={session.sessionId} />;
+    return <Inbox client={sessionClient ?? undefined} />;
   }
 
   if (panel === 'personnel') {

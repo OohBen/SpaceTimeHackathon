@@ -971,3 +971,623 @@
     min-width: 680px;
   }
 }
+
+/* ============================================================
+   Tactical Table implementation from the design handoff.
+   Overrides the older light command shell above.
+   ============================================================ */
+.command-shell {
+  --hud: #5bb6ff;
+  --hud-2: #8fd4ff;
+  --hud-glow: rgba(91, 182, 255, 0.5);
+  --hud-ink: #04101f;
+  --hud-dim: #3f88d8;
+  --ink: #e7eefb;
+  --ink-2: #cdd9ee;
+  --muted: #7e90b4;
+  --hairline: rgba(130, 170, 235, 0.16);
+  --hairline-strong: rgba(130, 170, 235, 0.32);
+  --panel-solid: #0e1626;
+  position: relative;
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  display: block;
+  color: var(--ink);
+  background:
+    radial-gradient(1000px 680px at 70% 16%, rgba(40, 90, 170, 0.22), transparent 60%),
+    radial-gradient(760px 560px at 18% 92%, rgba(150, 90, 30, 0.12), transparent 60%),
+    linear-gradient(160deg, #0a1020, #070b16 60%, #05070f);
+}
+
+.command-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.48;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 18% 24%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 64% 56%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 82% 30%, rgba(255,255,255,0.45), transparent),
+    radial-gradient(1px 1px at 38% 74%, rgba(255,255,255,0.35), transparent),
+    radial-gradient(1px 1px at 52% 12%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 8% 62%, rgba(255,255,255,0.32), transparent),
+    radial-gradient(1px 1px at 90% 78%, rgba(255,255,255,0.3), transparent);
+}
+
+.command-shell--workspace-active .command-shell__ambient-map {
+  filter: blur(3px) brightness(0.42);
+  opacity: 0.62;
+}
+
+.command-shell__ambient-map {
+  position: absolute;
+  inset: 0 390px 0 0;
+  z-index: 1;
+  display: grid;
+  place-items: stretch;
+  transition: filter 0.25s ease, opacity 0.25s ease;
+}
+
+.command-shell--map-active .command-shell__ambient-map {
+  pointer-events: auto;
+}
+
+.command-shell__ambient-map::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 52%, transparent 38%, rgba(5, 8, 16, 0.5) 80%);
+}
+
+.command-shell__ambient-map .world-map {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  align-content: center;
+  padding: 96px 430px 74px 86px;
+}
+
+.command-shell__ambient-map .world-map--empty {
+  border: 0;
+  background: transparent;
+  place-items: center;
+  padding: 96px 430px 74px 86px;
+}
+
+.command-shell__ambient-map .world-map--empty p {
+  color: rgba(205, 217, 238, 0.62);
+  font-family: var(--sd-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.command-shell__ambient-map .world-map__summary,
+.command-shell__ambient-map .world-map__legend,
+.command-shell__ambient-map .world-map__detail {
+  display: none;
+}
+
+.command-shell__ambient-map .world-map__layout {
+  display: block;
+}
+
+.command-shell__ambient-map .world-map__canvas-wrap {
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.command-shell__ambient-map .world-map__svg {
+  height: min(72vh, 720px);
+  min-height: 420px;
+  filter: drop-shadow(0 0 24px rgba(91, 182, 255, 0.12));
+}
+
+.command-shell__ambient-map .world-map__axis {
+  stroke: rgba(130, 170, 235, 0.22);
+}
+
+.command-shell__ambient-map .world-map__body-halo {
+  fill: rgba(10, 16, 30, 0.64);
+  stroke: rgba(130, 170, 235, 0.32);
+}
+
+.command-shell__ambient-map .world-map__body-core {
+  stroke: rgba(231, 238, 251, 0.9);
+  fill: rgba(102, 115, 143, 0.85);
+}
+
+.command-shell__ambient-map .world-map__body--controlled .world-map__body-halo {
+  stroke: var(--hud);
+  filter: drop-shadow(0 0 14px var(--hud-glow));
+}
+
+.command-shell__ambient-map .world-map__body--contested .world-map__body-halo {
+  stroke: #ffab4d;
+  filter: drop-shadow(0 0 14px rgba(255, 171, 77, 0.42));
+}
+
+.command-shell__identity,
+.command-shell__turn-cluster,
+.command-shell__context,
+.command-shell__back,
+.command-shell__submit-dock,
+.command-shell__sidebar,
+.command-shell__panel {
+  position: absolute;
+  z-index: 3;
+}
+
+.command-shell__identity {
+  top: 20px;
+  left: 20px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 18px 11px 13px;
+}
+
+.command-shell__crest {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: var(--hud-ink);
+  background: linear-gradient(180deg, var(--hud-2), var(--hud-dim));
+  font-weight: 800;
+  box-shadow: 0 0 18px var(--hud-glow);
+}
+
+.command-shell__title-block h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.command-shell__eyebrow,
+.command-shell__session-line {
+  margin: 0;
+  font-family: var(--sd-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.command-shell__turn-cluster {
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.command-shell__turn-cluster > div {
+  min-width: 92px;
+  padding: 9px 16px;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.command-shell__turn-cluster > div + div {
+  border-left: 1px solid rgba(130, 170, 235, 0.14);
+}
+
+.command-shell__turn-cluster span {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.command-shell__turn-cluster strong {
+  color: var(--ink);
+  font-family: var(--sd-mono);
+  font-size: 16px;
+}
+
+.command-shell__phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--hud-2) !important;
+  text-shadow: 0 0 14px var(--hud-glow);
+}
+
+.command-shell__phase i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hud-2);
+  box-shadow: 0 0 8px var(--hud-glow);
+}
+
+.command-shell__context {
+  top: 20px;
+  right: 158px;
+  min-height: 58px;
+  max-width: 318px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px 14px;
+  padding: 11px 16px;
+  background: linear-gradient(150deg, rgba(30, 44, 72, 0.55), rgba(14, 22, 40, 0.42));
+  border: 1px solid rgba(130, 170, 235, 0.18);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(170, 200, 255, 0.12);
+  color: var(--ink-2);
+  font-family: var(--sd-mono);
+  font-size: 11px;
+}
+
+.command-shell__context span {
+  white-space: nowrap;
+}
+
+.command-shell__back {
+  top: 20px;
+  right: 20px;
+  min-height: 58px;
+  padding: 0 18px;
+  border-radius: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.command-shell__submit-dock {
+  left: 20px;
+  bottom: 22px;
+  z-index: 6;
+  min-height: 58px;
+  padding: 12px 22px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  color: var(--hud-ink) !important;
+  background: linear-gradient(180deg, var(--hud), var(--hud-dim)) !important;
+  border-color: rgba(91, 182, 255, 0.55) !important;
+  box-shadow: 0 0 26px var(--hud-glow), 0 18px 44px rgba(0, 0, 0, 0.36);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.command-shell__submit-dock span {
+  color: rgba(4, 16, 31, 0.72);
+  font-family: var(--sd-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.command-shell__submit-dock:hover,
+.command-shell__submit-dock:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 0 34px var(--hud-glow), 0 22px 56px rgba(0, 0, 0, 0.42);
+}
+
+.command-shell__sidebar {
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 12px 9px;
+  width: 62px;
+  max-height: min(660px, calc(100vh - 180px));
+  overflow: visible;
+}
+
+.command-shell__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: center;
+}
+
+.command-shell__nav-button {
+  position: relative;
+  width: 42px;
+  min-height: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #5d82c4;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.command-shell__nav-button:hover {
+  color: #9cc0ff;
+  background: rgba(130, 170, 235, 0.07);
+}
+
+.command-shell__nav-button[aria-pressed='true'] {
+  color: var(--hud);
+  background: rgba(91, 182, 255, 0.16);
+  border-color: rgba(91, 182, 255, 0.45);
+  box-shadow: 0 0 16px var(--hud-glow);
+}
+
+.command-shell__nav-glyph {
+  font-family: var(--sd-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.command-shell__nav-label {
+  position: absolute;
+  left: 50px;
+  top: 50%;
+  transform: translateY(-50%) translateX(-5px);
+  padding: 7px 11px;
+  background: var(--panel-solid);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 7px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.14s;
+  z-index: 40;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.command-shell__nav-button:hover .command-shell__nav-label,
+.command-shell__nav-button:focus-visible .command-shell__nav-label {
+  opacity: 1;
+  transform: translateY(-50%);
+}
+
+.command-shell__panel {
+  top: 96px;
+  right: 20px;
+  bottom: 22px;
+  width: min(420px, calc(100vw - 116px));
+  min-width: 0;
+  overflow: auto;
+  padding: 18px;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  background: linear-gradient(160deg, rgba(17, 26, 44, 0.96), rgba(10, 16, 30, 0.97));
+}
+
+.command-shell--map-active .command-shell__panel {
+  width: min(380px, calc(100vw - 116px));
+  max-height: 42vh;
+  top: auto;
+}
+
+.command-shell__panel-heading {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.command-shell__panel-heading h3 {
+  color: var(--ink);
+  font-size: 20px;
+  letter-spacing: 0.01em;
+}
+
+.command-shell h2,
+.command-shell h3,
+.command-shell h4 {
+  color: var(--ink);
+}
+
+.command-shell__status-grid,
+.command-shell__metric-grid {
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.command-shell__status-grid > div,
+.command-shell__brief,
+.command-shell__data-panel,
+.command-shell__ledger,
+.command-shell__metric-grid > div,
+.command-shell__intel-record,
+.command-shell__posture-card,
+.command-shell__axis-row {
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: linear-gradient(150deg, rgba(40, 56, 88, 0.4), rgba(18, 28, 48, 0.3));
+  box-shadow: inset 0 1px 0 rgba(170, 200, 255, 0.08);
+}
+
+.command-shell__status-grid > div,
+.command-shell__brief,
+.command-shell__metric-grid > div {
+  padding: 14px;
+}
+
+.command-shell__brief--compact p {
+  color: var(--muted);
+}
+
+.command-shell__status-grid span,
+.command-shell__metric-grid span,
+.command-shell__table th,
+.command-shell__ledger h4 {
+  color: var(--muted);
+  font-family: var(--sd-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.command-shell__status-grid strong,
+.command-shell__metric-grid strong,
+.command-shell__table td,
+.command-shell__brief p,
+.command-shell__plain-list li,
+.command-shell__ledger dd {
+  color: var(--ink-2);
+}
+
+.command-shell__data-panel {
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.command-shell__ledger {
+  padding: 14px;
+}
+
+.command-shell__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.command-shell__table th,
+.command-shell__table td {
+  border: 0;
+  background: rgba(10, 16, 30, 0.42);
+}
+
+.command-shell__table th:first-child,
+.command-shell__table td:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.command-shell__table th:last-child,
+.command-shell__table td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.command-shell__axis-track {
+  background: rgba(130, 170, 235, 0.14);
+}
+
+.command-shell__axis-track span {
+  background: linear-gradient(90deg, #5bb6ff, #ffab4d);
+  box-shadow: 0 0 14px rgba(91, 182, 255, 0.35);
+}
+
+.turn-controls__item .command-shell__nav-button {
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  display: flex;
+  justify-content: center;
+  color: var(--ink);
+  background: rgba(130, 170, 235, 0.06);
+  border-color: var(--hairline-strong);
+}
+
+.turn-controls__item .command-shell__nav-button:not(:disabled):hover {
+  color: var(--hud);
+  border-color: rgba(91, 182, 255, 0.45);
+}
+
+.turn-controls__error {
+  color: #ffbb4d;
+}
+
+.command-shell [data-testid='commander-inbox'] {
+  grid-template-columns: 1fr !important;
+  border-color: var(--hairline-strong) !important;
+  background: rgba(8, 14, 26, 0.18);
+  color: var(--ink-2);
+}
+
+.command-shell [data-testid='inbox-loading'],
+.command-shell [data-testid='inbox-empty'],
+.command-shell [data-testid='proposal-reader-idle'],
+.command-shell [data-testid='proposal-reader-empty'] {
+  color: var(--muted) !important;
+  line-height: 1.55;
+}
+
+@media (max-width: 1020px) {
+  .command-shell {
+    min-height: 100vh;
+    height: auto;
+    overflow-y: auto;
+    padding: 104px 16px 24px 84px;
+  }
+
+  .command-shell__ambient-map {
+    inset: 0;
+    opacity: 0.34;
+    pointer-events: none;
+  }
+
+  .command-shell__ambient-map .world-map {
+    padding: 110px 20px 40px 84px;
+  }
+
+  .command-shell__identity,
+  .command-shell__turn-cluster,
+  .command-shell__context,
+  .command-shell__back,
+  .command-shell__submit-dock,
+  .command-shell__sidebar,
+  .command-shell__panel {
+    position: relative;
+    inset: auto;
+    transform: none;
+  }
+
+  .command-shell__identity {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+  }
+
+  .command-shell__turn-cluster,
+  .command-shell__context,
+  .command-shell__back,
+  .command-shell__submit-dock {
+    display: none;
+  }
+
+  .command-shell__sidebar {
+    position: fixed;
+    top: 96px;
+    left: 14px;
+    width: 54px;
+    max-height: calc(100vh - 120px);
+    z-index: 5;
+  }
+
+  .command-shell__panel,
+  .command-shell--map-active .command-shell__panel {
+    width: 100%;
+    max-height: none;
+    min-height: calc(100vh - 128px);
+  }
+
+  .command-shell__status-grid,
+  .command-shell__metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
