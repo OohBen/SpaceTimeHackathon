@@ -226,6 +226,27 @@ export const tables = {
     }
   ),
 
+  turn_summaries: table(
+    {
+      public: true,
+      indexes: [
+        { accessor: 'turn_summaries_session_idx', algorithm: 'btree', columns: ['session_id', 'turn'] as const },
+        { accessor: 'turn_summaries_faction_idx', algorithm: 'btree', columns: ['faction_id', 'turn'] as const },
+      ],
+    },
+    {
+      id: t.u32().primaryKey().autoInc(),
+      session_id: t.u32(),
+      faction_id: t.u32(),
+      turn: t.u32(),
+      summary_json: t.string(),
+      acknowledged: t.bool(),
+      acknowledged_at: t.option(t.timestamp()),
+      created_at: t.timestamp(),
+      updated_at: t.timestamp(),
+    }
+  ),
+
   trade_agreements: table(
     { public: true },
     {
@@ -244,6 +265,7 @@ export const tables = {
       public: true,
       indexes: [
         { accessor: 'llm_status_idx', algorithm: 'btree', columns: ['status'] as const },
+        { accessor: 'llm_session_turn_idx', algorithm: 'btree', columns: ['session_id', 'faction_id', 'created_turn'] as const },
       ],
     },
     {
@@ -255,7 +277,18 @@ export const tables = {
       status: t.string(),
       response_json: t.option(t.string()),
       error: t.option(t.string()),
+      error_code: t.option(t.string()),
+      attempt_count: t.u32(),
       created_turn: t.u32(),
+      updated_turn: t.u32(),
+    }
+  ),
+
+  module_settings: table(
+    { public: true },
+    {
+      id: t.u32().primaryKey(),
+      deliberation_mode: t.string(),
     }
   ),
 };
