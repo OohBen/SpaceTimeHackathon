@@ -1,0 +1,160 @@
+name: Repository Contract
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  contract:
+    name: Repository Contract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 1. Branch contract ──────────────────────────────────────────────────
+      - name: Branch contract
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          HEAD="$HEAD_REF"
+          BASE="$BASE_REF"
+          failed=0
+
+          if [[ "$HEAD" == task/* ]]; then
+            if [[ "$BASE" != epic/* ]]; then
+              echo "❌ task/* branches must target an epic/* branch, not '$BASE'"
+              failed=1
+            fi
+          fi
+
+          if [[ "$HEAD" == epic/* ]]; then
+            if [[ "$BASE" != "main" ]]; then
+              echo "❌ epic/* branches must target main, not '$BASE'"
+              failed=1
+            fi
+          fi
+
+          [[ $failed -eq 0 ]] && echo "✓ Branch contract"
+          exit $failed
+
+      # ── 2. Protected file check ─────────────────────────────────────────────
+      - name: Protected files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          HEAD="$HEAD_REF"
+
+          # Only enforce on task/* branches
+          if [[ "$HEAD" != task/* ]]; then
+            echo "✓ Protected files (not a task branch)"
+            exit 0
+          fi
+
+          # Check for planning-update label
+          LABELS=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels -q '.labels[].name')
+          if echo "$LABELS" | grep -q "planning-update"; then
+            echo "✓ Protected files (planning-update label present)"
+            exit 0
+          fi
+
+          PROTECTED="PLAN.md SPECS.md AGENTS.md HARNESS.md"
+          CHANGED=$(git diff --name-only origin/"$BASE_REF"...HEAD)
+          failed=0
+
+          for f in $PROTECTED; do
+            if echo "$CHANGED" | grep -q "^${f}$"; then
+              echo "❌ $f cannot be modified on a task branch."
+              echo "   Add the 'planning-update' label to this PR to override."
+              failed=1
+            fi
+          done
+
+          [[ $failed -eq 0 ]] && echo "✓ Protected files"
+          exit $failed
+
+      # ── 3. Environment contract ─────────────────────────────────────────────
+      - name: Environment contract
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          DIFF=$(git diff origin/"$BASE_REF"...HEAD -- . \
+            ':(exclude).env.example' \
+            ':(exclude)*.md' \
+            ':(exclude)*.lock' \
+            ':(exclude)package-lock.json')
+
+          NEW_VARS=$(echo "$DIFF" | grep '^+' | grep -E \
+            'process\.env\.|os\.getenv\(|std::env::var\(|ENV\[|getenv\(' \
+            | grep -v '^+++' || true)
+
+          if [ -z "$NEW_VARS" ]; then
+            echo "✓ Environment contract"
+            exit 0
+          fi
+
+          ENV_CHANGED=$(git diff --name-only origin/"$BASE_REF"...HEAD \
+            | grep -c '\.env\.example' || true)
+
+          if [ "$ENV_CHANGED" -gt 0 ]; then
+            echo "✓ Environment contract (.env.example updated)"
+            exit 0
+          fi
+
+          echo "❌ New environment variable usage detected but .env.example was not updated."
+          echo ""
+          echo "New usages found:"
+          echo "$NEW_VARS" | head -20
+          echo ""
+          echo "Update .env.example with the new variable(s) and push."
+          exit 1
+
+      # ── 4. Issue contract ───────────────────────────────────────────────────
+      - name: Issue contract
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Extract linked issue numbers from PR body (Closes/Fixes/Resolves #N)
+          ISSUES=$(echo "$PR_BODY" | grep -ioE '(closes|fixes|resolves) #[0-9]+' \
+            | grep -oE '#[0-9]+' | tr -d '#' || true)
+
+          if [ -z "$ISSUES" ]; then
+            echo "⚠ No linked issue found (no 'Closes #N' in PR body). Skipping issue contract."
+            exit 0
+          fi
+
+          failed=0
+          for ISSUE in $ISSUES; do
+            BODY=$(gh issue view "$ISSUE" --repo "$REPO" --json body -q '.body' 2>/dev/null || echo "")
+
+            if [ -z "$BODY" ]; then
+              echo "⚠ Could not read issue #$ISSUE body. Skipping."
+              continue
+            fi
+
+            if ! echo "$BODY" | grep -q '## Goal'; then
+              echo "❌ Issue #$ISSUE is missing '## Goal' section."
+              failed=1
+            fi
+
+            if ! echo "$BODY" | grep -q '## Acceptance Criteria'; then
+              echo "❌ Issue #$ISSUE is missing '## Acceptance Criteria' section."
+              failed=1
+            fi
+          done
+
+          [[ $failed -eq 0 ]] && echo "✓ Issue contract"
+          exit $failed
