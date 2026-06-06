@@ -58,6 +58,17 @@ export interface PrivateFactionStateRow {
 
 export type OperationalRowId = string | number;
 
+export interface FactionRow {
+  id: OperationalRowId;
+  sessionId: OperationalRowId;
+  name: string;
+  credits: number;
+  politicalCapital: number;
+  doctrineVector: string;
+  controlScore: number;
+  readyForTurn: boolean;
+}
+
 export interface PersonnelRow {
   id: OperationalRowId;
   factionId: OperationalRowId;
@@ -88,13 +99,37 @@ export interface IntelligenceRecordRow {
   acquiredTurn: number;
 }
 
+export interface EventRow {
+  id: OperationalRowId;
+  sessionId: OperationalRowId;
+  factionId: OperationalRowId | null | undefined;
+  turn: number;
+  eventType: string;
+  payload?: string;
+}
+
+export interface TurnSummaryRow {
+  id: OperationalRowId;
+  sessionId: OperationalRowId;
+  factionId: OperationalRowId;
+  turn: number;
+  summaryJson: string;
+  acknowledged: boolean;
+  acknowledgedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SubscriptionSnapshot {
   sessions?: SessionRow[];
   playerSlots?: PlayerSlotRow[];
   publicGameStates?: PublicGameStateRow[];
   privateFactionStates?: PrivateFactionStateRow[];
+  factions?: FactionRow[];
   personnel?: PersonnelRow[];
   intelligenceRecords?: IntelligenceRecordRow[];
+  events?: EventRow[];
+  turnSummaries?: TurnSummaryRow[];
 }
 
 export type SubscriptionEvent =
@@ -106,10 +141,16 @@ export type SubscriptionEvent =
   | { table: 'publicGameStates'; op: 'delete'; sessionId: string }
   | { table: 'privateFactionStates'; op: 'upsert'; row: PrivateFactionStateRow }
   | { table: 'privateFactionStates'; op: 'delete'; sessionId: string; factionId: string }
+  | { table: 'factions'; op: 'upsert'; row: FactionRow }
+  | { table: 'factions'; op: 'delete'; id: OperationalRowId }
   | { table: 'personnel'; op: 'upsert'; row: PersonnelRow }
   | { table: 'personnel'; op: 'delete'; id: OperationalRowId }
   | { table: 'intelligenceRecords'; op: 'upsert'; row: IntelligenceRecordRow }
-  | { table: 'intelligenceRecords'; op: 'delete'; id: OperationalRowId };
+  | { table: 'intelligenceRecords'; op: 'delete'; id: OperationalRowId }
+  | { table: 'events'; op: 'upsert'; row: EventRow }
+  | { table: 'events'; op: 'delete'; id: OperationalRowId }
+  | { table: 'turnSummaries'; op: 'upsert'; row: TurnSummaryRow }
+  | { table: 'turnSummaries'; op: 'delete'; id: OperationalRowId };
 
 export interface OptimisticSessionUpdate {
   kind: 'session';
@@ -132,8 +173,11 @@ export interface SessionState {
   playerSlotsByKey: Record<string, PlayerSlotRow>;
   publicGameStateBySessionId: Record<string, PublicGameStateRow>;
   privateFactionStateByKey: Record<string, PrivateFactionStateRow>;
+  factionsById: Record<string, FactionRow>;
   personnelById: Record<string, PersonnelRow>;
   intelligenceRecordsById: Record<string, IntelligenceRecordRow>;
+  eventsById: Record<string, EventRow>;
+  turnSummariesById: Record<string, TurnSummaryRow>;
   reducerCalls: Record<string, ReducerCallState>;
   actions: SessionStoreActions;
 }
@@ -172,8 +216,11 @@ export function createSessionStore(): SessionStore {
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
     privateFactionStateByKey: {},
+    factionsById: {},
     personnelById: {},
     intelligenceRecordsById: {},
+    eventsById: {},
+    turnSummariesById: {},
     reducerCalls: {},
     actions: {
       setConnection(connection) {
@@ -193,8 +240,11 @@ export function createSessionStore(): SessionStore {
           const playerSlotsByKey = { ...state.playerSlotsByKey };
           const publicGameStateBySessionId = { ...state.publicGameStateBySessionId };
           const privateFactionStateByKey = { ...state.privateFactionStateByKey };
+          const factionsById = { ...state.factionsById };
           const personnelById = { ...state.personnelById };
           const intelligenceRecordsById = { ...state.intelligenceRecordsById };
+          const eventsById = { ...state.eventsById };
+          const turnSummariesById = { ...state.turnSummariesById };
 
           for (const session of snapshot.sessions ?? []) {
             sessionsById[session.id] = session;
@@ -210,11 +260,20 @@ export function createSessionStore(): SessionStore {
               privateFactionKey(factionState.sessionId, factionState.factionId)
             ] = factionState;
           }
+          for (const faction of snapshot.factions ?? []) {
+            factionsById[String(faction.id)] = faction;
+          }
           for (const person of snapshot.personnel ?? []) {
             personnelById[String(person.id)] = person;
           }
           for (const record of snapshot.intelligenceRecords ?? []) {
             intelligenceRecordsById[String(record.id)] = record;
+          }
+          for (const event of snapshot.events ?? []) {
+            eventsById[String(event.id)] = event;
+          }
+          for (const summary of snapshot.turnSummaries ?? []) {
+            turnSummariesById[String(summary.id)] = summary;
           }
 
           return {
@@ -222,8 +281,11 @@ export function createSessionStore(): SessionStore {
             playerSlotsByKey,
             publicGameStateBySessionId,
             privateFactionStateByKey,
+            factionsById,
             personnelById,
             intelligenceRecordsById,
+            eventsById,
+            turnSummariesById,
             activeSessionId: nextActiveSessionId(state.activeSessionId, sessionsById),
           };
         });
@@ -364,6 +426,22 @@ export function selectPrivateFactionStateForSession(
   return state.privateFactionStateByKey[privateFactionKey(String(sessionId), String(factionId))] ?? null;
 }
 
+export function selectFactionById(
+  state: SessionState,
+  factionId: OperationalRowId,
+): FactionRow | null {
+  return state.factionsById[String(factionId)] ?? null;
+}
+
+export function selectFactionsForSession(
+  state: SessionState,
+  sessionId: OperationalRowId,
+): FactionRow[] {
+  return Object.values(state.factionsById)
+    .filter((faction) => String(faction.sessionId) === String(sessionId))
+    .sort((a, b) => compareOperationalIds(a.id, b.id));
+}
+
 export function selectPersonnelRoster(
   state: SessionState,
   factionId: OperationalRowId,
@@ -380,6 +458,38 @@ export function selectIntelligenceRecords(
   return Object.values(state.intelligenceRecordsById)
     .filter((record) => String(record.observerFactionId) === String(observerFactionId))
     .sort((a, b) => b.acquiredTurn - a.acquiredTurn || compareOperationalIds(a.id, b.id));
+}
+
+export function selectEventsForSession(
+  state: SessionState,
+  sessionId: OperationalRowId,
+  factionId?: OperationalRowId,
+): EventRow[] {
+  return Object.values(state.eventsById)
+    .filter((event) => String(event.sessionId) === String(sessionId))
+    .filter(
+      (event) =>
+        factionId == null ||
+        event.factionId == null ||
+        String(event.factionId) === String(factionId),
+    )
+    .sort((a, b) => b.turn - a.turn || compareOperationalIds(a.id, b.id));
+}
+
+export function selectLatestTurnSummaryForFaction(
+  state: SessionState,
+  sessionId: OperationalRowId,
+  factionId: OperationalRowId,
+): TurnSummaryRow | null {
+  return (
+    Object.values(state.turnSummariesById)
+      .filter(
+        (summary) =>
+          String(summary.sessionId) === String(sessionId) &&
+          String(summary.factionId) === String(factionId),
+      )
+      .sort((a, b) => b.turn - a.turn || compareOperationalIds(b.id, a.id))[0] ?? null
+  );
 }
 
 export function selectReducerCall(state: SessionState, key: string): ReducerCallState | null {
@@ -435,6 +545,16 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
     return { privateFactionStateByKey };
   }
 
+  if (event.table === 'factions') {
+    const factionsById = { ...state.factionsById };
+    if (event.op === 'delete') {
+      delete factionsById[String(event.id)];
+    } else {
+      factionsById[String(event.row.id)] = event.row;
+    }
+    return { factionsById };
+  }
+
   if (event.table === 'personnel') {
     const personnelById = { ...state.personnelById };
     if (event.op === 'delete') {
@@ -443,6 +563,26 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
       personnelById[String(event.row.id)] = event.row;
     }
     return { personnelById };
+  }
+
+  if (event.table === 'events') {
+    const eventsById = { ...state.eventsById };
+    if (event.op === 'delete') {
+      delete eventsById[String(event.id)];
+    } else {
+      eventsById[String(event.row.id)] = event.row;
+    }
+    return { eventsById };
+  }
+
+  if (event.table === 'turnSummaries') {
+    const turnSummariesById = { ...state.turnSummariesById };
+    if (event.op === 'delete') {
+      delete turnSummariesById[String(event.id)];
+    } else {
+      turnSummariesById[String(event.row.id)] = event.row;
+    }
+    return { turnSummariesById };
   }
 
   const intelligenceRecordsById = { ...state.intelligenceRecordsById };

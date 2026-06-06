@@ -42,8 +42,11 @@ function resetSessionStore() {
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
     privateFactionStateByKey: {},
+    factionsById: {},
     personnelById: {},
     intelligenceRecordsById: {},
+    eventsById: {},
+    turnSummariesById: {},
     reducerCalls: {},
   });
 }
@@ -102,6 +105,83 @@ function hydrateOperationalPanelState() {
           value: '{"visible_bodies":["Mars","Luna"],"known_cities":["Pavonis"]}',
           accuracy: 82,
           acquiredTurn: 5,
+        },
+      ],
+    });
+  });
+}
+
+function hydrateStrategicPanelState() {
+  act(() => {
+    const hydrate = sessionStore.getState().actions
+      .hydrateSubscription as (snapshot: Record<string, unknown>) => void;
+
+    hydrate({
+      sessions: [{ id: '42', code: 'GAME1', status: 'active', currentTurn: 5, phase: 'summary' }],
+      publicGameStates: [
+        {
+          sessionId: '42',
+          turn: 5,
+          year: 2351,
+          phase: 'summary',
+          controlScores: { '202': 52, '303': 38 },
+          visibleFactionIds: ['202', '303'],
+        },
+      ],
+      privateFactionStates: [
+        {
+          sessionId: '42',
+          factionId: '202',
+          resources: { credits: 150, minerals: 30, science: 12 },
+          morale: 80,
+          doctrine: 'expansion',
+          visibility: 'ownFaction',
+        },
+      ],
+      factions: [
+        {
+          id: '202',
+          sessionId: '42',
+          name: 'Solar Republic',
+          credits: 150,
+          politicalCapital: 18,
+          doctrineVector:
+            '{"strategy":72,"approach":36,"command":64,"focus":58,"style":44}',
+          controlScore: 52,
+          readyForTurn: true,
+        },
+        {
+          id: '303',
+          sessionId: '42',
+          name: 'Martian League',
+          credits: 90,
+          politicalCapital: 11,
+          doctrineVector:
+            '{"strategy":44,"approach":68,"command":47,"focus":42,"style":61}',
+          controlScore: 38,
+          readyForTurn: false,
+        },
+      ],
+      intelligenceRecords: [
+        {
+          id: '10',
+          observerFactionId: '202',
+          targetFactionId: '303',
+          intelType: 'signals',
+          value: '{"diplomatic_posture":"probing Callisto access","known_cities":["Pavonis"]}',
+          accuracy: 82,
+          acquiredTurn: 5,
+        },
+      ],
+      turnSummaries: [
+        {
+          id: 'turn-summary-5',
+          sessionId: '42',
+          factionId: '202',
+          turn: 5,
+          summaryJson:
+            '{"headline":"Turn 5 outcome summary","events":["Olympus City infrastructure complete","Opponent colony ship detected inbound to Ganymede"],"controlScores":{"202":52,"303":38},"resourceDeltas":{"credits":-40,"science":6}}',
+          acknowledged: false,
         },
       ],
     });
@@ -316,6 +396,58 @@ describe('Command Center shell', () => {
       expect(panel).toHaveTextContent(/Turn 5/i);
       expect(panel).toHaveTextContent(/visible_bodies: Mars, Luna/i);
       expect(panel).toHaveTextContent(/known_cities: Pavonis/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders diplomacy panel from visible faction posture and recent intelligence', () => {
+      enterStoredGameContext();
+      hydrateStrategicPanelState();
+      usePanelStore.getState().setPanel('diplomacy');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(screen.getByLabelText(/diplomacy posture/i)).toBeDefined();
+      expect(panel).toHaveTextContent(/Solar Republic/i);
+      expect(panel).toHaveTextContent(/Martian League/i);
+      expect(panel).toHaveTextContent(/Control 52/i);
+      expect(panel).toHaveTextContent(/Control 38/i);
+      expect(panel).toHaveTextContent(/probing Callisto access/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders doctrine panel from the current faction doctrine vector', () => {
+      enterStoredGameContext();
+      hydrateStrategicPanelState();
+      usePanelStore.getState().setPanel('doctrine');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(screen.getByLabelText(/faction doctrine posture/i)).toBeDefined();
+      expect(panel).toHaveTextContent(/Expansionist/i);
+      expect(panel).toHaveTextContent(/Consolidationist/i);
+      expect(panel).toHaveTextContent(/Militarist/i);
+      expect(panel).toHaveTextContent(/Diplomatic/i);
+      expect(panel).toHaveTextContent(/Rapid expansion proposals/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders resolution panel from latest faction turn summary data', () => {
+      enterStoredGameContext();
+      hydrateStrategicPanelState();
+      usePanelStore.getState().setPanel('resolution');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(screen.getByLabelText(/turn resolution summary/i)).toBeDefined();
+      expect(panel).toHaveTextContent(/Turn 5 outcome summary/i);
+      expect(panel).toHaveTextContent(/Olympus City infrastructure complete/i);
+      expect(panel).toHaveTextContent(/Opponent colony ship detected inbound to Ganymede/i);
+      expect(panel).toHaveTextContent(/Control 52/i);
+      expect(panel).toHaveTextContent(/credits -40/i);
+      expect(panel).toHaveTextContent(/Acknowledgement pending/i);
       expect(panel).not.toHaveTextContent(/not yet available/i);
     });
 

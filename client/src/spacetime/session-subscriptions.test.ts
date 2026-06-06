@@ -20,7 +20,13 @@ describe('session subscription wiring', () => {
 
     expect(subscribedQueries).toEqual([[...SESSION_SUBSCRIPTION_QUERIES]]);
     expect(subscribedQueries[0]).toEqual(
-      expect.arrayContaining(['SELECT * FROM personnel', 'SELECT * FROM intelligence_records']),
+      expect.arrayContaining([
+        'SELECT * FROM personnel',
+        'SELECT * FROM intelligence_records',
+        'SELECT * FROM factions',
+        'SELECT * FROM events',
+        'SELECT * FROM turn_summaries',
+      ]),
     );
 
     bridge.hydrate({

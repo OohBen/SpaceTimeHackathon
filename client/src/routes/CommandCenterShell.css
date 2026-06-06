@@ -305,6 +305,99 @@
   line-height: 1.45;
 }
 
+.command-shell__posture-list,
+.command-shell__axis-list,
+.command-shell__split-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.command-shell__posture-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.command-shell__split-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.command-shell__posture-card,
+.command-shell__axis-row {
+  min-width: 0;
+  border: 1px solid #d6ded9;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.command-shell__posture-card {
+  display: grid;
+  gap: 8px;
+}
+
+.command-shell__posture-card header,
+.command-shell__axis-row header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+}
+
+.command-shell__posture-card h4 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.command-shell__posture-card header span {
+  color: #32433c;
+  font-weight: 700;
+}
+
+.command-shell__posture-card p,
+.command-shell__axis-row p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.command-shell__axis-row {
+  display: grid;
+  gap: 10px;
+}
+
+.command-shell__axis-row header span {
+  color: #32433c;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.command-shell__axis-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dfe8e4;
+}
+
+.command-shell__axis-track span {
+  display: block;
+  height: 100%;
+  min-width: 10px;
+  border-radius: inherit;
+  background: #0f766e;
+}
+
+.command-shell__plain-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding-left: 20px;
+}
+
+.command-shell__plain-list li {
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
 .command-shell__hud-absent {
   color: #9aada5;
 }
@@ -370,7 +463,9 @@
   }
 
   .command-shell__metric-grid,
-  .command-shell__ledger dl {
+  .command-shell__ledger dl,
+  .command-shell__posture-list,
+  .command-shell__split-grid {
     grid-template-columns: 1fr;
   }
 

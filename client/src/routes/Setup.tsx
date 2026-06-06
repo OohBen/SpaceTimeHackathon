@@ -50,7 +50,7 @@ export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
 
   const canConfirm =
     !loading &&
-    (backend?.isConnected ?? true) &&
+    (mode === 'demo' || (backend?.isConnected ?? true)) &&
     playerName.trim() !== '' &&
     (mode !== 'resume' ||
       (sessionId.trim() !== '' && selectedSlot?.status !== 'occupied'));
