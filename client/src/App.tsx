@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { AppRouter } from './routes/AppRouter';
+import type { SessionBackend } from './session/spacetime';
 import { createSpacetimeClient, type SpacetimeClient } from './spacetime/client';
 import { applyConnectionLifecycleEvent } from './spacetime/connection-lifecycle';
 import { createClientConfig } from './spacetime/config';
@@ -10,8 +12,10 @@ import {
 } from './state/session-store';
 
 interface AppProps {
+  backend?: SessionBackend;
   store?: SessionStore;
   client?: SpacetimeClient;
+  showConnectionStatus?: boolean;
 }
 
 interface ConnectionStatusPanelProps {
@@ -80,18 +84,25 @@ export function ConnectionStatusPanel({
   );
 }
 
-export default function App({ store = sessionStore, client }: AppProps) {
+export default function App({
+  backend,
+  store = sessionStore,
+  client,
+  showConnectionStatus = false,
+}: AppProps) {
   const config = useMemo(() => createClientConfig(), []);
   const clientRef = useRef<SpacetimeClient | null>(client ?? null);
   const connection = useStoreSelector(store, (state) => state.connection);
 
-  if (!clientRef.current) {
+  if (showConnectionStatus && !clientRef.current) {
     clientRef.current = createSpacetimeClient(config, {
       onLifecycleChange: (event) => applyConnectionLifecycleEvent(store, event),
     });
   }
 
   useEffect(() => {
+    if (!showConnectionStatus) return undefined;
+
     const activeClient = clientRef.current;
     if (!activeClient) return undefined;
 
@@ -105,21 +116,23 @@ export default function App({ store = sessionStore, client }: AppProps) {
     } catch {
       return undefined;
     }
-  }, [store]);
+  }, [showConnectionStatus, store]);
 
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', padding: 24 }}>
-      <h1>Solar Dominion</h1>
-      <ConnectionStatusPanel
-        connection={connection}
-        onReconnect={() => {
-          try {
-            clientRef.current?.reconnect();
-          } catch {
-            return undefined;
-          }
-        }}
-      />
+      {showConnectionStatus ? (
+        <ConnectionStatusPanel
+          connection={connection}
+          onReconnect={() => {
+            try {
+              clientRef.current?.reconnect();
+            } catch {
+              return undefined;
+            }
+          }}
+        />
+      ) : null}
+      <AppRouter backend={backend} />
     </main>
   );
 }
