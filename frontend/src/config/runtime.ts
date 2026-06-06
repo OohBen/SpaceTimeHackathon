@@ -15,4 +15,7 @@ export function getRuntimeConfig(env: RuntimeEnv): RuntimeConfig {
   };
 }
 
-export const runtimeConfig = getRuntimeConfig(import.meta.env);
+export const runtimeConfig = getRuntimeConfig({
+  VITE_SPACETIME_HOST: import.meta.env.VITE_SPACETIME_HOST,
+  VITE_SPACETIME_DB_NAME: import.meta.env.VITE_SPACETIME_DB_NAME,
+});
