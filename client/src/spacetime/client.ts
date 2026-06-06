@@ -12,6 +12,7 @@ export interface SpacetimeClient {
 }
 
 export function createSpacetimeClient(config: ClientConfig): SpacetimeClient {
+  void config;
   let activeConnection: ConnectionHandle | null = null;
 
   return {
