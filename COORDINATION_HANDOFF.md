@@ -46,6 +46,18 @@ Do not trust label-only queues. Project containers still carry `ai-approved`, an
 
 Task PRs target their parent epic branch and use squash merge. After merge:
 
+Review safety before merge:
+
+1. Fetch the task issue and PR.
+2. Review only open, non-verify tasks labeled `review-ready`.
+3. Replace `review-ready` with `in-review` before reading deeply, so another agent does not review the same PR.
+4. Check the PR target branch is the parent epic branch, not `main`.
+5. Check mergeability/conflicts, changed files, acceptance criteria, validation output, and security-sensitive diff scope.
+6. Leave a PASS or requested-changes review comment. If changes are needed, keep the issue out of `review-ready` until fixes land.
+7. Merge only after PASS and clean mergeability.
+
+Closeout after merge:
+
 1. Fetch the task issue.
 2. If still open, close it with `state_reason=completed`.
 3. Clear `in-progress`, `review-ready`, and `in-review`; remove assignees.

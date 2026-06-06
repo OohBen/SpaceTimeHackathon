@@ -32,7 +32,8 @@ No active epic has a missing branch plan. The branch column in `## Epic Inventor
 | Branch | Work starts from latest parent epic branch | Push task branch immediately after claim |
 | Baseline | Validation command selected before edits | Record failed/passing baseline when applicable |
 | Completion | Acceptance criteria met and tests pass | Push commits, open PR to parent epic branch, label task `review-ready` |
-| Review | `code_review.human_required=false` | AI review may comment PASS/changes; self-approval can be blocked by GitHub |
+| Review claim | `review-ready`, open task, non-verify | Replace state label with `in-review` before reviewing to prevent duplicate reviews |
+| Review decision | Acceptance criteria, tests, security, mergeability, and diff scope checked | Comment PASS or requested changes; self-approval can be blocked by GitHub |
 | Task merge | Clean review and checks | Squash merge task PR into epic branch |
 | Task close | Task PR merged | Manually close issue and repair labels before claiming next task |
 | Epic merge | Verify task complete, epic PR targets `main` | Human review required; regular merge commit only |
