@@ -13,7 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Skip private repositories without Advanced Security
+        if: ${{ github.event.repository.private }}
+        run: |
+          echo "Dependency Review requires Dependency graph plus GitHub Advanced Security on private repositories."
+          echo "Skipping until those repository security features are enabled."
       - uses: actions/dependency-review-action@v4
+        if: ${{ !github.event.repository.private }}
         with:
           fail-on-severity: high
           comment-summary-in-pr: always
