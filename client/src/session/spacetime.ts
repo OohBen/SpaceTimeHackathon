@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { readHostedRuntime } from '../config/hostedRuntime';
 import { DbConnection, tables } from '../module_bindings';
+import { PANEL_STORE_KEY } from '../routes/panels';
 import type {
   CelestialBodies,
   Factions,
@@ -20,6 +21,7 @@ import {
   type SpacetimeClient,
 } from '../spacetime/client';
 import { defaultClientConfig } from '../spacetime/config';
+import { SESSION_STORE_KEY } from './store';
 import {
   sessionStore as sharedSessionStore,
   type PlayerSlotRow,
@@ -35,7 +37,9 @@ import {
   type SessionStore as SharedSessionStore,
 } from '../state/session-store';
 
-const AUTH_TOKEN_KEY = 'solar-dominion-auth-token';
+export const AUTH_TOKEN_KEY = 'solar-dominion-auth-token-v2';
+const LEGACY_AUTH_TOKEN_KEYS = ['solar-dominion-auth-token'];
+const PERSISTED_IDENTITY_KEYS = [AUTH_TOKEN_KEY, ...LEGACY_AUTH_TOKEN_KEYS, SESSION_STORE_KEY, PANEL_STORE_KEY];
 
 export interface SessionBackendResult {
   sessionId: number;
@@ -99,10 +103,41 @@ interface SlotMetadata {
 
 export function createConnectionBuilder() {
   const runtime = readHostedRuntime();
+  const token = readAuthToken();
+  const hadStoredToken = Boolean(token);
   return DbConnection.builder()
     .withUri(runtime.spacetimeUri)
     .withDatabaseName(runtime.spacetimeDbName)
-    .withToken(readAuthToken());
+    .withCompression('none')
+    .withToken(token)
+    .onConnect((_conn, identity, nextToken) => {
+      saveAuthToken(nextToken);
+      console.info('[Solar Dominion] SpacetimeDB connected', {
+        dbName: runtime.spacetimeDbName,
+        identity: identity.toHexString(),
+        uri: runtime.spacetimeUri,
+      });
+    })
+    .onConnectError((_ctx, error) => {
+      console.error('[Solar Dominion] SpacetimeDB connect error', {
+        dbName: runtime.spacetimeDbName,
+        hadStoredToken,
+        message: error.message,
+        uri: runtime.spacetimeUri,
+      });
+      if (hadStoredToken) {
+        resetPersistedSpacetimeIdentity('connect-error');
+        scheduleAnonymousReconnect();
+      }
+    })
+    .onDisconnect((ctx, error) => {
+      console.warn('[Solar Dominion] SpacetimeDB disconnected', {
+        active: ctx.isActive,
+        dbName: runtime.spacetimeDbName,
+        message: error?.message ?? null,
+        uri: runtime.spacetimeUri,
+      });
+    });
 }
 
 export function useSpacetimeSessionBackend(): SessionBackend {
@@ -122,23 +157,6 @@ export function useSpacetimeSessionBackend(): SessionBackend {
       saveAuthToken(token);
     }
   }, [token]);
-
-  useEffect(() => {
-    if (!conn || !isActive) {
-      return;
-    }
-
-    conn.subscriptionBuilder().subscribe([
-      tables.game_sessions,
-      tables.factions,
-      tables.celestial_bodies,
-      tables.public_factions,
-      tables.public_cities,
-      tables.public_fleets,
-      tables.public_colony_ships,
-      tables.public_events,
-    ]);
-  }, [conn, isActive]);
 
   useEffect(() => {
     hydrateSessionStoreFromSpacetimeSnapshot({
@@ -581,18 +599,46 @@ export function findOwnedSlot(
   return null;
 }
 
-function readAuthToken(): string | undefined {
+export function readAuthToken(): string | undefined {
   if (typeof localStorage === 'undefined') {
+    return undefined;
+  }
+
+  const hadLegacyToken = LEGACY_AUTH_TOKEN_KEYS.some((key) => localStorage.getItem(key));
+  if (hadLegacyToken) {
+    resetPersistedSpacetimeIdentity('legacy-token');
     return undefined;
   }
 
   return localStorage.getItem(AUTH_TOKEN_KEY) ?? undefined;
 }
 
-function saveAuthToken(token: string): void {
+export function saveAuthToken(token: string): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
   }
+}
+
+export function resetPersistedSpacetimeIdentity(reason: 'connect-error' | 'legacy-token'): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  for (const key of PERSISTED_IDENTITY_KEYS) {
+    localStorage.removeItem(key);
+  }
+
+  console.warn('[Solar Dominion] Cleared persisted SpacetimeDB identity', { reason });
+}
+
+function scheduleAnonymousReconnect(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 0);
 }
 
 function resolveSession(

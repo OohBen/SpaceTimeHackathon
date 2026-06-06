@@ -1,15 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  AUTH_TOKEN_KEY,
   createSessionBackend,
   deriveSessionChoices,
   deriveSlotChoices,
   findOwnedSlot,
   hydrateSessionStoreFromSpacetimeSnapshot,
+  readAuthToken,
+  resetPersistedSpacetimeIdentity,
+  saveAuthToken,
 } from './spacetime';
 import type { DbConnection } from '../module_bindings';
 import type { Factions, GameSessions } from '../module_bindings/types';
 import { reducerRegistry } from '../spacetime/reducers';
 import { createSessionStore } from '../state/session-store';
+import { SESSION_STORE_KEY } from './store';
 
 const identityA = {
   toHexString: () => 'aaaaaaaa',
@@ -106,6 +111,61 @@ describe('slot derivation', () => {
     expect(deriveSessionChoices([session])).toEqual([
       { id: 7, label: 'Session #7 - setup', state: 'setup' },
     ]);
+  });
+});
+
+describe('auth token storage', () => {
+  it('burns legacy auth tokens and persisted route state', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    localStorage.clear();
+    localStorage.setItem('solar-dominion-auth-token', 'legacy-token');
+    localStorage.setItem(SESSION_STORE_KEY, '{"state":{"sessionId":2}}');
+    localStorage.setItem('solar-dominion-panel', '{"state":{"activePanel":"turn-controls"}}');
+
+    try {
+      expect(readAuthToken()).toBeUndefined();
+      expect(localStorage.getItem('solar-dominion-auth-token')).toBeNull();
+      expect(localStorage.getItem(SESSION_STORE_KEY)).toBeNull();
+      expect(localStorage.getItem('solar-dominion-panel')).toBeNull();
+      expect(warn).toHaveBeenCalledWith(
+        '[Solar Dominion] Cleared persisted SpacetimeDB identity',
+        { reason: 'legacy-token' }
+      );
+    } finally {
+      warn.mockRestore();
+      localStorage.clear();
+    }
+  });
+
+  it('stores and reads the current auth token key', () => {
+    localStorage.clear();
+
+    saveAuthToken('fresh-token');
+
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('fresh-token');
+    expect(readAuthToken()).toBe('fresh-token');
+    localStorage.clear();
+  });
+
+  it('clears current auth and persisted session state after a stored-token connect error', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    localStorage.clear();
+    saveAuthToken('bad-token');
+    localStorage.setItem(SESSION_STORE_KEY, '{"state":{"sessionId":2}}');
+
+    try {
+      resetPersistedSpacetimeIdentity('connect-error');
+
+      expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull();
+      expect(localStorage.getItem(SESSION_STORE_KEY)).toBeNull();
+      expect(warn).toHaveBeenCalledWith(
+        '[Solar Dominion] Cleared persisted SpacetimeDB identity',
+        { reason: 'connect-error' }
+      );
+    } finally {
+      warn.mockRestore();
+      localStorage.clear();
+    }
   });
 });
 

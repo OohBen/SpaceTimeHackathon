@@ -73,6 +73,52 @@ describe('session store', () => {
     expect(selectPrivateFactionState(store.getState(), 'earth')?.resources.energy).toBe(120);
   });
 
+  it('preserves the route-selected active session when multiple live sessions hydrate', () => {
+    const store = createSessionStore();
+    store.getState().actions.setConnection({
+      status: 'connected',
+      identity: 'identity-player-42',
+    });
+    store.getState().actions.setActiveSession(42);
+
+    store.getState().actions.hydrateSubscription({
+      sessions: [
+        {
+          id: '1',
+          code: 'SOL-001',
+          status: 'lobby',
+          currentTurn: 1,
+          phase: 'setup',
+        },
+        {
+          id: '42',
+          code: 'SOL-042',
+          status: 'active',
+          currentTurn: 3,
+          phase: 'deliberation',
+        },
+      ],
+      playerSlots: [
+        {
+          sessionId: '42',
+          slot: 1,
+          identity: 'identity-player-42',
+          factionId: 'earth',
+          factionName: 'Earth Directorate',
+          playerName: 'Atlas',
+          occupied: true,
+          visibility: 'own',
+        },
+      ],
+    });
+
+    expect(selectActiveSession(store.getState())).toMatchObject({
+      id: '42',
+      phase: 'deliberation',
+    });
+    expect(selectCurrentPlayerSlot(store.getState())?.factionName).toBe('Earth Directorate');
+  });
+
   it('applies subscription upsert and delete events without component glue', () => {
     const store = createSessionStore();
 

@@ -303,6 +303,10 @@ function CommandCenterShell({
   const activeDef = findPanelDef(activePanel);
   const hud = useHudData(String(session.factionId));
 
+  useEffect(() => {
+    sessionStore.getState().actions.setActiveSession(session.sessionId);
+  }, [session.sessionId]);
+
   return (
     <div className="command-shell">
       <header className="command-shell__header" aria-label="Command Center header" role="banner">

@@ -322,6 +322,7 @@ export interface SessionState {
 }
 
 export interface SessionStoreActions {
+  setActiveSession: (sessionId: OperationalRowId | null) => void;
   setConnection: (connection: Partial<ConnectionState>) => void;
   setProposalsSubscription: (status: SubscriptionLoadStatus) => void;
   hydrateSubscription: (snapshot: SubscriptionSnapshot) => void;
@@ -373,6 +374,10 @@ export function createSessionStore(): SessionStore {
     llmRequestsById: {},
     reducerCalls: {},
     actions: {
+      setActiveSession(sessionId) {
+        set(() => ({ activeSessionId: sessionId == null ? null : String(sessionId) }));
+      },
+
       setConnection(connection) {
         set((state) => ({
           connection: {

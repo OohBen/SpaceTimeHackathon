@@ -470,7 +470,7 @@ export function joinOrResumeSession(
     opponentFactionId
   );
 
-  if (bothClaimed) {
+  if (bothClaimed && session.state === INITIAL_SESSION_STATE) {
     ctx.db.game_sessions.id.update({
       ...transitionTurnPhase(session, 'world_update', ctx.timestamp),
       state: ACTIVE_SESSION_STATE,

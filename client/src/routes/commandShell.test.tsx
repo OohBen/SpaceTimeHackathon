@@ -718,6 +718,56 @@ describe('Command Center shell', () => {
       expect(screen.getByLabelText(/control score/i)).toHaveTextContent(/Control: 47/i);
     });
 
+    it('scopes HUD data to the routed session instead of the first hydrated session', () => {
+      enterStoredGameContext();
+
+      act(() => {
+        sessionStore.getState().actions.setConnection({ status: 'connected', identity: 'identity-a' });
+        sessionStore.getState().actions.hydrateSubscription({
+          sessions: [
+            { id: '1', code: 'GAME0', status: 'lobby', currentTurn: 1, phase: 'setup' },
+            { id: '42', code: 'GAME1', status: 'active', currentTurn: 3, phase: 'deliberation' },
+          ],
+          playerSlots: [
+            {
+              sessionId: '42',
+              slot: 2,
+              identity: 'identity-a',
+              factionId: '202',
+              factionName: 'Solar Republic',
+              playerName: 'Rex',
+              occupied: true,
+              visibility: 'own',
+            },
+          ],
+          publicGameStates: [
+            {
+              sessionId: '1',
+              turn: 1,
+              year: 2150,
+              phase: 'setup',
+              controlScores: { '101': 10 },
+              visibleFactionIds: ['101'],
+            },
+            {
+              sessionId: '42',
+              turn: 3,
+              year: 2350,
+              phase: 'deliberation',
+              controlScores: { '202': 47 },
+              visibleFactionIds: ['202'],
+            },
+          ],
+        });
+      });
+
+      render(<AppRouter backend={backend()} />);
+
+      expect(screen.getByLabelText(/turn and year/i)).toHaveTextContent(/Turn 3/i);
+      expect(screen.getByLabelText(/phase/i)).toHaveTextContent(/deliberation/i);
+      expect(screen.getByLabelText(/control score/i)).toHaveTextContent(/Control: 47/i);
+    });
+
     it('shows resources from private faction state', () => {
       enterStoredGameContext();
 

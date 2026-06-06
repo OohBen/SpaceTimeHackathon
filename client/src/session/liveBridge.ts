@@ -1,17 +1,15 @@
 // Live integration bridge between the generated SpacetimeDB bindings and the
 // hand-rolled `sessionStore` consumed by `<Inbox />` and `<GlobalHud />`.
 //
-// Without this bridge, the route mounted at `/game/:sessionId/:playerSlot`
-// subscribes only to `game_sessions` + `factions` (see `useSpacetimeSessionBackend`),
-// so the Inbox renders "Loading proposals..." forever even though the server is
-// emitting them. The bridge widens the subscription set to every table the
-// playable path needs, then translates generated row shapes (numeric IDs,
-// camelCase, `Identity` helpers) into the snapshot shape the store consumes.
+// Without this bridge, the route flow hydrates only session setup data, so the
+// Inbox misses proposals and turn state. The bridge reads every live table the
+// playable path needs via SDK `useTable`, then translates generated row shapes
+// into the snapshot shape the store consumes.
 //
 // Two surfaces:
 //   - `buildLiveSnapshot(rows)` — pure translator, fully unit-testable.
 //   - `useLiveSessionBridge(...)` — React hook that ties live `useTable` output
-//     to `sessionStore` and expands the connection's subscription set.
+//     to `sessionStore`.
 //
 // Closes the M2/M3/M4 gaps from `docs/P4E1-integration-contracts-audit.md` for
 // the playable-path subscription wedge; M5 (token resume) + M6 (orchestrator
@@ -19,7 +17,6 @@
 
 import { useEffect } from 'react';
 import { useSpacetimeDB, useTable } from 'spacetimedb/react';
-import type { DbConnection } from '../module_bindings';
 import { tables } from '../module_bindings';
 import type {
   Factions,
@@ -118,38 +115,15 @@ export function buildLiveSnapshot(rows: LiveTableRows): SubscriptionSnapshot {
 }
 
 export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
-  const { isActive, identity, getConnection } = useSpacetimeDB();
-  const conn = getConnection() as DbConnection | null;
+  const { isActive, identity } = useSpacetimeDB();
   const identityHex = identity?.toHexString() ?? null;
 
-  const [sessions] = useTable(tables.game_sessions);
-  const [factions] = useTable(tables.factions);
-  const [proposals] = useTable(tables.proposals);
-  const [personnel] = useTable(tables.personnel);
-  const [turnSummaries] = useTable(tables.turn_summaries);
-  const [llmRequests] = useTable(tables.llm_requests);
-
-  useEffect(() => {
-    if (!conn || !isActive) return;
-    conn.subscriptionBuilder().subscribe([
-      // game_sessions + factions are REQUIRED here: the operational store reads
-      // them via useTable() above, and selectActiveSession()/all panels key off
-      // the hydrated session. Without these the store has no sessions and the
-      // whole game view shows "No active session".
-      tables.game_sessions,
-      tables.factions,
-      tables.cities,
-      tables.celestial_bodies,
-      tables.proposals,
-      tables.commander_inbox,
-      tables.turn_summaries,
-      tables.events,
-      tables.llm_requests,
-      tables.module_settings,
-      tables.personnel,
-      tables.public_factions,
-    ]);
-  }, [conn, isActive]);
+  const [sessions, sessionsReady] = useTable(tables.game_sessions);
+  const [factions, factionsReady] = useTable(tables.factions);
+  const [proposals, proposalsReady] = useTable(tables.proposals);
+  const [personnel, personnelReady] = useTable(tables.personnel);
+  const [turnSummaries, turnSummariesReady] = useTable(tables.turn_summaries);
+  const [llmRequests, llmRequestsReady] = useTable(tables.llm_requests);
 
   useEffect(() => {
     store.getState().actions.setConnection({
@@ -160,6 +134,18 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
   }, [isActive, identityHex, store]);
 
   useEffect(() => {
+    const ready =
+      sessionsReady &&
+      factionsReady &&
+      proposalsReady &&
+      personnelReady &&
+      turnSummariesReady &&
+      llmRequestsReady;
+    if (!ready) {
+      store.getState().actions.setProposalsSubscription({ status: isActive ? 'loading' : 'idle' });
+      return;
+    }
+
     const snapshot = buildLiveSnapshot({
       sessions,
       factions,
@@ -171,7 +157,23 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
     });
     store.getState().actions.hydrateSubscription(snapshot);
     store.getState().actions.setProposalsSubscription({ status: 'ready' });
-  }, [factions, identityHex, llmRequests, personnel, proposals, sessions, store, turnSummaries]);
+  }, [
+    factions,
+    factionsReady,
+    identityHex,
+    isActive,
+    llmRequests,
+    llmRequestsReady,
+    personnel,
+    personnelReady,
+    proposals,
+    proposalsReady,
+    sessions,
+    sessionsReady,
+    store,
+    turnSummaries,
+    turnSummariesReady,
+  ]);
 }
 
 function translateSession(session: GameSessions): SessionRow {

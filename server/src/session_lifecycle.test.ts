@@ -412,6 +412,23 @@ describe('join_or_resume_session reducer', () => {
     expect(sessions[0].turn_phase).toBe('world_update');
   });
 
+  it('claims an open slot on an already-active session without rewinding phase', () => {
+    const { sessions, factions } = setupSession();
+    sessions[0] = {
+      ...sessions[0],
+      state: ACTIVE_SESSION_STATE,
+      turn_phase: 'deliberation',
+    };
+
+    joinOrResumeSession(makeJoinResumeCtx(playerA, sessions, factions), {
+      session_id: 1,
+      player_slot: 'player_a',
+    });
+
+    expect(sessions[0].state).toBe(ACTIVE_SESSION_STATE);
+    expect(sessions[0].turn_phase).toBe('deliberation');
+  });
+
   it('rejects unknown player slots', () => {
     const { sessions, factions } = setupSession();
 

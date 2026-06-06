@@ -21,6 +21,8 @@ interface SessionState {
   reset(): void;
 }
 
+export const SESSION_STORE_KEY = 'solar-dominion-session';
+
 const initialState = {
   status: 'idle' as const,
   error: null,
@@ -50,7 +52,7 @@ export const useSessionStore = create<SessionState>()(
       reset: () => set(initialState),
     }),
     {
-      name: 'solar-dominion-session',
+      name: SESSION_STORE_KEY,
       partialize: (state) => ({
         sessionId: state.sessionId,
         factionId: state.factionId,
