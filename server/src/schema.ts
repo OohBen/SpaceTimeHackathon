@@ -2,7 +2,11 @@ import { table, t } from 'spacetimedb/server';
 
 export const tables = {
   game_sessions: table(
-    {},
+    {
+      indexes: [
+        { accessor: 'game_sessions_state_idx', algorithm: 'btree', columns: ['state'] as const },
+      ],
+    },
     {
       id: t.u32().primaryKey().autoInc(),
       state: t.string(),
@@ -19,7 +23,14 @@ export const tables = {
   ),
 
   factions: table(
-    {},
+    {
+      indexes: [
+        { accessor: 'factions_session_idx', algorithm: 'btree', columns: ['session_id'] as const },
+      ],
+      constraints: [
+        { constraint: 'unique', columns: ['player_id'] as const },
+      ],
+    },
     {
       id: t.u32().primaryKey().autoInc(),
       session_id: t.u32(),
@@ -48,7 +59,12 @@ export const tables = {
   ),
 
   cities: table(
-    {},
+    {
+      indexes: [
+        { accessor: 'cities_body_idx', algorithm: 'btree', columns: ['body_id'] as const },
+        { accessor: 'cities_faction_idx', algorithm: 'btree', columns: ['faction_id'] as const },
+      ],
+    },
     {
       id: t.u32().primaryKey().autoInc(),
       session_id: t.u32(),
@@ -67,7 +83,11 @@ export const tables = {
   ),
 
   personnel: table(
-    {},
+    {
+      indexes: [
+        { accessor: 'personnel_faction_idx', algorithm: 'btree', columns: ['faction_id'] as const },
+      ],
+    },
     {
       id: t.u32().primaryKey().autoInc(),
       faction_id: t.u32(),
@@ -101,7 +121,11 @@ export const tables = {
   ),
 
   proposals: table(
-    {},
+    {
+      indexes: [
+        { accessor: 'proposals_faction_idx', algorithm: 'btree', columns: ['faction_id', 'turn'] as const },
+      ],
+    },
     {
       id: t.u32().primaryKey().autoInc(),
       faction_id: t.u32(),
@@ -210,7 +234,11 @@ export const tables = {
   ),
 
   llm_requests: table(
-    {},
+    {
+      indexes: [
+        { accessor: 'llm_status_idx', algorithm: 'btree', columns: ['status'] as const },
+      ],
+    },
     {
       id: t.u32().primaryKey().autoInc(),
       session_id: t.u32(),
