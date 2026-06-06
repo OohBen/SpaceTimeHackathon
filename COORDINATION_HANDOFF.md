@@ -20,10 +20,10 @@ This file is the fast path for agents and reviewers who need current branch, cla
 | #40 | Closed | Epic inventory and dependency map created. |
 | #41 | Closed | Branch targets, task linkage, and workflow checkpoints documented. |
 | #42 | Closed | Maintenance runbook and audit script added. |
-| #43 | In progress for this branch | This handoff note package. |
-| #39 | Blocked until #43 closes | Final tracking-epic verification; unblock only after this PR merges and #43 is closed. |
+| #43 | Closed | Handoff note package merged into the coordination epic branch. |
+| #39 | Closed via PR #197 | Final tracking-epic verification completed with the epic PR. |
 
-After this PR merges, close #43, clear its workflow labels, remove `blocked` from #39, and run:
+After PR #197 merged, #33 and #39 were closed. Confirm no stale workflow labels or assignees remain, then run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/audit-tracking.ps1
@@ -86,4 +86,4 @@ $report.stateLabelViolations
 $report.closedIssueHygiene
 ```
 
-Expected healthy state after #43 closes: no stale workflow labels on closed tasks, no false-claimable blocked tasks, and #39 ready for final verify.
+Expected healthy state after PR #197 closed #33 and #39: no stale workflow labels on closed tasks, no false-claimable blocked tasks, and no remaining coordination-epic closeout work.
