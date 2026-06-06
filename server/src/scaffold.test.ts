@@ -4,15 +4,22 @@ import { resolve } from 'path';
 
 const root = resolve(import.meta.dirname, '../..');
 const serverRoot = resolve(import.meta.dirname, '..');
+const isWindows = process.platform === 'win32';
 
 describe('server scaffold', () => {
   it('module entry point exists', () => {
+    expect(existsSync(resolve(serverRoot, 'src/index.ts'))).toBe(true);
     expect(existsSync(resolve(serverRoot, 'src/module.ts'))).toBe(true);
   });
 
   it('dev helper script exists and is executable', () => {
     const devSh = resolve(serverRoot, 'scripts/dev.sh');
     expect(existsSync(devSh)).toBe(true);
+    if (isWindows) {
+      expect(readFileSync(devSh, 'utf8')).toContain('#!/usr/bin/env bash');
+      return;
+    }
+
     const mode = statSync(devSh).mode;
     expect(mode & 0o111).toBeGreaterThan(0);
   });

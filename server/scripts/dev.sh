@@ -14,13 +14,15 @@
 #
 # Expected env vars (or defaults shown):
 #   SPACETIME_DB_NAME   Name to publish the module under (default: solar-dominion)
-#   SPACETIME_HOST      SpacetimeDB server host (default: localhost:3000)
+#   SPACETIME_HOST      SpacetimeDB server URL (default: http://localhost:3000)
+#   SPACETIME_LISTEN_ADDR  Local server listen address (default: 0.0.0.0:3000)
 
 set -euo pipefail
 
 COMMAND="${1:-help}"
 DB_NAME="${SPACETIME_DB_NAME:-solar-dominion}"
-HOST="${SPACETIME_HOST:-localhost:3000}"
+HOST="${SPACETIME_HOST:-http://localhost:3000}"
+LISTEN_ADDR="${SPACETIME_LISTEN_ADDR:-0.0.0.0:3000}"
 BINDINGS_DIR="../client/src/module_bindings"
 
 case "$COMMAND" in
@@ -29,17 +31,17 @@ case "$COMMAND" in
     spacetime build
     ;;
   start)
-    echo "Starting local SpacetimeDB server and publishing module as '$DB_NAME'..."
-    spacetime start --db-name "$DB_NAME" --anonymous-access
+    echo "Starting local SpacetimeDB server on $LISTEN_ADDR..."
+    spacetime start --listen-addr "$LISTEN_ADDR" --non-interactive
     ;;
   publish)
     echo "Publishing module to $HOST as '$DB_NAME'..."
-    spacetime publish --db-name "$DB_NAME" --anonymous-access
+    spacetime publish "$DB_NAME" --server "$HOST" --anonymous --yes
     ;;
   generate)
     echo "Generating TypeScript client bindings into $BINDINGS_DIR..."
     mkdir -p "$BINDINGS_DIR"
-    spacetime generate --lang typescript --out-dir "$BINDINGS_DIR"
+    spacetime generate --lang typescript --module-path . --out-dir "$BINDINGS_DIR" --yes
     ;;
   help|*)
     echo "Usage: $0 {build|start|publish|generate}"
