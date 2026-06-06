@@ -10,6 +10,12 @@ export const SESSION_SUBSCRIPTION_QUERIES = [
   'SELECT * FROM player_slots',
   'SELECT * FROM public_game_state',
   'SELECT * FROM private_faction_state',
+  'SELECT * FROM celestial_bodies',
+  'SELECT * FROM public_factions',
+  'SELECT * FROM public_cities',
+  'SELECT * FROM public_fleets',
+  'SELECT * FROM public_colony_ships',
+  'SELECT * FROM public_events',
 ] as const;
 
 export interface SessionSubscriptionBridge {

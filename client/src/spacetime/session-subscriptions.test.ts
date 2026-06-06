@@ -61,4 +61,26 @@ describe('session subscription wiring', () => {
 
     expect(selectActiveSession(store.getState())?.phase).toBe('planning');
   });
+
+  it('subscribes to public world projections without private map tables', () => {
+    expect(SESSION_SUBSCRIPTION_QUERIES).toEqual(
+      expect.arrayContaining([
+        'SELECT * FROM celestial_bodies',
+        'SELECT * FROM public_factions',
+        'SELECT * FROM public_cities',
+        'SELECT * FROM public_fleets',
+        'SELECT * FROM public_colony_ships',
+        'SELECT * FROM public_events',
+      ]),
+    );
+    expect(SESSION_SUBSCRIPTION_QUERIES).not.toEqual(
+      expect.arrayContaining([
+        'SELECT * FROM factions',
+        'SELECT * FROM cities',
+        'SELECT * FROM fleets',
+        'SELECT * FROM colony_ships',
+        'SELECT * FROM events',
+      ]),
+    );
+  });
 });
