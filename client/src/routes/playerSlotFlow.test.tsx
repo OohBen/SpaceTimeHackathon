@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRouter } from './AppRouter';
 import { Setup } from './Setup';
 import type { SessionBackend } from '../session/spacetime';
+import { useSessionStore } from '../session/store';
 
 function backend(overrides: Partial<SessionBackend> = {}): SessionBackend {
   return {
@@ -40,6 +41,12 @@ function backend(overrides: Partial<SessionBackend> = {}): SessionBackend {
 }
 
 describe('player slot flow', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/');
+    localStorage.clear();
+    useSessionStore.getState().reset();
+  });
+
   it('renders available and occupied slot states for the selected session', () => {
     render(
       <Setup
@@ -53,6 +60,30 @@ describe('player slot flow', () => {
     expect(screen.getByRole('button', { name: /p1 united earth occupied/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /p2 mars compact available/i })).toBeEnabled();
     expect(screen.getByText(/use the browser that claimed p1/i)).toBeDefined();
+  });
+
+  it('routes a successful create into the game context', async () => {
+    const fakeBackend = backend({
+      createAndJoin: vi.fn(async () => ({
+        sessionId: 11,
+        factionId: 101,
+        playerSlot: 'player_a' as const,
+        playerName: 'Atlas',
+        isResume: false,
+      })),
+    });
+    render(<AppRouter backend={fakeBackend} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), {
+      target: { value: 'Atlas' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    await waitFor(() => expect(window.location.pathname).toBe('/game/11/player_a'));
+    expect(screen.getByRole('heading', { name: /command center/i })).toBeDefined();
+    expect(screen.getByText(/session 11/i)).toBeDefined();
+    expect(screen.getByText(/player_a/i)).toBeDefined();
   });
 
   it('submits the requested slot through the backend join flow', async () => {
@@ -77,8 +108,40 @@ describe('player slot flow', () => {
         playerSlot: 'player_b',
       })
     );
+    await waitFor(() => expect(window.location.pathname).toBe('/game/7/player_b'));
     expect(await screen.findByText(/your slot:/i)).toBeDefined();
     expect(screen.getByText('player_b')).toBeDefined();
+  });
+
+  it('renders a matching direct game route as a resumed context', () => {
+    useSessionStore.getState().setReady({
+      sessionId: 7,
+      factionId: 102,
+      playerSlot: 'player_b',
+      playerName: 'Rex',
+    });
+    window.history.replaceState(null, '', '/game/7/player_b');
+
+    render(<AppRouter backend={backend()} />);
+
+    expect(screen.getByRole('heading', { name: /command center/i })).toBeDefined();
+    expect(screen.getByText(/session 7/i)).toBeDefined();
+    expect(screen.getByText(/player_b/i)).toBeDefined();
+  });
+
+  it('blocks a direct game route when stored session context mismatches the path', () => {
+    useSessionStore.getState().setReady({
+      sessionId: 7,
+      factionId: 101,
+      playerSlot: 'player_a',
+      playerName: 'Atlas',
+    });
+    window.history.replaceState(null, '', '/game/7/player_b');
+
+    render(<AppRouter backend={backend()} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/route.*does not match.*session/i);
+    expect(screen.queryByRole('heading', { name: /command center/i })).toBeNull();
   });
 
   it('shows actionable invalid-session recovery text', async () => {

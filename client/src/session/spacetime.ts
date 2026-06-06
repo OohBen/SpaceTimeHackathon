@@ -27,6 +27,11 @@ export interface SessionBackend {
   createAndJoin(state: SetupState): Promise<SessionBackendResult>;
 }
 
+interface SessionReducers {
+  joinOrResumeSession(input: { sessionId: number; playerSlot: PlayerSlot }): Promise<void>;
+  createSession(input: { playerAName: string; playerBName: string }): Promise<void>;
+}
+
 interface BackendOptions {
   conn: DbConnection | null;
   isConnected: boolean;
@@ -113,7 +118,7 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
         throw new Error(`${slot.label} is occupied. ${slot.recovery}`);
       }
 
-      await conn.reducers.joinOrResumeSession({ sessionId, playerSlot });
+      await sessionReducers(conn).joinOrResumeSession({ sessionId, playerSlot });
 
       return {
         sessionId,
@@ -130,11 +135,15 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
 
       const playerAName = state.playerSlot === 'player_b' ? (state.opponentName ?? 'Player A') : state.playerName;
       const playerBName = state.playerSlot === 'player_b' ? state.playerName : (state.opponentName ?? 'Player B');
-      await conn.reducers.createSession({ playerAName, playerBName });
+      await sessionReducers(conn).createSession({ playerAName, playerBName });
 
       throw new Error('Session created. Select the new session ID, then join a slot.');
     },
   };
+}
+
+function sessionReducers(conn: DbConnection): SessionReducers {
+  return conn.reducers as unknown as SessionReducers;
 }
 
 export function deriveSessionChoices(sessions: readonly GameSessions[]): SessionChoice[] {

@@ -6,14 +6,21 @@ import {
   findOwnedSlot,
   useSpacetimeSessionBackend,
   type SessionBackend,
+  type SessionBackendResult,
 } from '../session/spacetime';
-import type { SetupParams, SetupState } from './types';
+import type { PlayerSlot, SetupParams, SetupState } from './types';
 
-type View = 'landing' | 'setup' | 'session-ready';
+type View = 'landing' | 'setup' | 'game';
+
+interface GameRouteParams {
+  sessionId: number;
+  playerSlot: PlayerSlot;
+}
 
 interface RouterState {
   view: View;
   setupParams?: SetupParams;
+  gameRoute?: GameRouteParams;
 }
 
 interface AppRouterProps {
@@ -40,11 +47,43 @@ function AppRouterView({
   onSessionReady,
   onSubmit,
 }: AppRouterProps & { backend: SessionBackend }) {
-  const [router, setRouter] = useState<RouterState>({ view: 'landing' });
+  const [router, setRouter] = useState<RouterState>(() => routeFromPath(readPathname()));
   const session = useSessionStore();
+
+  const resetToLanding = () => {
+    session.reset();
+    updatePath('/', 'push');
+    setRouter({ view: 'landing' });
+  };
+
+  const enterGame = (result: SessionBackendResult, historyMode: HistoryMode = 'push') => {
+    const gameRoute = { sessionId: result.sessionId, playerSlot: result.playerSlot };
+    updatePath(gamePath(gameRoute), historyMode);
+    setRouter({ view: 'game', gameRoute });
+  };
+
+  useEffect(() => {
+    const onPopState = () => setRouter(routeFromPath(readPathname()));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   useEffect(() => {
     if (session.status === 'ready') {
+      return;
+    }
+
+    if (router.view === 'game' && router.gameRoute && hasCompleteSessionContext(session)) {
+      if (!storedContextMatchesRoute(session, router.gameRoute)) {
+        return;
+      }
+
+      session.setReady({
+        sessionId: session.sessionId,
+        factionId: session.factionId,
+        playerSlot: session.playerSlot,
+        playerName: session.playerName,
+      });
       return;
     }
 
@@ -53,10 +92,14 @@ function AppRouterView({
       return;
     }
 
+    if (router.view === 'game' && router.gameRoute && !matchesGameRoute(router.gameRoute, owned)) {
+      return;
+    }
+
     session.setReady(owned);
     onSessionReady?.(owned.sessionId, owned.playerSlot);
-    setRouter({ view: 'session-ready' });
-  }, [backend.factions, backend.identity, backend.sessions, onSessionReady, session]);
+    enterGame(owned, router.view === 'game' ? 'replace' : 'push');
+  }, [backend.factions, backend.identity, backend.sessions, onSessionReady, router, session]);
 
   const defaultSubmit = async (state: SetupState): Promise<void> => {
     session.beginMutation();
@@ -67,7 +110,7 @@ function AppRouterView({
           : await backend.joinOrResume(state);
       session.setReady(result);
       onSessionReady?.(result.sessionId, result.playerSlot);
-      setRouter({ view: 'session-ready' });
+      enterGame(result);
     } catch (err) {
       const msg = actionableSessionError(err);
       session.setError(msg);
@@ -77,17 +120,13 @@ function AppRouterView({
 
   const handleSubmit = onSubmit ?? defaultSubmit;
 
-  if (router.view === 'session-ready' && session.status === 'ready') {
+  if (router.view === 'game' && router.gameRoute) {
     return (
-      <div>
-        <h2>Session Ready</h2>
-        <p>Session ID: <strong>{session.sessionId}</strong></p>
-        <p>Your slot: <strong>{session.playerSlot}</strong></p>
-        <p>Share the session ID with your opponent to start.</p>
-        <button onClick={() => { session.reset(); setRouter({ view: 'landing' }); }}>
-          Back to Menu
-        </button>
-      </div>
+      <GameRoute
+        route={router.gameRoute}
+        session={session}
+        onBack={resetToLanding}
+      />
     );
   }
 
@@ -107,6 +146,123 @@ function AppRouterView({
       onNavigate={(view, params) => setRouter({ view, setupParams: params })}
     />
   );
+}
+
+type SessionStoreState = ReturnType<typeof useSessionStore.getState>;
+type HistoryMode = 'push' | 'replace';
+
+function GameRoute({
+  route,
+  session,
+  onBack,
+}: {
+  route: GameRouteParams;
+  session: SessionStoreState;
+  onBack: () => void;
+}) {
+  if (!hasCompleteSessionContext(session)) {
+    return (
+      <RouteGuard
+        message="Join or resume this session before entering the game route."
+        onBack={onBack}
+      />
+    );
+  }
+
+  if (!storedContextMatchesRoute(session, route)) {
+    return (
+      <RouteGuard
+        message="Route does not match stored session context. Return to the menu and join the correct slot."
+        onBack={onBack}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <h2>Command Center</h2>
+      <p>Session {session.sessionId}</p>
+      <p>Your slot: <strong>{session.playerSlot}</strong></p>
+      <p>Share the session ID with your opponent to start.</p>
+      <button onClick={onBack}>Back to Menu</button>
+    </div>
+  );
+}
+
+function RouteGuard({ message, onBack }: { message: string; onBack: () => void }) {
+  return (
+    <div>
+      <p role="alert">{message}</p>
+      <button onClick={onBack}>Back to Menu</button>
+    </div>
+  );
+}
+
+function readPathname(): string {
+  return typeof window === 'undefined' ? '/' : window.location.pathname;
+}
+
+function routeFromPath(pathname: string): RouterState {
+  const match = /^\/game\/([1-9]\d*)\/(player_a|player_b)\/?$/.exec(pathname);
+  if (!match) {
+    return { view: 'landing' };
+  }
+
+  return {
+    view: 'game',
+    gameRoute: {
+      sessionId: Number(match[1]),
+      playerSlot: match[2] as PlayerSlot,
+    },
+  };
+}
+
+function gamePath(route: GameRouteParams): string {
+  return `/game/${route.sessionId}/${route.playerSlot}`;
+}
+
+function updatePath(path: string, mode: HistoryMode): void {
+  if (typeof window === 'undefined' || window.location.pathname === path) {
+    return;
+  }
+
+  if (mode === 'replace') {
+    window.history.replaceState(null, '', path);
+    return;
+  }
+
+  window.history.pushState(null, '', path);
+}
+
+function hasCompleteSessionContext(
+  session: SessionStoreState
+): session is SessionStoreState & {
+  sessionId: number;
+  factionId: number;
+  playerSlot: PlayerSlot;
+  playerName: string;
+} {
+  return (
+    session.sessionId !== null &&
+    session.factionId !== null &&
+    isPlayerSlot(session.playerSlot) &&
+    session.playerName !== null
+  );
+}
+
+function storedContextMatchesRoute(
+  session: SessionStoreState & { sessionId: number; playerSlot: PlayerSlot },
+  route: GameRouteParams
+): boolean {
+  return session.sessionId === route.sessionId && session.playerSlot === route.playerSlot;
+}
+
+function matchesGameRoute(route: GameRouteParams, result: SessionBackendResult): boolean {
+  return route.sessionId === result.sessionId && route.playerSlot === result.playerSlot;
+}
+
+function isPlayerSlot(value: unknown): value is PlayerSlot {
+  return value === 'player_a' || value === 'player_b';
 }
 
 function actionableSessionError(err: unknown): string {
