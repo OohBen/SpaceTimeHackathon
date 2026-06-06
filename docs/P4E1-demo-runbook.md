@@ -36,19 +36,20 @@ Then visit `http://localhost:5173` in **two separate browser profiles** (see
 joins as `player_a`. Player B opens the second profile, picks the same session
 from the dropdown, and joins as `player_b`.
 
-Once both slots are claimed, overlay the Turn-1 world snapshot onto the live
-session so the deterministic fallback proposal generator has eligible cities
-and personnel to draw from:
+Once both slots are claimed, load the Turn 8 judge scenario onto the live
+session so the Mars pressure / Callisto opportunity state, briefings, proposals,
+and narrative hooks are ready without manual database surgery:
 
 ```bash
-spacetime call solar-dominion --server http://localhost:3000 seed_demo_world <session_id>
+spacetime call solar-dominion --server http://localhost:3000 seed_demo_turn_8 <session_id>
 spacetime call solar-dominion --server http://localhost:3000 set_deliberation_mode '"fallback"'
 ```
 
-Without `seed_demo_world`, `run_deliberation` will write `fallback_unavailable`
-audit rows to `llm_requests` because `create_session` only seeds the session
-row plus two factions. The reducer is idempotent — re-calling it for a session
-that already has cities is a safe no-op.
+Without `seed_demo_turn_8`, a freshly-created session only has the session row
+plus two factions. The reducer is reproducible: re-calling it replaces the
+session-scoped scenario rows and restores the deterministic Turn 8 state.
+`seed_demo_world` remains available when you specifically need the older Turn 1
+world overlay.
 
 ## Identity pinning (audit M5)
 

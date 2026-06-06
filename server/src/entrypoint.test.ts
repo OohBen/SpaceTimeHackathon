@@ -21,6 +21,11 @@ const REQUIRED_TABLES = [
   'llm_requests',
 ];
 
+const REQUIRED_REDUCERS = [
+  'seed_demo_world',
+  'seed_demo_turn_8',
+];
+
 describe('SpacetimeDB entrypoint wiring', () => {
   it('uses the authoritative schema tables in the CLI entrypoint', () => {
     const src = readFileSync(srcPath('index.ts'), 'utf8');
@@ -42,6 +47,14 @@ describe('SpacetimeDB entrypoint wiring', () => {
     expect(src).toMatch(/export\s+const\s+tables\s*=/);
     for (const tableName of REQUIRED_TABLES) {
       expect(src).toContain(tableName);
+    }
+  });
+
+  it('exports supported demo seed reducers from the CLI entrypoint', () => {
+    const src = readFileSync(srcPath('index.ts'), 'utf8');
+
+    for (const reducerName of REQUIRED_REDUCERS) {
+      expect(src).toContain(`export const ${reducerName}`);
     }
   });
 });

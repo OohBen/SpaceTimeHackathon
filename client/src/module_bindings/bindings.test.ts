@@ -32,6 +32,8 @@ const REQUIRED_REDUCERS = [
   'expire_turn',
   'join_or_resume_session',
   'run_deliberation',
+  'seed_demo_turn_8',
+  'seed_demo_world',
   'simulate_turn',
   'submit_turn',
 ];
