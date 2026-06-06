@@ -130,18 +130,9 @@ export const LlmRequests = __t.object("LlmRequests", {
   status: __t.string(),
   responseJson: __t.option(__t.string()),
   error: __t.option(__t.string()),
-  errorCode: __t.option(__t.string()),
-  attemptCount: __t.u32(),
   createdTurn: __t.u32(),
-  updatedTurn: __t.u32(),
 });
 export type LlmRequests = __Infer<typeof LlmRequests>;
-
-export const ModuleSettings = __t.object("ModuleSettings", {
-  id: __t.u32(),
-  deliberationMode: __t.string(),
-});
-export type ModuleSettings = __Infer<typeof ModuleSettings>;
 
 export const Personnel = __t.object("Personnel", {
   id: __t.u32(),
@@ -201,65 +192,6 @@ export const Proposals = __t.object("Proposals", {
 });
 export type Proposals = __Infer<typeof Proposals>;
 
-export const PublicCities = __t.object("PublicCities", {});
-export type PublicCities = __Infer<typeof PublicCities>;
-
-export const PublicCityProjection = __t.object("PublicCityProjection", {
-  id: __t.u32(),
-  sessionId: __t.u32(),
-  bodyId: __t.u32(),
-  factionId: __t.u32(),
-  name: __t.string(),
-  developmentStage: __t.string(),
-});
-export type PublicCityProjection = __Infer<typeof PublicCityProjection>;
-
-export const PublicColonyShipProjection = __t.object("PublicColonyShipProjection", {
-  id: __t.u32(),
-  factionId: __t.u32(),
-  destinationBodyId: __t.u32(),
-  arrivesTurn: __t.u32(),
-  status: __t.string(),
-});
-export type PublicColonyShipProjection = __Infer<typeof PublicColonyShipProjection>;
-
-export const PublicColonyShips = __t.object("PublicColonyShips", {});
-export type PublicColonyShips = __Infer<typeof PublicColonyShips>;
-
-export const PublicEventProjection = __t.object("PublicEventProjection", {
-  id: __t.u32(),
-  sessionId: __t.u32(),
-  turn: __t.u32(),
-  eventType: __t.string(),
-});
-export type PublicEventProjection = __Infer<typeof PublicEventProjection>;
-
-export const PublicEvents = __t.object("PublicEvents", {});
-export type PublicEvents = __Infer<typeof PublicEvents>;
-
-export const PublicFactionProjection = __t.object("PublicFactionProjection", {
-  id: __t.u32(),
-  sessionId: __t.u32(),
-  name: __t.string(),
-  controlScore: __t.i32(),
-  readyForTurn: __t.bool(),
-});
-export type PublicFactionProjection = __Infer<typeof PublicFactionProjection>;
-
-export const PublicFactions = __t.object("PublicFactions", {});
-export type PublicFactions = __Infer<typeof PublicFactions>;
-
-export const PublicFleetProjection = __t.object("PublicFleetProjection", {
-  id: __t.u32(),
-  factionId: __t.u32(),
-  postingCityId: __t.u32(),
-  strength: __t.i32(),
-});
-export type PublicFleetProjection = __Infer<typeof PublicFleetProjection>;
-
-export const PublicFleets = __t.object("PublicFleets", {});
-export type PublicFleets = __Infer<typeof PublicFleets>;
-
 export const TradeAgreements = __t.object("TradeAgreements", {
   id: __t.u32(),
   sessionId: __t.u32(),
@@ -270,17 +202,4 @@ export const TradeAgreements = __t.object("TradeAgreements", {
   expiresTurn: __t.option(__t.u32()),
 });
 export type TradeAgreements = __Infer<typeof TradeAgreements>;
-
-export const TurnSummaries = __t.object("TurnSummaries", {
-  id: __t.u32(),
-  sessionId: __t.u32(),
-  factionId: __t.u32(),
-  turn: __t.u32(),
-  summaryJson: __t.string(),
-  acknowledged: __t.bool(),
-  acknowledgedAt: __t.option(__t.timestamp()),
-  createdAt: __t.timestamp(),
-  updatedAt: __t.timestamp(),
-});
-export type TurnSummaries = __Infer<typeof TurnSummaries>;
 

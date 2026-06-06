@@ -11,7 +11,6 @@ const OPERATIONAL_TABLES = [
   'projects',
   'intelligence_records',
   'events',
-  'turn_summaries',
   'trade_agreements',
   'llm_requests',
 ];
