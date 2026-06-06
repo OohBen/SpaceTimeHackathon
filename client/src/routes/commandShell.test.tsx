@@ -534,6 +534,40 @@ describe('Command Center shell', () => {
       expect(panel).not.toHaveTextContent(/not yet available/i);
     });
 
+    it('renders display-only narrative prose from a safe resolution payload', () => {
+      enterStoredGameContext();
+      hydrateStrategicPanelState();
+      act(() => {
+        sessionStore.getState().actions.applySubscriptionEvent({
+          table: 'turnSummaries',
+          op: 'upsert',
+          row: {
+            id: 'turn-summary-5',
+            sessionId: '42',
+            factionId: '202',
+            turn: 5,
+            summaryJson: JSON.stringify({
+              headline: 'Turn 5 outcome summary',
+              controlScores: { '202': 52, '303': 38 },
+              narrative: {
+                authoritative: false,
+                display_only: true,
+                text: 'Generated resolution note stays separate from control score state.',
+              },
+            }),
+            acknowledged: false,
+          },
+        });
+      });
+      usePanelStore.getState().setPanel('resolution');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/Generated resolution note stays separate/i);
+      expect(panel).toHaveTextContent(/Control 52/i);
+    });
+
     it('renders end-game review inside the command shell when the session is complete', () => {
       enterStoredGameContext();
       hydrateCompletedGameState();

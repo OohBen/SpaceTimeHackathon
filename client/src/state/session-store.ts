@@ -107,6 +107,7 @@ export interface EventRow {
   turn: number;
   eventType: string;
   payload?: string;
+  narrativeJson?: string | null;
 }
 
 export interface TurnSummaryRow {
@@ -115,6 +116,7 @@ export interface TurnSummaryRow {
   factionId: OperationalRowId;
   turn: number;
   summaryJson: string;
+  narrativeJson?: string | null;
   acknowledged: boolean;
   acknowledgedAt?: string | null;
   createdAt?: string;

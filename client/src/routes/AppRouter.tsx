@@ -1065,9 +1065,11 @@ interface ParsedResolutionSummary {
 
 function parseResolutionSummary(value: string | null | undefined): ParsedResolutionSummary {
   const parsed = parseJsonObject(value);
+  const narrativeText = parseDisplayNarrative(parsed?.narrative);
+  const events = stringList(parsed?.events);
   return {
     headline: typeof parsed?.headline === 'string' ? parsed.headline : null,
-    events: stringList(parsed?.events),
+    events: narrativeText ? [narrativeText, ...events] : events,
     controlScores: numberRecord(parsed?.controlScores),
     resourceDeltas: numberRecord(parsed?.resourceDeltas),
   };
@@ -1123,11 +1125,30 @@ function numberRecord(value: unknown): Record<string, number> {
 }
 
 function formatEventPayload(event: EventRow): string {
+  const narrativeText =
+    parseDisplayNarrative(parseJsonObject(event.narrativeJson)?.narrative) ??
+    parseDisplayNarrative(parseJsonObject(event.narrativeJson)) ??
+    parseDisplayNarrative(parseJsonObject(event.payload)?.narrative);
+  if (narrativeText) {
+    return narrativeText;
+  }
   if (!event.payload) {
     return `Turn ${event.turn}`;
   }
 
   return formatIntelValue(event.payload);
+}
+
+function parseDisplayNarrative(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.display_only !== true || record.authoritative !== false) {
+    return null;
+  }
+  const text = typeof record.text === 'string' ? record.text : null;
+  return text && text.trim() ? text : null;
 }
 
 function factionName(

@@ -58,6 +58,7 @@ export const CommanderInbox = __t.object("CommanderInbox", {
   fromPersonnelId: __t.u32(),
   subject: __t.string(),
   body: __t.string(),
+  narrativeJson: __t.option(__t.string()),
   requiresDecision: __t.bool(),
   status: __t.string(),
 });
@@ -70,6 +71,7 @@ export const Events = __t.object("Events", {
   turn: __t.u32(),
   eventType: __t.string(),
   payload: __t.string(),
+  narrativeJson: __t.option(__t.string()),
 });
 export type Events = __Infer<typeof Events>;
 
@@ -277,10 +279,10 @@ export const TurnSummaries = __t.object("TurnSummaries", {
   factionId: __t.u32(),
   turn: __t.u32(),
   summaryJson: __t.string(),
+  narrativeJson: __t.option(__t.string()),
   acknowledged: __t.bool(),
   acknowledgedAt: __t.option(__t.timestamp()),
   createdAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
 });
 export type TurnSummaries = __Infer<typeof TurnSummaries>;
-

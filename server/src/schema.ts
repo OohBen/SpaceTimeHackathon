@@ -156,6 +156,7 @@ export const tables = {
       from_personnel_id: t.u32(),
       subject: t.string(),
       body: t.string(),
+      narrative_json: t.option(t.string()),
       requires_decision: t.bool(),
       status: t.string(),
     }
@@ -223,6 +224,7 @@ export const tables = {
       turn: t.u32(),
       event_type: t.string(),
       payload: t.string(),
+      narrative_json: t.option(t.string()),
     }
   ),
 
@@ -240,6 +242,7 @@ export const tables = {
       faction_id: t.u32(),
       turn: t.u32(),
       summary_json: t.string(),
+      narrative_json: t.option(t.string()),
       acknowledged: t.bool(),
       acknowledged_at: t.option(t.timestamp()),
       created_at: t.timestamp(),
