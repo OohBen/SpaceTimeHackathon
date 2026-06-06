@@ -8,7 +8,7 @@ import {
   turn8Seed,
   type Turn8SeedRows,
 } from './turn8_seed.js';
-import { joinOrResumeSessionReducer } from './session_lifecycle.js';
+import { joinOrResumeSession } from './session_lifecycle.js';
 
 const canonicalValue = (value: unknown): unknown => {
   if (value instanceof Identity) return value.toHexString();
@@ -133,7 +133,7 @@ describe('Turn 8 deterministic seed', () => {
       },
     };
 
-    const result = joinOrResumeSessionReducer(ctx, {
+    const result = joinOrResumeSession(ctx, {
       session_id: session.id,
       player_slot: 'player_a',
     });
