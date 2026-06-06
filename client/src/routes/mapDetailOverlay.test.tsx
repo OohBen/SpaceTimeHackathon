@@ -312,7 +312,7 @@ describe('Map detail overlay (P2E4T3/T4)', () => {
     render(<AppRouter backend={backend()} />);
 
     const alertBoard = screen.getByRole('complementary', { name: /map alerts/i });
-    expect(within(alertBoard).getByText(/Mars contested/i)).toBeDefined();
+    expect(within(alertBoard).getAllByText(/Mars contested/i).length).toBeGreaterThan(0);
     expect(within(alertBoard).getByText(/Mars arrival imminent/i)).toBeDefined();
   });
 

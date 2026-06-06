@@ -331,10 +331,10 @@ describe('Command Center shell', () => {
       const panel = screen.getByRole('region', { name: /command content panel/i });
       expect(panel).toHaveTextContent(/Star Map/i);
       expect(screen.getByRole('img', { name: /solar system schematic map/i })).toBeDefined();
-      expect(screen.getByLabelText(/body earth controlled by earth directorate/i)).toBeDefined();
-      expect(screen.getByLabelText(/body mars contested/i)).toBeDefined();
-      expect(screen.getByLabelText(/city marker ares shipyards/i)).toBeDefined();
-      expect(screen.getByLabelText(/city marker valles holdfast/i)).toBeDefined();
+      expect(screen.getByLabelText(/open detail for earth.*controlled by earth directorate/i)).toBeDefined();
+      expect(screen.getByLabelText(/open detail for mars.*contested/i)).toBeDefined();
+      expect(screen.getByLabelText(/open detail for ares shipyards/i)).toBeDefined();
+      expect(screen.getByLabelText(/open detail for valles holdfast/i)).toBeDefined();
       expect(screen.getByLabelText(/fleet marker earth directorate strength 24/i)).toBeDefined();
       expect(screen.getByLabelText(/fleet marker mars compact strength 19/i)).toBeDefined();
       expect(screen.getByLabelText(/travel route earth directorate to mars arrives turn 9/i)).toBeDefined();
@@ -371,7 +371,7 @@ describe('Command Center shell', () => {
       render(<AppRouter backend={backend()} />);
 
       expect(screen.getByRole('img', { name: /solar system schematic map/i })).toBeDefined();
-      expect(screen.getByLabelText(/body earth controlled by earth directorate/i)).toBeDefined();
+      expect(screen.getByLabelText(/open detail for earth.*controlled by earth directorate/i)).toBeDefined();
     });
   });
 
