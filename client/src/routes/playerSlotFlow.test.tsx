@@ -4,6 +4,7 @@ import { AppRouter } from './AppRouter';
 import { Setup } from './Setup';
 import type { SessionBackend } from '../session/spacetime';
 import { useSessionStore } from '../session/store';
+import { sessionStore } from '../state/session-store';
 
 function backend(overrides: Partial<SessionBackend> = {}): SessionBackend {
   return {
@@ -46,6 +47,30 @@ describe('player slot flow', () => {
     window.history.replaceState(null, '', '/');
     localStorage.clear();
     useSessionStore.getState().reset();
+    sessionStore.getState().actions.setConnection({ status: 'idle', identity: null, error: null });
+    sessionStore.setState({
+      activeSessionId: null,
+      sessionsById: {},
+      playerSlotsByKey: {},
+      publicGameStateBySessionId: {},
+      privateFactionStateByKey: {},
+      publicFactionsByKey: {},
+      worldBodiesById: {},
+      publicFactionsById: {},
+      publicCitiesById: {},
+      publicFleetsById: {},
+      publicColonyShipsById: {},
+      publicEventsById: {},
+      proposalsById: {},
+      proposalsSubscription: { status: 'idle' },
+      factionsById: {},
+      personnelById: {},
+      intelligenceRecordsById: {},
+      eventsById: {},
+      turnSummariesById: {},
+      llmRequestsById: {},
+      reducerCalls: {},
+    });
   });
 
   it('renders available and occupied slot states for the selected session', () => {
@@ -112,6 +137,104 @@ describe('player slot flow', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/game/7/player_b'));
     expect(await screen.findByText(/your slot:/i)).toBeDefined();
     expect(screen.getByText('player_b')).toBeDefined();
+  });
+
+  it('shows deterministic local demo launch choices for both browsers', () => {
+    render(<Setup mode="demo" onBack={() => {}} onSubmit={() => Promise.resolve()} />);
+
+    expect(screen.getByRole('button', { name: /browser a p1 solar republic/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /browser b p2 martian league/i })).toBeEnabled();
+  });
+
+  it('boots local demo Browser B into the shared session with the Mars faction context', async () => {
+    render(<AppRouter backend={backend()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /local demo/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), {
+      target: { value: 'Browser B Commander' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /browser b p2 martian league/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    await waitFor(() => expect(window.location.pathname).toBe('/game/9001/player_b'));
+    expect(screen.getByText(/session 9001/i)).toBeDefined();
+    expect(screen.getByText('player_b')).toBeDefined();
+    expect(screen.getByLabelText(/faction identity/i)).toHaveTextContent('Martian League');
+  });
+
+  it('keeps local demo Browser B private resources scoped to the Mars faction only', async () => {
+    render(<AppRouter backend={backend()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /local demo/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), {
+      target: { value: 'Browser B Commander' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /browser b p2 martian league/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    await waitFor(() => expect(window.location.pathname).toBe('/game/9001/player_b'));
+    const privateRows = Object.values(sessionStore.getState().privateFactionStateByKey);
+    expect(privateRows.map(row => row.factionId)).toEqual(['303']);
+    expect(JSON.stringify(privateRows)).not.toContain('minerals":30');
+  });
+
+  it('bootstraps a direct local demo Browser B route without stored context', () => {
+    window.history.replaceState(null, '', '/game/9001/player_b');
+
+    render(<AppRouter backend={backend()} />);
+
+    expect(screen.getByRole('heading', { name: /command center/i })).toBeDefined();
+    expect(screen.getByText(/session 9001/i)).toBeDefined();
+    expect(screen.getByText('player_b')).toBeDefined();
+    expect(screen.getByLabelText(/faction identity/i)).toHaveTextContent('Martian League');
+  });
+
+  it('seeds direct local demo Browser B with its decision-phase proposal only', () => {
+    window.history.replaceState(null, '', '/game/9001/player_b');
+
+    render(<AppRouter backend={backend()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inbox' }));
+
+    expect(screen.getByTestId('commander-inbox')).toHaveTextContent(
+      /Mars dust lane interdiction/i,
+    );
+    expect(screen.getByTestId('commander-inbox')).not.toHaveTextContent(
+      /Solar orbital yard expansion/i,
+    );
+    expect(screen.getByTestId('turn-submit-readiness')).toHaveTextContent(
+      /not ready: 1 decision pending/i,
+    );
+  });
+
+  it('replays fresh local setup without stale state from the previous browser slot', async () => {
+    render(<AppRouter backend={backend()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /local demo/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), {
+      target: { value: 'Browser A Commander' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /browser a p1 solar republic/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    await waitFor(() => expect(window.location.pathname).toBe('/game/9001/player_a'));
+    expect(Object.values(sessionStore.getState().privateFactionStateByKey).map(row => row.factionId))
+      .toEqual(['202']);
+
+    fireEvent.click(screen.getByRole('button', { name: /back to menu/i }));
+    fireEvent.click(screen.getByRole('button', { name: /local demo/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), {
+      target: { value: 'Browser B Commander' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /browser b p2 martian league/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    await waitFor(() => expect(window.location.pathname).toBe('/game/9001/player_b'));
+    expect(Object.values(sessionStore.getState().privateFactionStateByKey).map(row => row.factionId))
+      .toEqual(['303']);
+    expect(Object.keys(sessionStore.getState().proposalsById)).toEqual(['9801']);
+    expect(sessionStore.getState().turnSummariesById).toEqual({});
+    expect(sessionStore.getState().reducerCalls).toEqual({});
   });
 
   it('renders a matching direct game route as a resumed context', () => {

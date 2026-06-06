@@ -25,12 +25,14 @@ import type {
   Factions,
   GameSessions,
   LlmRequests,
+  Personnel,
   Proposals,
   TurnSummaries,
 } from '../module_bindings/types';
 import {
   sessionStore,
   type LlmRequestRow,
+  type PersonnelRow,
   type PlayerSlotRow,
   type PrivateFactionStateRow,
   type ProposalRow,
@@ -66,6 +68,7 @@ export interface LiveTableRows {
   sessions: readonly GameSessions[];
   factions: readonly Factions[];
   proposals: readonly Proposals[];
+  personnel?: readonly Personnel[];
   turnSummaries: readonly TurnSummaries[];
   llmRequests: readonly LlmRequests[];
   identity: string | null;
@@ -76,18 +79,31 @@ export function buildLiveSnapshot(rows: LiveTableRows): SubscriptionSnapshot {
   for (const faction of rows.factions) {
     factionById.set(faction.id, faction);
   }
+  const ownedFactionIds = new Set(
+    rows.factions
+      .filter(faction => ownsFaction(faction, rows.identity))
+      .map(faction => faction.id)
+  );
 
   const sessions: SessionRow[] = rows.sessions.map(translateSession);
   const playerSlots: PlayerSlotRow[] = rows.factions.map(translatePlayerSlot);
   const publicFactions: PublicFactionRow[] = rows.factions.map(translatePublicFaction);
   const privateFactionStates: PrivateFactionStateRow[] = rows.factions
-    .filter(faction => ownsFaction(faction, rows.identity))
+    .filter(faction => ownedFactionIds.has(faction.id))
     .map(translatePrivateFactionState);
   const proposals: ProposalRow[] = rows.proposals
+    .filter(proposal => ownedFactionIds.has(proposal.factionId))
     .map(proposal => translateProposal(proposal, factionById))
     .filter((row): row is ProposalRow => row !== null);
-  const turnSummaries: TurnSummaryRow[] = rows.turnSummaries.map(translateTurnSummary);
-  const llmRequests: LlmRequestRow[] = rows.llmRequests.map(translateLlmRequest);
+  const personnel: PersonnelRow[] = (rows.personnel ?? [])
+    .filter(person => ownedFactionIds.has(person.factionId))
+    .map(translatePersonnel);
+  const turnSummaries: TurnSummaryRow[] = rows.turnSummaries
+    .filter(summary => ownedFactionIds.has(summary.factionId))
+    .map(translateTurnSummary);
+  const llmRequests: LlmRequestRow[] = rows.llmRequests
+    .filter(request => ownedFactionIds.has(request.factionId))
+    .map(translateLlmRequest);
 
   return {
     sessions,
@@ -95,6 +111,7 @@ export function buildLiveSnapshot(rows: LiveTableRows): SubscriptionSnapshot {
     publicFactions,
     privateFactionStates,
     proposals,
+    personnel,
     turnSummaries,
     llmRequests,
   };
@@ -108,6 +125,7 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
   const [sessions] = useTable(tables.game_sessions);
   const [factions] = useTable(tables.factions);
   const [proposals] = useTable(tables.proposals);
+  const [personnel] = useTable(tables.personnel);
   const [turnSummaries] = useTable(tables.turn_summaries);
   const [llmRequests] = useTable(tables.llm_requests);
 
@@ -120,6 +138,7 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
       tables.events,
       tables.llm_requests,
       tables.module_settings,
+      tables.personnel,
       tables.public_factions,
     ]);
   }, [conn, isActive]);
@@ -137,13 +156,14 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
       sessions,
       factions,
       proposals,
+      personnel,
       turnSummaries,
       llmRequests,
       identity: identityHex,
     });
     store.getState().actions.hydrateSubscription(snapshot);
     store.getState().actions.setProposalsSubscription({ status: 'ready' });
-  }, [factions, identityHex, llmRequests, proposals, sessions, store, turnSummaries]);
+  }, [factions, identityHex, llmRequests, personnel, proposals, sessions, store, turnSummaries]);
 }
 
 function translateSession(session: GameSessions): SessionRow {
@@ -218,6 +238,28 @@ function translateProposal(
     confidence: proposal.confidence,
     status: proposal.status,
     decision: proposal.decision ?? null,
+  };
+}
+
+function translatePersonnel(person: Personnel): PersonnelRow {
+  return {
+    id: person.id,
+    factionId: person.factionId,
+    name: person.name,
+    role: person.role,
+    department: person.department,
+    postingCityId: person.postingCityId,
+    competence: person.competence,
+    creativity: person.creativity,
+    reliability: person.reliability,
+    ambition: person.ambition,
+    politicalSkill: person.politicalSkill,
+    communication: person.communication,
+    loyalty: person.loyalty,
+    autonomyTolerance: person.autonomyTolerance,
+    morale: person.morale,
+    burnout: person.burnout,
+    salary: person.salary,
   };
 }
 
