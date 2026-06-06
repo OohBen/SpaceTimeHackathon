@@ -8,7 +8,7 @@ export interface SessionContext {
   playerName: string;
 }
 
-interface SessionState extends SessionContext {
+interface SessionState {
   status: 'idle' | 'loading' | 'error' | 'ready';
   error: string | null;
   sessionId: number | null;

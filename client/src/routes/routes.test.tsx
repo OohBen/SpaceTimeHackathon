@@ -1,8 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Landing } from './Landing';
 import { Setup } from './Setup';
 import { AppRouter } from './AppRouter';
+import type { SessionBackend } from '../session/spacetime';
+
+function backend(): SessionBackend {
+  return {
+    isConnected: true,
+    identity: null,
+    sessions: [],
+    factions: [],
+    getSessionChoices: () => [],
+    getSlotChoices: () => [],
+    joinOrResume: vi.fn(),
+    createAndJoin: vi.fn(),
+  };
+}
 
 describe('Landing', () => {
   it('renders all three entry choices', () => {
@@ -36,12 +50,12 @@ describe('Landing', () => {
 
 describe('Setup', () => {
   it('renders the two-browser demo path explanation', () => {
-    render(<Setup mode="demo" onBack={() => {}} onConfirm={() => {}} />);
+    render(<Setup mode="demo" onBack={() => {}} onSubmit={() => Promise.resolve()} />);
     expect(screen.getByText(/two.browser/i)).toBeDefined();
   });
 
   it('preserves player name state', () => {
-    render(<Setup mode="create" onBack={() => {}} onConfirm={() => {}} />);
+    render(<Setup mode="create" onBack={() => {}} onSubmit={() => Promise.resolve()} />);
     const input = screen.getByRole('textbox', { name: /player name/i });
     fireEvent.change(input, { target: { value: 'Commander Atlas' } });
     expect((input as HTMLInputElement).value).toBe('Commander Atlas');
@@ -49,7 +63,7 @@ describe('Setup', () => {
 
   it('calls onBack when back is clicked', () => {
     const onBack = vi.fn();
-    render(<Setup mode="create" onBack={onBack} onConfirm={() => {}} />);
+    render(<Setup mode="create" onBack={onBack} onSubmit={() => Promise.resolve()} />);
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(onBack).toHaveBeenCalled();
   });
@@ -60,7 +74,12 @@ describe('Setup', () => {
     const input = screen.getByRole('textbox', { name: /player name/i });
     fireEvent.change(input, { target: { value: 'Admiral Rex' } });
     fireEvent.click(screen.getByRole('button', { name: /confirm|start|continue/i }));
-    expect(onSubmit).toHaveBeenCalledWith({ playerName: 'Admiral Rex', mode: 'create' });
+    expect(onSubmit).toHaveBeenCalledWith({
+      playerName: 'Admiral Rex',
+      mode: 'create',
+      opponentName: '',
+      playerSlot: 'player_a',
+    });
   });
 
   it('shows loading state while mutation is pending', async () => {
@@ -89,18 +108,18 @@ describe('Setup', () => {
 
 describe('AppRouter', () => {
   it('renders Landing by default', () => {
-    render(<AppRouter />);
+    render(<AppRouter backend={backend()} />);
     expect(screen.getByRole('button', { name: /create/i })).toBeDefined();
   });
 
   it('navigates to Setup when Create is clicked', () => {
-    render(<AppRouter />);
+    render(<AppRouter backend={backend()} />);
     fireEvent.click(screen.getByRole('button', { name: /create/i }));
     expect(screen.getByRole('textbox', { name: /player name/i })).toBeDefined();
   });
 
   it('navigates back to Landing from Setup', () => {
-    render(<AppRouter />);
+    render(<AppRouter backend={backend()} />);
     fireEvent.click(screen.getByRole('button', { name: /create/i }));
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(screen.getByRole('button', { name: /create/i })).toBeDefined();
