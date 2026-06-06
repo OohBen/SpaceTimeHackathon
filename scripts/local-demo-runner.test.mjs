@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 
 import {
   DEFAULTS,
   buildChildEnvironments,
+  buildFrontendDevArgs,
   buildRunnerConfig,
+  buildSpacetimePublishArgs,
+  buildSpacetimeStartArgs,
+  buildWindowsTaskkillArgs,
   operatorReadyLines,
   runPreflight,
+  waitForManagedReadiness,
 } from "./local-demo-runner.mjs";
 
 test("defaults to judge-ready fixture mode and required local endpoints", () => {
@@ -14,11 +20,62 @@ test("defaults to judge-ready fixture mode and required local endpoints", () => 
 
   assert.equal(config.mode, "fixture");
   assert.equal(config.spacetime.host, "http://localhost:3000");
+  assert.match(config.spacetime.dataDir, /[\\/]\.spacetimedb-local-data$/);
   assert.equal(config.spacetime.wsHost, "ws://localhost:3000");
   assert.equal(config.spacetime.dbName, "solar-dominion");
   assert.equal(config.orchestrator.port, 8787);
   assert.equal(config.frontend.port, 5173);
   assert.deepEqual(config.requiredExecutables, ["node", "npm", "spacetime"]);
+});
+
+test("uses a runner-owned SpacetimeDB data dir and destructive publish reset for repeatable smoke", () => {
+  const config = buildRunnerConfig({}, []);
+
+  assert.deepEqual(buildSpacetimeStartArgs(config), [
+    "start",
+    "--listen-addr",
+    "0.0.0.0:3000",
+    "--data-dir",
+    config.spacetime.dataDir,
+    "--non-interactive",
+  ]);
+  assert.deepEqual(buildSpacetimePublishArgs(config), [
+    "publish",
+    "solar-dominion",
+    "--server",
+    "http://localhost:3000",
+    "--anonymous",
+    "--yes",
+    "--delete-data=always",
+    "--module-path",
+    "server",
+  ]);
+});
+
+test("builds a Windows process-tree kill command for managed teardown", () => {
+  assert.deepEqual(buildWindowsTaskkillArgs(1234), [
+    "/PID",
+    "1234",
+    "/T",
+    "/F",
+  ]);
+});
+
+test("starts Vite through the client workspace so CLI flags reach Vite", () => {
+  const config = buildRunnerConfig({}, []);
+
+  assert.deepEqual(buildFrontendDevArgs(config), [
+    "--workspace",
+    "client",
+    "run",
+    "dev",
+    "--",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "5173",
+    "--strictPort",
+  ]);
 });
 
 test("sets all child env surfaces needed by the demo stack", () => {
@@ -81,4 +138,26 @@ test("preflight rejects invalid fixture catalogs before startup", async () => {
     result.errors.join("\n"),
     /expected schema_version=1 and a non-empty scenarios array/
   );
+});
+
+test("managed readiness fails immediately with recent child logs when service exits early", async () => {
+  const child = new EventEmitter();
+  const managed = {
+    child,
+    logs: ["[spacetimedb] failed to create initial log file"],
+    name: "spacetimedb",
+  };
+
+  const waiting = waitForManagedReadiness(
+    managed,
+    async () => false,
+    10_000,
+    "http://localhost:3000 did not become reachable",
+    1
+  );
+  child.emit("exit", 1);
+
+  await assert.rejects(waiting, {
+    message: /spacetimedb exited before readiness with code 1[\s\S]*failed to create initial log file/,
+  });
 });

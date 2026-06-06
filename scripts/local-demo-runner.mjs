@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, rm } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ const repoRoot = path.resolve(here, "..");
 
 export const DEFAULTS = {
   dbName: "solar-dominion",
+  dataDir: path.join(repoRoot, ".spacetimedb-local-data"),
   frontendPort: 5173,
   fixturePath: path.join(repoRoot, "orchestrator", "fixtures", "scenarios.json"),
   mode: "fixture",
@@ -82,6 +83,7 @@ export function buildRunnerConfig(env = process.env, argv = process.argv.slice(2
     requiredExecutables: REQUIRED_EXECUTABLES,
     smoke: args.smoke,
     spacetime: {
+      dataDir: DEFAULTS.dataDir,
       dbName: spacetimeDbName,
       host: spacetimeHost,
       port: readPortFromUrl(spacetimeHost, DEFAULTS.spacetimePort),
@@ -89,6 +91,50 @@ export function buildRunnerConfig(env = process.env, argv = process.argv.slice(2
     },
     viteModule: frontendModule,
   };
+}
+
+export function buildSpacetimeStartArgs(config) {
+  return [
+    "start",
+    "--listen-addr",
+    `0.0.0.0:${config.spacetime.port}`,
+    "--data-dir",
+    config.spacetime.dataDir,
+    "--non-interactive",
+  ];
+}
+
+export function buildSpacetimePublishArgs(config) {
+  return [
+    "publish",
+    config.spacetime.dbName,
+    "--server",
+    config.spacetime.host,
+    "--anonymous",
+    "--yes",
+    "--delete-data=always",
+    "--module-path",
+    "server",
+  ];
+}
+
+export function buildFrontendDevArgs(config) {
+  return [
+    "--workspace",
+    "client",
+    "run",
+    "dev",
+    "--",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(config.frontend.port),
+    "--strictPort",
+  ];
+}
+
+export function buildWindowsTaskkillArgs(pid) {
+  return ["/PID", String(pid), "/T", "/F"];
 }
 
 export function buildChildEnvironments(config, baseEnv = process.env) {
@@ -203,18 +249,27 @@ export async function runLocalDemo(config = buildRunnerConfig()) {
       cwd: config.repoRoot,
     });
 
+    await resetSpacetimeDataDir(config.spacetime.dataDir);
+
     const spacetime = startManagedProcess(
       "spacetimedb",
-      "npm",
-      ["run", "spacetime:start"],
+      "spacetime",
+      buildSpacetimeStartArgs(config),
       { cwd: config.repoRoot }
     );
     children.push(spacetime);
-    await waitForTcpPort(config.spacetime.port, config.readinessTimeoutMs);
+    await waitForManagedTcpPort(
+      spacetime,
+      config.spacetime.port,
+      config.readinessTimeoutMs
+    );
 
-    await runCommand("spacetimedb", "npm", ["run", "spacetime:publish"], {
-      cwd: config.repoRoot,
-    });
+    await runCommand(
+      "spacetimedb",
+      "spacetime",
+      buildSpacetimePublishArgs(config),
+      { cwd: config.repoRoot }
+    );
 
     const orchestrator = startManagedProcess(
       "orchestrator",
@@ -223,7 +278,8 @@ export async function runLocalDemo(config = buildRunnerConfig()) {
       { cwd: config.repoRoot, env: env.orchestrator }
     );
     children.push(orchestrator);
-    await waitForHttpOk(
+    await waitForManagedHttpOk(
+      orchestrator,
       `${config.orchestrator.url}/health`,
       config.readinessTimeoutMs
     );
@@ -245,20 +301,15 @@ export async function runLocalDemo(config = buildRunnerConfig()) {
     const frontend = startManagedProcess(
       "frontend",
       "npm",
-      [
-        "run",
-        "dev:client",
-        "--",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(config.frontend.port),
-        "--strictPort",
-      ],
+      buildFrontendDevArgs(config),
       { cwd: config.repoRoot, env: env.frontend }
     );
     children.push(frontend);
-    await waitForHttpOk(config.frontend.url, config.readinessTimeoutMs);
+    await waitForManagedHttpOk(
+      frontend,
+      config.frontend.url,
+      config.readinessTimeoutMs
+    );
 
     for (const line of operatorReadyLines(config)) {
       console.log(line);
@@ -275,6 +326,10 @@ export async function runLocalDemo(config = buildRunnerConfig()) {
     await shutdown();
     return 1;
   }
+}
+
+async function resetSpacetimeDataDir(dataDir) {
+  await rm(dataDir, { force: true, recursive: true });
 }
 
 function parseArgs(argv) {
@@ -451,7 +506,11 @@ async function stopChildren(children) {
     if (child.child.exitCode !== null || child.child.killed) {
       continue;
     }
-    child.child.kill("SIGTERM");
+    if (process.platform === "win32" && child.child.pid) {
+      await runProcessQuiet("taskkill", buildWindowsTaskkillArgs(child.child.pid));
+    } else {
+      child.child.kill("SIGTERM");
+    }
     await Promise.race([
       waitForExit(child.child),
       delay(5_000).then(() => {
@@ -463,8 +522,9 @@ async function stopChildren(children) {
   }
 }
 
-async function waitForTcpPort(port, timeoutMs) {
-  await pollUntil(
+async function waitForManagedTcpPort(managed, port, timeoutMs) {
+  await waitForManagedReadiness(
+    managed,
     async () => {
       try {
         await connectTcp(port);
@@ -478,8 +538,9 @@ async function waitForTcpPort(port, timeoutMs) {
   );
 }
 
-async function waitForHttpOk(url, timeoutMs) {
-  await pollUntil(
+async function waitForManagedHttpOk(managed, url, timeoutMs) {
+  await waitForManagedReadiness(
+    managed,
     async () => {
       try {
         const response = await fetch(url);
@@ -493,15 +554,46 @@ async function waitForHttpOk(url, timeoutMs) {
   );
 }
 
-async function pollUntil(check, timeoutMs, failureMessage) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    if (await check()) {
-      return;
-    }
-    await delay(POLL_INTERVAL_MS);
+export async function waitForManagedReadiness(
+  managed,
+  check,
+  timeoutMs,
+  failureMessage,
+  intervalMs = POLL_INTERVAL_MS
+) {
+  if (managed.child.exitCode !== undefined && managed.child.exitCode !== null) {
+    throw new Error(formatManagedExit(managed, managed.child.exitCode));
   }
-  throw new Error(failureMessage);
+
+  let exited = false;
+  let exitCode = 0;
+  let onExit;
+  onExit = (code) => {
+    exited = true;
+    exitCode = code ?? 0;
+  };
+  managed.child.once("exit", onExit);
+
+  try {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      if (exited) {
+        throw new Error(formatManagedExit(managed, exitCode));
+      }
+      if (await check()) {
+        return;
+      }
+      if (exited) {
+        throw new Error(formatManagedExit(managed, exitCode));
+      }
+      await delay(intervalMs);
+    }
+    throw new Error(failureMessage);
+  } finally {
+    if (onExit && typeof managed.child.off === "function") {
+      managed.child.off("exit", onExit);
+    }
+  }
 }
 
 function connectTcp(port) {
@@ -516,6 +608,14 @@ function connectTcp(port) {
       socket.destroy();
       reject(new Error("timeout"));
     });
+  });
+}
+
+function runProcessQuiet(command, args) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: "ignore" });
+    child.once("error", () => resolve());
+    child.once("exit", () => resolve());
   });
 }
 
@@ -642,6 +742,16 @@ function validateFixtureCatalog(value) {
 
 function formatError(cause) {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+function formatManagedExit(managed, code) {
+  const recentLogs = managed.logs?.slice(-10).join("\n") ?? "";
+  return [
+    `${managed.name} exited before readiness with code ${code}.`,
+    recentLogs,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function delay(ms) {
