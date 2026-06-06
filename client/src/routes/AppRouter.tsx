@@ -10,7 +10,7 @@ import {
 } from '../session/spacetime';
 import { useHudData, type HudData } from './hud';
 import type { PlayerSlot, SetupParams, SetupState } from './types';
-import { usePanelStore, CORE_PANELS, type PanelId } from './panels';
+import { usePanelStore, CORE_PANELS, findPanelDef, type PanelId } from './panels';
 import './CommandCenterShell.css';
 
 type View = 'landing' | 'setup' | 'game';
@@ -209,7 +209,7 @@ function CommandCenterShell({
   onPanelChange: (panel: PanelId) => void;
   onBack: () => void;
 }) {
-  const activeDef = CORE_PANELS.find((p) => p.id === activePanel) ?? CORE_PANELS[0];
+  const activeDef = findPanelDef(activePanel);
   const hud = useHudData(String(session.factionId));
 
   return (
@@ -299,9 +299,14 @@ function PanelContent({
     );
   }
 
+  const panelDef = findPanelDef(panel);
   return (
-    <div className="command-shell__brief" aria-label={`${panel} panel placeholder`}>
-      <p>This panel is not yet available.</p>
+    <div className="command-shell__brief" aria-label={`${panelDef.label} panel placeholder`}>
+      <p>
+        {panelDef.label}: {panelDef.unavailableMessage ?? 'This panel is not yet available.'}{' '}
+        Session {session.sessionId} remains available in the shared shell while this view waits for
+        implementation data.
+      </p>
     </div>
   );
 }

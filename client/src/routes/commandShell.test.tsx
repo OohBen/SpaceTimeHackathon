@@ -156,6 +156,54 @@ describe('Command Center shell', () => {
       );
     });
 
+    it('exposes the strategic demo panels in the shell registry', () => {
+      expect(CORE_PANELS.map((p) => p.id)).toEqual(
+        expect.arrayContaining([
+          'personnel',
+          'resources',
+          'intelligence',
+          'diplomacy',
+          'doctrine',
+          'resolution',
+          'end-game',
+        ]),
+      );
+    });
+
+    it('can switch through strategic demo panels without route churn', () => {
+      enterStoredGameContext();
+      render(<AppRouter backend={backend()} />);
+      const path = window.location.pathname;
+
+      for (const panel of [
+        'Personnel',
+        'Resources',
+        'Intelligence',
+        'Diplomacy',
+        'Doctrine',
+        'Turn Resolution',
+        'End Game',
+      ]) {
+        fireEvent.click(screen.getByRole('button', { name: panel }));
+        expect(window.location.pathname).toBe(path);
+        expect(screen.getByRole('region', { name: /command content panel/i })).toHaveTextContent(
+          panel,
+        );
+      }
+    });
+
+    it('degrades unavailable strategic panel data into clear placeholder content', () => {
+      enterStoredGameContext();
+      usePanelStore.getState().setPanel('diplomacy');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/Diplomacy/i);
+      expect(panel).toHaveTextContent(/not yet available/i);
+      expect(panel).toHaveTextContent(/Session 42/i);
+    });
+
     it('active panel persists across remount via local storage', () => {
       enterStoredGameContext();
       const { unmount } = render(<AppRouter backend={backend()} />);
