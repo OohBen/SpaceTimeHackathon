@@ -23,6 +23,9 @@ describe('session subscription wiring', () => {
     const bridge = wireSessionSubscriptions(store, client);
 
     expect(subscribedQueries).toEqual([[...SESSION_SUBSCRIPTION_QUERIES]]);
+    expect(subscribedQueries[0]).toContain('SELECT * FROM public_factions');
+    expect(subscribedQueries[0]).toContain('SELECT * FROM turn_summaries');
+    expect(subscribedQueries[0]).toContain('SELECT * FROM llm_requests');
 
     bridge.hydrate({
       sessions: [
@@ -91,7 +94,7 @@ describe('session subscription wiring', () => {
     );
   });
 
-  it('subscribes to proposals and tracks loading state', () => {
+  it('subscribes to proposals and marks the subscription as loading until a snapshot arrives', () => {
     const subscribedQueries: string[][] = [];
     const client: SpacetimeClient = {
       connect: () => ({ disconnect: () => undefined }),
@@ -115,5 +118,50 @@ describe('session subscription wiring', () => {
       status: 'error',
       error: 'feed dropped',
     });
+  });
+
+  it('routes orchestrator audit and turn summary snapshots through the bridge', () => {
+    const client: SpacetimeClient = {
+      connect: () => ({ disconnect: () => undefined }),
+      reconnect: () => ({ disconnect: () => undefined }),
+      disconnect: () => undefined,
+      subscribe: () => undefined,
+      callReducer: () => undefined,
+      diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
+    };
+    const store = createSessionStore();
+    const bridge = wireSessionSubscriptions(store, client);
+
+    bridge.hydrate({
+      turnSummaries: [
+        {
+          id: 'summary-1',
+          sessionId: 'session-bridge',
+          factionId: '7',
+          turn: 2,
+          summaryJson: '{"event":"turn_summary"}',
+          acknowledged: false,
+          acknowledgedAt: null,
+        },
+      ],
+      llmRequests: [
+        {
+          id: 'llm-1',
+          sessionId: 'session-bridge',
+          factionId: '7',
+          requestType: 'proposals',
+          status: 'queued',
+          responseJson: null,
+          error: null,
+          errorCode: null,
+          attemptCount: 0,
+          createdTurn: 2,
+          updatedTurn: 2,
+        },
+      ],
+    });
+
+    expect(store.getState().turnSummariesById['summary-1']?.turn).toBe(2);
+    expect(store.getState().llmRequestsById['llm-1']?.status).toBe('queued');
   });
 });

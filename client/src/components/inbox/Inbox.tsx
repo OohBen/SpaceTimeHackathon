@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { SpacetimeClient } from '../../spacetime/client';
 import {
+  ackResolutionAction,
+  ackResolutionKey,
   commanderDecisionAction,
   commanderDecisionKey,
   expireTurnAction,
   expireTurnKey,
+  runDeliberationAction,
+  runDeliberationKey,
+  simulateTurnAction,
+  simulateTurnKey,
   submitTurnAction,
   submitTurnKey,
 } from '../../spacetime/session-actions';
@@ -19,12 +25,14 @@ import {
   type PlayerSlotRow,
   type PrivateFactionStateRow,
   type PublicFactionRow,
+  type LlmRequestRow,
   type ProposalRow,
   type ReducerCallState,
   type SessionRow,
   type SessionState,
   type SessionStore,
   type SubscriptionLoadStatus,
+  type TurnSummaryRow,
 } from '../../state/session-store';
 
 export interface InboxProps {
@@ -42,6 +50,11 @@ interface InboxView {
   currentSlot: PlayerSlotRow | null;
   factionState: PrivateFactionStateRow | null;
   publicFactions: PublicFactionRow[];
+  llmRequests: LlmRequestRow[];
+  turnSummary: TurnSummaryRow | null;
+  deliberationCall: ReducerCallState | null;
+  simulateTurnCall: ReducerCallState | null;
+  ackResolutionCall: ReducerCallState | null;
   decisionCall: ReducerCallState | null;
   submitTurnCall: ReducerCallState | null;
   expireTurnCall: ReducerCallState | null;
@@ -58,6 +71,8 @@ export function Inbox({
   const activeSelectedId = controlled ? selectedProposalId ?? null : internalSelectedId;
 
   const proposalsById = useStoreSlice(store, (state) => state.proposalsById);
+  const turnSummariesById = useStoreSlice(store, (state) => state.turnSummariesById);
+  const llmRequestsById = useStoreSlice(store, (state) => state.llmRequestsById);
   const subscription = useStoreSlice(store, selectProposalsSubscriptionStatus);
   const activeSessionId = useStoreSlice(store, (state) => state.activeSessionId);
   const activeSession = useStoreSlice(store, selectActiveSession);
@@ -75,6 +90,15 @@ export function Inbox({
   const decisionCall = useStoreSlice(store, (state) =>
     activeSelectedId ? selectReducerCall(state, commanderDecisionKey(activeSelectedId)) : null,
   );
+  const deliberationCall = useStoreSlice(store, (state) =>
+    currentSlot ? selectReducerCall(state, runDeliberationKey(currentSlot.factionId)) : null,
+  );
+  const simulateTurnCall = useStoreSlice(store, (state) =>
+    activeSessionId ? selectReducerCall(state, simulateTurnKey(activeSessionId)) : null,
+  );
+  const ackResolutionCall = useStoreSlice(store, (state) =>
+    currentSlot ? selectReducerCall(state, ackResolutionKey(currentSlot.factionId)) : null,
+  );
   const submitTurnCall = useStoreSlice(store, (state) =>
     currentSlot ? selectReducerCall(state, submitTurnKey(currentSlot.factionId)) : null,
   );
@@ -85,6 +109,8 @@ export function Inbox({
   const view = useMemo<InboxView>(() => {
     const proposals = computeInboxProposals(proposalsById, activeSessionId, currentSlot);
     const selected = activeSelectedId ? proposalsById[activeSelectedId] ?? null : null;
+    const llmRequests = computeLlmRequests(llmRequestsById, activeSessionId, currentSlot);
+    const turnSummary = computeTurnSummary(turnSummariesById, activeSession, currentSlot);
     return {
       proposals,
       subscription,
@@ -93,6 +119,11 @@ export function Inbox({
       currentSlot,
       factionState,
       publicFactions,
+      llmRequests,
+      turnSummary,
+      deliberationCall,
+      simulateTurnCall,
+      ackResolutionCall,
       decisionCall,
       submitTurnCall,
       expireTurnCall,
@@ -104,8 +135,13 @@ export function Inbox({
     activeSession,
     currentSlot,
     activeSelectedId,
+    turnSummariesById,
+    llmRequestsById,
     factionState,
     publicFactions,
+    deliberationCall,
+    simulateTurnCall,
+    ackResolutionCall,
     decisionCall,
     submitTurnCall,
     expireTurnCall,
@@ -129,7 +165,9 @@ export function Inbox({
         padding: 16,
       }}
     >
+      <OrchestratorStatus requests={view.llmRequests} />
       <TurnWorkflowPanel view={view} store={store} client={client} />
+      <ResolutionPanel view={view} store={store} client={client} />
       <ProposalList
         view={view}
         selectedId={activeSelectedId}
@@ -172,6 +210,7 @@ function TurnWorkflowPanel({ view, store, client }: TurnWorkflowPanelProps) {
   const inDecisionPhase = activeSession.phase === 'decision';
   const submitLoading = view.submitTurnCall?.status === 'loading';
   const timeoutLoading = view.expireTurnCall?.status === 'loading';
+  const deliberationLoading = view.deliberationCall?.status === 'loading';
   const readyToSubmit =
     pendingDecisions.length === 0 &&
     inDecisionPhase &&
@@ -181,6 +220,11 @@ function TurnWorkflowPanel({ view, store, client }: TurnWorkflowPanelProps) {
     !submitLoading;
   const canProcessTimeout =
     inDecisionPhase && Boolean(client) && sessionId !== null && !timeoutLoading;
+  const canGenerateProposals =
+    activeSession.phase === 'deliberation' &&
+    Boolean(client) &&
+    factionId !== null &&
+    !deliberationLoading;
 
   const handleSubmitTurn = () => {
     if (!client || factionId === null || !readyToSubmit) return;
@@ -190,6 +234,11 @@ function TurnWorkflowPanel({ view, store, client }: TurnWorkflowPanelProps) {
   const handleProcessTimeout = () => {
     if (!client || sessionId === null || !canProcessTimeout) return;
     expireTurnAction(store, client, { sessionId });
+  };
+
+  const handleGenerateProposals = () => {
+    if (!client || factionId === null || !canGenerateProposals) return;
+    runDeliberationAction(store, client, { factionId });
   };
 
   return (
@@ -229,8 +278,12 @@ function TurnWorkflowPanel({ view, store, client }: TurnWorkflowPanelProps) {
       />
 
       <TurnTimeoutStatus call={view.expireTurnCall} />
+      <DeliberationStatus call={view.deliberationCall} />
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <button type="button" disabled={!canGenerateProposals} onClick={handleGenerateProposals}>
+          Generate proposals
+        </button>
         <button type="button" disabled={!readyToSubmit} onClick={handleSubmitTurn}>
           Submit turn
         </button>
@@ -240,6 +293,31 @@ function TurnWorkflowPanel({ view, store, client }: TurnWorkflowPanelProps) {
       </div>
     </section>
   );
+}
+
+function DeliberationStatus({ call }: { call: ReducerCallState | null }) {
+  if (call?.status === 'loading') {
+    return (
+      <p data-testid="deliberation-status" role="status" style={{ margin: 0 }}>
+        Requesting proposals from orchestrator or fallback path...
+      </p>
+    );
+  }
+  if (call?.status === 'success') {
+    return (
+      <p data-testid="deliberation-status" role="status" style={{ margin: 0 }}>
+        Proposal request recorded.
+      </p>
+    );
+  }
+  if (call?.status === 'error') {
+    return (
+      <p data-testid="deliberation-status" role="alert" style={{ color: '#a00', margin: 0 }}>
+        Backend rejected proposal request: {call.error}
+      </p>
+    );
+  }
+  return null;
 }
 
 function TurnSubmitStatus({
@@ -319,6 +397,208 @@ function TurnTimeoutStatus({ call }: { call: ReducerCallState | null }) {
     return (
       <p data-testid="turn-timeout-status" role="alert" style={{ color: '#a00', margin: 0 }}>
         Backend rejected timeout: {call.error}
+      </p>
+    );
+  }
+  return null;
+}
+
+function OrchestratorStatus({ requests }: { requests: LlmRequestRow[] }) {
+  const request = requests.find((entry) =>
+    ['proposals', 'inbox', 'event_narrative'].includes(entry.requestType),
+  );
+  if (!request) return null;
+
+  const response = parseJsonRecord(request.responseJson);
+  const source = stringValue(response?.source);
+  const typeLabel = request.requestType.replace(/_/g, ' ');
+  let detail: string;
+
+  if (request.status === 'completed') {
+    detail =
+      source === 'deterministic_fallback'
+        ? `${typeLabel} completed through deterministic fallback.`
+        : `${typeLabel} completed through orchestrator output.`;
+  } else if (request.status === 'failed' || request.status === 'cancelled') {
+    detail = `${typeLabel} unavailable: ${
+      request.error ?? request.errorCode ?? request.status
+    }. Deterministic fallback keeps the command flow playable.`;
+  } else {
+    detail = `${typeLabel} ${request.status}. Deterministic fallback keeps the command flow playable when configured.`;
+  }
+
+  return (
+    <section
+      aria-label="Orchestrator status"
+      data-testid="orchestrator-status"
+      style={{
+        borderBottom: '1px solid #e2e4ea',
+        gridColumn: '1 / -1',
+        paddingBottom: 12,
+      }}
+    >
+      <p style={{ margin: 0 }}>{detail}</p>
+    </section>
+  );
+}
+
+function ResolutionPanel({
+  view,
+  store,
+  client,
+}: {
+  view: InboxView;
+  store: SessionStore;
+  client?: SpacetimeClient;
+}) {
+  if (!view.activeSession || !view.currentSlot) return null;
+
+  const sessionId = toNonNegativeInteger(view.activeSession.id);
+  const factionId = toNonNegativeInteger(view.currentSlot.factionId);
+  const phase = view.activeSession.phase;
+  const summary = view.turnSummary;
+  const simulateLoading = view.simulateTurnCall?.status === 'loading';
+  const ackLoading = view.ackResolutionCall?.status === 'loading';
+  const canRunResolution =
+    phase === 'resolution' && Boolean(client) && sessionId !== null && !simulateLoading;
+  const canAck =
+    Boolean(summary) &&
+    !summary?.acknowledged &&
+    Boolean(client) &&
+    factionId !== null &&
+    !ackLoading;
+
+  const handleRunResolution = () => {
+    if (!client || sessionId === null || !canRunResolution) return;
+    simulateTurnAction(store, client, { sessionId });
+  };
+
+  const handleAckResolution = () => {
+    if (!client || factionId === null || !canAck) return;
+    ackResolutionAction(store, client, { factionId });
+  };
+
+  if (phase !== 'resolution' && phase !== 'summary' && !summary) {
+    return null;
+  }
+
+  return (
+    <section
+      aria-label="Resolution review"
+      data-testid="resolution-panel"
+      style={{
+        borderBottom: '1px solid #e2e4ea',
+        display: 'grid',
+        gap: 10,
+        gridColumn: '1 / -1',
+        paddingBottom: 14,
+      }}
+    >
+      <strong>Resolution review</strong>
+      {phase === 'resolution' ? (
+        <>
+          <ResolutionStatus call={view.simulateTurnCall} />
+          <button type="button" disabled={!canRunResolution} onClick={handleRunResolution}>
+            Run resolution
+          </button>
+        </>
+      ) : null}
+      {summary ? (
+        <>
+          <ResolutionSummary summary={summary} />
+          <ResolutionAckStatus summary={summary} call={view.ackResolutionCall} />
+          <button type="button" disabled={!canAck} onClick={handleAckResolution}>
+            Acknowledge resolution
+          </button>
+        </>
+      ) : phase === 'summary' ? (
+        <p data-testid="resolution-summary" role="status" style={{ margin: 0 }}>
+          Resolution summary pending. Deterministic summary fallback keeps the command flow playable
+          while narrative output arrives.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function ResolutionStatus({ call }: { call: ReducerCallState | null }) {
+  if (call?.status === 'loading') {
+    return (
+      <p data-testid="resolution-status" role="status" style={{ margin: 0 }}>
+        Running resolution...
+      </p>
+    );
+  }
+  if (call?.status === 'success') {
+    return (
+      <p data-testid="resolution-status" role="status" style={{ margin: 0 }}>
+        Resolution run accepted. Waiting for summary rows.
+      </p>
+    );
+  }
+  if (call?.status === 'error') {
+    return (
+      <p data-testid="resolution-status" role="alert" style={{ color: '#a00', margin: 0 }}>
+        Backend rejected resolution: {call.error}
+      </p>
+    );
+  }
+  return null;
+}
+
+function ResolutionSummary({ summary }: { summary: TurnSummaryRow }) {
+  const payload = parseJsonRecord(summary.summaryJson);
+  const narrative =
+    stringValue(payload?.narrative) ??
+    stringValue(payload?.resolution_narrative) ??
+    stringValue(payload?.summary) ??
+    stringValue(recordValue(payload?.simulation_outputs)?.narrative) ??
+    stringValue(recordValue(payload?.simulation_outputs)?.summary) ??
+    'Authoritative summary received.';
+  const outcomes = recordValue(payload?.proposal_outcomes);
+  const outcomeText = outcomes
+    ? Object.entries(outcomes)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => `${key}: ${String(value)}`)
+        .join(', ')
+    : null;
+
+  return (
+    <article data-testid="resolution-summary" aria-label="Resolution summary">
+      <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{narrative}</p>
+      {outcomeText ? <p style={{ margin: '4px 0 0' }}>{outcomeText}</p> : null}
+      <p style={{ margin: '4px 0 0' }}>
+        Turn {summary.turn} {summary.acknowledged ? 'acknowledged' : 'awaiting acknowledgement'}.
+      </p>
+    </article>
+  );
+}
+
+function ResolutionAckStatus({
+  summary,
+  call,
+}: {
+  summary: TurnSummaryRow;
+  call: ReducerCallState | null;
+}) {
+  if (call?.status === 'loading') {
+    return (
+      <p data-testid="resolution-ack-status" role="status" style={{ margin: 0 }}>
+        Acknowledging resolution...
+      </p>
+    );
+  }
+  if (call?.status === 'success' || summary.acknowledged) {
+    return (
+      <p data-testid="resolution-ack-status" role="status" style={{ margin: 0 }}>
+        Resolution acknowledged.
+      </p>
+    );
+  }
+  if (call?.status === 'error') {
+    return (
+      <p data-testid="resolution-ack-status" role="alert" style={{ color: '#a00', margin: 0 }}>
+        Backend rejected acknowledgement: {call.error}
       </p>
     );
   }
@@ -771,4 +1051,58 @@ function computeInboxProposals(
     });
 }
 
-export const __internal = { computeInboxProposals };
+function computeLlmRequests(
+  llmRequestsById: Record<string, LlmRequestRow>,
+  activeSessionId: string | null,
+  slot: PlayerSlotRow | null,
+): LlmRequestRow[] {
+  if (!activeSessionId || !slot) return [];
+  return Object.values(llmRequestsById)
+    .filter(
+      (request) =>
+        request.sessionId === activeSessionId && request.factionId === slot.factionId,
+    )
+    .sort((a, b) => {
+      if (a.updatedTurn !== b.updatedTurn) return b.updatedTurn - a.updatedTurn;
+      return String(b.id).localeCompare(String(a.id));
+    });
+}
+
+function computeTurnSummary(
+  turnSummariesById: Record<string, TurnSummaryRow>,
+  activeSession: SessionRow | null,
+  slot: PlayerSlotRow | null,
+): TurnSummaryRow | null {
+  if (!activeSession || !slot) return null;
+  return (
+    Object.values(turnSummariesById)
+      .filter(
+        (summary) =>
+          summary.sessionId === activeSession.id &&
+          summary.factionId === slot.factionId &&
+          summary.turn === activeSession.currentTurn,
+      )
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)))[0] ?? null
+  );
+}
+
+function parseJsonRecord(value: string | null): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return recordValue(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+export const __internal = { computeInboxProposals, computeLlmRequests, computeTurnSummary };

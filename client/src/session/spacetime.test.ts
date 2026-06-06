@@ -8,6 +8,7 @@ import {
 } from './spacetime';
 import type { DbConnection } from '../module_bindings';
 import type { Factions, GameSessions } from '../module_bindings/types';
+import { reducerRegistry } from '../spacetime/reducers';
 import { createSessionStore } from '../state/session-store';
 
 const identityA = {
@@ -319,5 +320,62 @@ describe('live SpacetimeDB store hydration', () => {
     expect(state.publicFleetsById['301']).toMatchObject({ strength: 24, visibility: 'public' });
     expect(state.publicColonyShipsById['401']).toMatchObject({ status: 'in_transit', visibility: 'public' });
     expect(state.publicEventsById['501']).toMatchObject({ eventType: 'session_seeded', visibility: 'public' });
+  });
+});
+
+describe('createSessionBackend wiring', () => {
+  it('exposes a SpacetimeClient backed by the live DbConnection when conn is present', () => {
+    const calls: Array<{ method: string; args: unknown }> = [];
+    const reducers = new Proxy({}, {
+      get(_target, prop: string) {
+        return (args: unknown) => {
+          calls.push({ method: prop, args });
+        };
+      },
+    }) as Record<string, (args: unknown) => unknown>;
+    const conn = {
+      reducers,
+      subscriptionBuilder: () => ({ subscribe: () => undefined }),
+    } as unknown as DbConnection;
+
+    const backend = createSessionBackend({
+      conn,
+      isConnected: true,
+      identity: 'identity-a',
+      sessions: [],
+      factions: [],
+    });
+
+    expect(backend.client).not.toBeNull();
+    backend.client?.connect();
+    backend.client?.callReducer(reducerRegistry.submitTurn({ factionId: 7 }));
+    backend.client?.callReducer(
+      reducerRegistry.commanderDecision({
+        factionId: 7,
+        proposalId: 11,
+        decision: 'approved',
+        allocation: 50,
+      }),
+    );
+
+    expect(calls).toEqual([
+      { method: 'submitTurn', args: { factionId: 7 } },
+      {
+        method: 'commanderDecision',
+        args: { factionId: 7, proposalId: 11, decision: 'approved', allocation: 50 },
+      },
+    ]);
+  });
+
+  it('returns client=null when conn is not yet connected', () => {
+    const backend = createSessionBackend({
+      conn: null,
+      isConnected: false,
+      identity: null,
+      sessions: [],
+      factions: [],
+    });
+
+    expect(backend.client).toBeNull();
   });
 });

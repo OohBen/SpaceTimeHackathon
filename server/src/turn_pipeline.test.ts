@@ -422,4 +422,92 @@ describe('turn pipeline reducers', () => {
     expect(src).toMatch(/export\s+const\s+simulate_turn\s*=/);
     expect(src).toMatch(/export\s+const\s+ack_resolution\s*=/);
   });
+
+  // Closes P4E1 task #118 AC "local demo path can be exercised repeatedly
+  // without manual patching between runs". Drives three consecutive turn loops
+  // through the same in-memory db. Each loop only defers the seeded current-
+  // turn proposals (fresh decisions per turn need P3 deliberation output the
+  // seed does not provide), but the world+resolution+ack reducers are
+  // exercised on every turn — proving the wrap-around path survives multiple
+  // demos without manual patching.
+  it('drives three consecutive resolution-ack loops through one shared db without manual reset', () => {
+    const rows = makeRows('world_update');
+    const [factionA, factionB] = rows.factions;
+
+    function deferCurrentTurnProposals(factionId: number): void {
+      const session = rows.game_sessions[0];
+      const faction = rows.factions.find(row => row.id === factionId);
+      if (!faction) throw new Error(`faction ${factionId} not found`);
+
+      const open = rows.proposals.filter(p =>
+        p.faction_id === factionId &&
+        p.turn === session.current_turn &&
+        p.decision === undefined &&
+        ['unread', 'read'].includes(p.status)
+      );
+
+      for (const proposal of open) {
+        commanderDecisionReducer(makeDecisionCtx(faction.player_id, rows), {
+          faction_id: faction.id,
+          proposal_id: proposal.id,
+          decision: 'deferred',
+          allocation: 0,
+        });
+      }
+    }
+
+    function runOneLoop(expectedStartTurn: number): void {
+      expect(rows.game_sessions[0].current_turn).toBe(expectedStartTurn);
+      expect(rows.game_sessions[0].turn_phase).toBe('world_update');
+
+      advanceWorldReducer(makeAdvanceWorldCtx(rows), {
+        session_id: rows.game_sessions[0].id,
+      });
+      expect(rows.game_sessions[0].turn_phase).toBe('deliberation');
+
+      // Queue mode (default): inserts llm_requests, no fresh proposals
+      // synthesised. Repeated calls per turn are validated by the queue
+      // boundary tests; here we just need the reducer to accept the call.
+      queueDeliberationForBothFactions(rows);
+      enterDecision(rows);
+
+      deferCurrentTurnProposals(factionA.id);
+      deferCurrentTurnProposals(factionB.id);
+
+      submitTurnReducer(makeAdvancementCtx(factionA.player_id, rows), {
+        faction_id: factionA.id,
+      });
+      submitTurnReducer(makeAdvancementCtx(factionB.player_id, rows), {
+        faction_id: factionB.id,
+      });
+      expect(rows.game_sessions[0].turn_phase).toBe('resolution');
+
+      simulateTurnReducer(makeResolutionCtx(factionA.player_id, rows), {
+        session_id: rows.game_sessions[0].id,
+      });
+      expect(rows.game_sessions[0].turn_phase).toBe('summary');
+
+      ackResolutionReducer(makeResolutionCtx(factionA.player_id, rows), {
+        faction_id: factionA.id,
+      });
+      ackResolutionReducer(makeResolutionCtx(factionB.player_id, rows), {
+        faction_id: factionB.id,
+      });
+      expect(rows.game_sessions[0].current_turn).toBe(expectedStartTurn + 1);
+      expect(rows.game_sessions[0].turn_phase).toBe('world_update');
+      expect(rows.factions.every(faction => !faction.ready_for_turn)).toBe(true);
+    }
+
+    runOneLoop(1);
+    runOneLoop(2);
+    runOneLoop(3);
+
+    expect(rows.game_sessions[0].current_turn).toBe(4);
+    expect(rows.turn_summaries).toHaveLength(6);
+    expect(rows.events.filter(e => e.event_type === 'simulation_triggered')).toHaveLength(3);
+    expect(rows.events.filter(e => e.event_type === 'turn_summary_ready')).toHaveLength(3);
+    expect(
+      rows.events.filter(e => e.event_type === 'resolution_acknowledged'),
+    ).toHaveLength(6);
+  });
 });

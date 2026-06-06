@@ -28,10 +28,12 @@ import {
   type SessionBackend,
   type SessionBackendResult,
 } from '../session/spacetime';
+import { useLiveSessionBridge } from '../session/liveBridge';
 import { useHudData, type HudData } from './hud';
 import type { PlayerSlot, SetupParams, SetupState } from './types';
 import { usePanelStore, CORE_PANELS, findPanelDef, type PanelId } from './panels';
 import { WorldMapPanel } from './WorldMapPanel';
+import { Inbox } from '../components/inbox/Inbox';
 import './CommandCenterShell.css';
 
 type View = 'landing' | 'setup' | 'game';
@@ -63,6 +65,9 @@ export function AppRouter(props: AppRouterProps) {
 
 function LiveAppRouter(props: Omit<AppRouterProps, 'backend'>) {
   const backend = useSpacetimeSessionBackend();
+  // Mirror generated table rows into `sessionStore` so the Inbox and HUD see
+  // the same live state the rest of the route flow consumes.
+  useLiveSessionBridge();
   return <AppRouterView {...props} backend={backend} />;
 }
 
@@ -71,6 +76,7 @@ function AppRouterView({
   onSessionReady,
   onSubmit,
 }: AppRouterProps & { backend: SessionBackend }) {
+  const sessionClient = backend.client;
   const [router, setRouter] = useState<RouterState>(() => routeFromPath(readPathname()));
   const session = useSessionStore();
 
@@ -157,6 +163,7 @@ function AppRouterView({
       <GameRoute
         route={router.gameRoute}
         session={session}
+        sessionClient={sessionClient}
         onBack={resetToLanding}
       />
     );
@@ -186,10 +193,12 @@ type HistoryMode = 'push' | 'replace';
 function GameRoute({
   route,
   session,
+  sessionClient,
   onBack,
 }: {
   route: GameRouteParams;
   session: SessionStoreState;
+  sessionClient: SessionBackend['client'];
   onBack: () => void;
 }) {
   const { activePanel, setPanel } = usePanelStore();
@@ -215,6 +224,7 @@ function GameRoute({
   return (
     <CommandCenterShell
       session={session}
+      sessionClient={sessionClient}
       activePanel={activePanel}
       onPanelChange={setPanel}
       onBack={onBack}
@@ -224,6 +234,7 @@ function GameRoute({
 
 function CommandCenterShell({
   session,
+  sessionClient,
   activePanel,
   onPanelChange,
   onBack,
@@ -234,6 +245,7 @@ function CommandCenterShell({
     playerSlot: PlayerSlot;
     playerName: string;
   };
+  sessionClient: SessionBackend['client'];
   activePanel: PanelId;
   onPanelChange: (panel: PanelId) => void;
   onBack: () => void;
@@ -277,7 +289,7 @@ function CommandCenterShell({
             <p className="command-shell__eyebrow">Active panel</p>
             <h3>{activeDef.label}</h3>
           </div>
-          <PanelContent panel={activePanel} session={session} />
+          <PanelContent panel={activePanel} session={session} sessionClient={sessionClient} />
         </section>
       </div>
     </div>
@@ -294,9 +306,11 @@ type SessionRouteState = SessionStoreState & {
 function PanelContent({
   panel,
   session,
+  sessionClient,
 }: {
   panel: PanelId;
   session: SessionRouteState;
+  sessionClient: SessionBackend['client'];
 }) {
   const sessionId = String(session.sessionId);
   const factionId = String(session.factionId);
@@ -347,6 +361,10 @@ function PanelContent({
         </p>
       </div>
     );
+  }
+
+  if (panel === 'inbox') {
+    return <Inbox client={sessionClient ?? undefined} />;
   }
 
   if (panel === 'map') {
@@ -1065,11 +1083,9 @@ interface ParsedResolutionSummary {
 
 function parseResolutionSummary(value: string | null | undefined): ParsedResolutionSummary {
   const parsed = parseJsonObject(value);
-  const narrativeText = parseDisplayNarrative(parsed?.narrative);
-  const events = stringList(parsed?.events);
   return {
     headline: typeof parsed?.headline === 'string' ? parsed.headline : null,
-    events: narrativeText ? [narrativeText, ...events] : events,
+    events: stringList(parsed?.events),
     controlScores: numberRecord(parsed?.controlScores),
     resourceDeltas: numberRecord(parsed?.resourceDeltas),
   };
@@ -1125,30 +1141,11 @@ function numberRecord(value: unknown): Record<string, number> {
 }
 
 function formatEventPayload(event: EventRow): string {
-  const narrativeText =
-    parseDisplayNarrative(parseJsonObject(event.narrativeJson)?.narrative) ??
-    parseDisplayNarrative(parseJsonObject(event.narrativeJson)) ??
-    parseDisplayNarrative(parseJsonObject(event.payload)?.narrative);
-  if (narrativeText) {
-    return narrativeText;
-  }
   if (!event.payload) {
     return `Turn ${event.turn}`;
   }
 
   return formatIntelValue(event.payload);
-}
-
-function parseDisplayNarrative(value: unknown): string | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  if (record.display_only !== true || record.authoritative !== false) {
-    return null;
-  }
-  const text = typeof record.text === 'string' ? record.text : null;
-  return text && text.trim() ? text : null;
 }
 
 function factionName(

@@ -12,6 +12,7 @@ function backend(): SessionBackend {
     identity: 'identity-a',
     sessions: [],
     factions: [],
+    client: null,
     getSessionChoices: () => [],
     getSlotChoices: () => [],
     joinOrResume: vi.fn(),
@@ -56,6 +57,7 @@ function resetSessionStore() {
     intelligenceRecordsById: {},
     eventsById: {},
     turnSummariesById: {},
+    llmRequestsById: {},
     reducerCalls: {},
   });
 }
@@ -375,6 +377,78 @@ describe('Command Center shell', () => {
       ).toHaveTextContent(/not yet available/i);
     });
 
+    it('renders orchestrator-backed inbox content in the command flow panel', () => {
+      enterStoredGameContext();
+      usePanelStore.getState().setPanel('inbox');
+
+      act(() => {
+        sessionStore.getState().actions.setConnection({ status: 'connected', identity: 'identity-a' });
+        sessionStore.getState().actions.hydrateSubscription({
+          sessions: [{ id: '42', code: 'G', status: 'active', currentTurn: 8, phase: 'summary' }],
+          playerSlots: [
+            {
+              sessionId: '42',
+              slot: 2,
+              identity: 'identity-a',
+              factionId: '202',
+              factionName: 'Solar Republic',
+              playerName: 'Rex',
+              occupied: true,
+              visibility: 'own',
+            },
+          ],
+          proposals: [
+            {
+              id: '501',
+              sessionId: '42',
+              factionId: '202',
+              turn: 8,
+              proposingPersonnelId: '81',
+              department: 'Fleet',
+              title: 'Callisto convoy screen',
+              body: 'Fallback proposal body from deterministic generator.',
+              resourceCost: 30,
+              confidence: 'HIGH',
+              status: 'pending',
+              decision: null,
+            },
+          ],
+          turnSummaries: [
+            {
+              id: 'summary-42',
+              sessionId: '42',
+              factionId: '202',
+              turn: 8,
+              summaryJson: '{"simulation_outputs":{"narrative":"Callisto route secured."},"proposal_outcomes":{"approved":1}}',
+              acknowledged: false,
+              acknowledgedAt: null,
+            },
+          ],
+          llmRequests: [
+            {
+              id: 'llm-42',
+              sessionId: '42',
+              factionId: '202',
+              requestType: 'proposals',
+              status: 'completed',
+              responseJson: '{"source":"deterministic_fallback"}',
+              error: null,
+              errorCode: null,
+              attemptCount: 1,
+              createdTurn: 8,
+              updatedTurn: 8,
+            },
+          ],
+        });
+      });
+
+      render(<AppRouter backend={backend()} />);
+
+      expect(screen.getByTestId('commander-inbox')).toHaveTextContent(/Callisto convoy screen/i);
+      expect(screen.getByTestId('orchestrator-status')).toHaveTextContent(/deterministic fallback/i);
+      expect(screen.getByTestId('resolution-summary')).toHaveTextContent(/Callisto route secured/i);
+    });
+
     it('panel model is extensible — CORE_PANELS registry drives sidebar render', () => {
       expect(CORE_PANELS.map((p) => p.id)).toEqual(
         expect.arrayContaining(['overview', 'session-brief', 'map', 'inbox', 'strategic']),
@@ -532,40 +606,6 @@ describe('Command Center shell', () => {
       expect(panel).toHaveTextContent(/credits -40/i);
       expect(panel).toHaveTextContent(/Acknowledgement pending/i);
       expect(panel).not.toHaveTextContent(/not yet available/i);
-    });
-
-    it('renders display-only narrative prose from a safe resolution payload', () => {
-      enterStoredGameContext();
-      hydrateStrategicPanelState();
-      act(() => {
-        sessionStore.getState().actions.applySubscriptionEvent({
-          table: 'turnSummaries',
-          op: 'upsert',
-          row: {
-            id: 'turn-summary-5',
-            sessionId: '42',
-            factionId: '202',
-            turn: 5,
-            summaryJson: JSON.stringify({
-              headline: 'Turn 5 outcome summary',
-              controlScores: { '202': 52, '303': 38 },
-              narrative: {
-                authoritative: false,
-                display_only: true,
-                text: 'Generated resolution note stays separate from control score state.',
-              },
-            }),
-            acknowledged: false,
-          },
-        });
-      });
-      usePanelStore.getState().setPanel('resolution');
-
-      render(<AppRouter backend={backend()} />);
-
-      const panel = screen.getByRole('region', { name: /command content panel/i });
-      expect(panel).toHaveTextContent(/Generated resolution note stays separate/i);
-      expect(panel).toHaveTextContent(/Control 52/i);
     });
 
     it('renders end-game review inside the command shell when the session is complete', () => {

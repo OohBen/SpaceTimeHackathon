@@ -12,6 +12,7 @@ function backend(): SessionBackend {
     identity: 'identity-a',
     sessions: [],
     factions: [],
+    client: null,
     getSessionChoices: () => [],
     getSlotChoices: () => [],
     joinOrResume: vi.fn(),
