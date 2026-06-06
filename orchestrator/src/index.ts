@@ -1,6 +1,10 @@
 // LLM orchestrator entry point.
-// HTTP endpoints for processing LLM requests are added in subsequent tasks.
-export const ORCHESTRATOR_VERSION = "0.0.0";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+import { startOrchestratorServer } from "./http_server.js";
+
+export { ORCHESTRATOR_VERSION } from "./version.js";
 
 export {
   DEFAULT_OPENROUTER_MODEL,
@@ -127,3 +131,22 @@ export type {
   ProposalPromptInput,
   RecentEvent,
 } from "./proposal_prompt.js";
+export {
+  buildHealthPayload,
+  createOrchestratorHttpServer,
+  readOrchestratorServerConfig,
+  startOrchestratorServer,
+} from "./http_server.js";
+export type {
+  OrchestratorHealthPayload,
+  OrchestratorHttpServer,
+  OrchestratorHttpServerHandle,
+  OrchestratorServerConfig,
+} from "./http_server.js";
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  startOrchestratorServer().catch((cause) => {
+    console.error(cause instanceof Error ? cause.message : String(cause));
+    process.exitCode = 1;
+  });
+}
