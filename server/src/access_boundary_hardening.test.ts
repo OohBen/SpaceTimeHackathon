@@ -11,13 +11,13 @@ import { buildPublicWorldProjection } from './public_world_projection.js';
 import {
   commanderDecisionReducer,
   type DecisionReducerContext,
-  type ModuleSettingsRow,
 } from './turn_decisions.js';
 import {
   buildTurn1Seed,
   turn1Seed,
   type CityRow,
   type LlmRequestRow,
+  type ModuleSettingsRow,
   type PersonnelRow,
   type ProposalRow,
 } from './turn1_seed.js';
@@ -49,11 +49,11 @@ function makeDecisionRows() {
       turn_phase: 'decision',
     })) as GameSessionRow[],
     factions: seed.factions.map((faction) => ({ ...faction })) as FactionRow[],
-    proposals: seed.proposals.map((proposal) => ({ ...proposal })),
     cities: seed.cities.map((city) => ({ ...city })) as CityRow[],
     personnel: seed.personnel.map((person) => ({ ...person })) as PersonnelRow[],
+    proposals: seed.proposals.map((proposal) => ({ ...proposal })) as ProposalRow[],
     llmRequests: [] as LlmRequestRow[],
-    moduleSettings: [] as ModuleSettingsRow[],
+    moduleSettings: seed.module_settings.map((setting) => ({ ...setting })) as ModuleSettingsRow[],
   };
 }
 
@@ -82,15 +82,6 @@ function makeDecisionCtx(
         },
       },
       proposals: {
-        id: {
-          find: id => rows.proposals.find(proposal => proposal.id === id) ?? null,
-          update: row => {
-            const idx = rows.proposals.findIndex(proposal => proposal.id === row.id);
-            if (idx === -1) throw new Error(`proposal ${row.id} not found`);
-            rows.proposals[idx] = row;
-            return row;
-          },
-        },
         iter: () => rows.proposals.values(),
         insert: row => {
           const inserted = {
@@ -99,6 +90,15 @@ function makeDecisionCtx(
           };
           rows.proposals.push(inserted);
           return inserted;
+        },
+        id: {
+          find: id => rows.proposals.find(proposal => proposal.id === id) ?? null,
+          update: row => {
+            const idx = rows.proposals.findIndex(proposal => proposal.id === row.id);
+            if (idx === -1) throw new Error(`proposal ${row.id} not found`);
+            rows.proposals[idx] = row;
+            return row;
+          },
         },
       },
       cities: {

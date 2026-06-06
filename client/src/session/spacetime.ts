@@ -1,7 +1,16 @@
 import { useEffect, useMemo } from 'react';
 import { useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { DbConnection, tables } from '../module_bindings';
-import type { Factions, GameSessions } from '../module_bindings/types';
+import type {
+  CelestialBodies,
+  Factions,
+  GameSessions,
+  PublicCityProjection,
+  PublicColonyShipProjection,
+  PublicEventProjection,
+  PublicFactionProjection,
+  PublicFleetProjection,
+} from '../module_bindings/types';
 import type { PlayerSlot, SessionChoice, SetupState, SlotChoice } from '../routes/types';
 import {
   createDbConnectionTransport,
@@ -10,6 +19,20 @@ import {
   type SpacetimeClient,
 } from '../spacetime/client';
 import { defaultClientConfig } from '../spacetime/config';
+import {
+  sessionStore as sharedSessionStore,
+  type PlayerSlotRow,
+  type PublicGameStateRow,
+  type PublicWorldBodyRow,
+  type PublicWorldCityProjectionRow,
+  type PublicColonyShipProjectionRow,
+  type PublicEventProjectionRow,
+  type PublicFactionProjectionRow,
+  type PublicFleetProjectionRow,
+  type SessionRow,
+  type SessionStatus,
+  type SessionStore as SharedSessionStore,
+} from '../state/session-store';
 
 const AUTH_TOKEN_KEY = 'solar-dominion-auth-token';
 const DEFAULT_SPACETIMEDB_URI = 'http://localhost:3000';
@@ -55,6 +78,19 @@ interface BackendOptions {
   factions: readonly Factions[];
 }
 
+export interface SpacetimeSessionStoreSnapshot {
+  isConnected: boolean;
+  identity: string | null;
+  sessions: readonly GameSessions[];
+  factions: readonly Factions[];
+  worldBodies: readonly CelestialBodies[];
+  publicFactions: readonly PublicFactionProjection[];
+  publicCities: readonly PublicCityProjection[];
+  publicFleets: readonly PublicFleetProjection[];
+  publicColonyShips: readonly PublicColonyShipProjection[];
+  publicEvents: readonly PublicEventProjection[];
+}
+
 interface SlotMetadata {
   slot_key?: string;
   slot_name?: string;
@@ -74,6 +110,12 @@ export function useSpacetimeSessionBackend(): SessionBackend {
   const conn = getConnection() as DbConnection | null;
   const [sessions] = useTable(tables.game_sessions);
   const [factions] = useTable(tables.factions);
+  const [worldBodies] = useTable(tables.celestial_bodies);
+  const [publicFactions] = useTable(tables.public_factions);
+  const [publicCities] = useTable(tables.public_cities);
+  const [publicFleets] = useTable(tables.public_fleets);
+  const [publicColonyShips] = useTable(tables.public_colony_ships);
+  const [publicEvents] = useTable(tables.public_events);
 
   useEffect(() => {
     if (token) {
@@ -86,8 +128,43 @@ export function useSpacetimeSessionBackend(): SessionBackend {
       return;
     }
 
-    conn.subscriptionBuilder().subscribe([tables.game_sessions, tables.factions]);
+    conn.subscriptionBuilder().subscribe([
+      tables.game_sessions,
+      tables.factions,
+      tables.celestial_bodies,
+      tables.public_factions,
+      tables.public_cities,
+      tables.public_fleets,
+      tables.public_colony_ships,
+      tables.public_events,
+    ]);
   }, [conn, isActive]);
+
+  useEffect(() => {
+    hydrateSessionStoreFromSpacetimeSnapshot({
+      isConnected: isActive,
+      identity: identity?.toHexString() ?? null,
+      sessions,
+      factions,
+      worldBodies,
+      publicFactions,
+      publicCities,
+      publicFleets,
+      publicColonyShips,
+      publicEvents,
+    });
+  }, [
+    factions,
+    identity,
+    isActive,
+    publicCities,
+    publicColonyShips,
+    publicEvents,
+    publicFactions,
+    publicFleets,
+    sessions,
+    worldBodies,
+  ]);
 
   return useMemo(
     () =>
@@ -122,10 +199,11 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
         throw new Error('SpacetimeDB connection is not ready');
       }
 
+      const rows = readSessionRows(conn, sessions, factions);
       const sessionId = assertSessionId(state.sessionId);
-      const session = assertSession(sessions, sessionId);
-      const playerSlot = state.playerSlot ?? firstJoinableSlot(session, factions, identity);
-      const slot = deriveSlotChoices(session, factions, identity).find(choice => choice.key === playerSlot);
+      const session = assertSession(rows.sessions, sessionId);
+      const playerSlot = state.playerSlot ?? firstJoinableSlot(session, rows.factions, identity);
+      const slot = deriveSlotChoices(session, rows.factions, identity).find(choice => choice.key === playerSlot);
 
       if (!slot) {
         throw new Error(`slot ${playerSlot} not found for session ${sessionId}`);
@@ -150,13 +228,76 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
         throw new Error('SpacetimeDB connection is not ready');
       }
 
-      const playerAName = state.playerSlot === 'player_b' ? (state.opponentName ?? 'Player A') : state.playerName;
-      const playerBName = state.playerSlot === 'player_b' ? state.playerName : (state.opponentName ?? 'Player B');
-      await sessionReducers(conn).createSession({ playerAName, playerBName });
+      const beforeRows = readSessionRows(conn, sessions, factions);
+      const playerAName =
+        state.playerSlot === 'player_b'
+          ? normalizeCreateName(state.opponentName, 'Player A')
+          : normalizeCreateName(state.playerName, 'Player A');
+      const playerBName =
+        state.playerSlot === 'player_b'
+          ? normalizeCreateName(state.playerName, 'Player B')
+          : normalizeCreateName(state.opponentName, 'Player B');
 
-      throw new Error('Session created. Select the new session ID, then join a slot.');
+      assertDistinctSlotNames(playerAName, playerBName);
+      assertNoDuplicateSetupSession({ playerAName, playerBName }, beforeRows.sessions, beforeRows.factions);
+      const beforeSessionIds = new Set(beforeRows.sessions.map(session => session.id));
+
+      try {
+        await sessionReducers(conn).createSession({ playerAName, playerBName });
+      } catch (err) {
+        throw createActionableCreateSessionError(err);
+      }
+
+      const created = await waitForCreatedSession(conn, beforeSessionIds, sessions, factions);
+      const playerSlot = state.playerSlot ?? 'player_a';
+      const slot = deriveSlotChoices(created.session, created.factions, identity).find(choice => choice.key === playerSlot);
+
+      if (!slot || slot.factionId === undefined) {
+        throw new Error(`slot ${playerSlot} not found for created session ${created.session.id}`);
+      }
+
+      if (slot.status === 'occupied') {
+        throw new Error(`${slot.label} is occupied. ${slot.recovery}`);
+      }
+
+      await sessionReducers(conn).joinOrResumeSession({
+        sessionId: created.session.id,
+        playerSlot,
+      });
+
+      return {
+        sessionId: created.session.id,
+        factionId: slot.factionId,
+        playerSlot,
+        playerName: state.playerName,
+        isResume: false,
+      };
     },
   };
+}
+
+export function hydrateSessionStoreFromSpacetimeSnapshot(
+  snapshot: SpacetimeSessionStoreSnapshot,
+  store: SharedSessionStore = sharedSessionStore
+): void {
+  const actions = store.getState().actions;
+  actions.setConnection({
+    status: snapshot.isConnected ? 'connected' : 'disconnected',
+    identity: snapshot.identity,
+  });
+  actions.hydrateSubscription({
+    sessions: snapshot.sessions.map(toSessionRow),
+    playerSlots: snapshot.factions
+      .map(faction => toPlayerSlotRow(faction, snapshot.identity))
+      .filter((slot): slot is PlayerSlotRow => Boolean(slot)),
+    publicGameStates: toPublicGameStateRows(snapshot.sessions, snapshot.publicFactions),
+    worldBodies: snapshot.worldBodies.map(row => withPublicVisibility(row)),
+    publicFactions: snapshot.publicFactions.map(row => withPublicVisibility(row)),
+    publicCities: snapshot.publicCities.map(row => withPublicVisibility(row)),
+    publicFleets: snapshot.publicFleets.map(row => withPublicVisibility(row)),
+    publicColonyShips: snapshot.publicColonyShips.map(row => withPublicVisibility(row)),
+    publicEvents: snapshot.publicEvents.map(row => withPublicVisibility(row)),
+  });
 }
 
 function sessionReducers(conn: DbConnection): SessionReducers {
@@ -173,6 +314,186 @@ function sessionReducers(conn: DbConnection): SessionReducers {
 function buildSpacetimeClient(conn: DbConnection): SpacetimeClient {
   const transport = createDbConnectionTransport(conn as unknown as DbConnectionLike);
   return createSpacetimeClient(defaultClientConfig(), { transport });
+}
+
+interface SessionRows {
+  sessions: readonly GameSessions[];
+  factions: readonly Factions[];
+}
+
+interface IterableTable<T> {
+  iter(): Iterable<T>;
+}
+
+interface LiveSessionTables {
+  db?: {
+    game_sessions?: IterableTable<GameSessions>;
+    factions?: IterableTable<Factions>;
+  };
+}
+
+function readSessionRows(
+  conn: DbConnection,
+  fallbackSessions: readonly GameSessions[],
+  fallbackFactions: readonly Factions[]
+): SessionRows {
+  const live = conn as unknown as LiveSessionTables;
+  return {
+    sessions: live.db?.game_sessions ? Array.from(live.db.game_sessions.iter()) : fallbackSessions,
+    factions: live.db?.factions ? Array.from(live.db.factions.iter()) : fallbackFactions,
+  };
+}
+
+async function waitForCreatedSession(
+  conn: DbConnection,
+  beforeSessionIds: ReadonlySet<number>,
+  fallbackSessions: readonly GameSessions[],
+  fallbackFactions: readonly Factions[]
+): Promise<{ session: GameSessions; factions: readonly Factions[] }> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const rows = readSessionRows(conn, fallbackSessions, fallbackFactions);
+    const session = findCreatedSession(rows.sessions, beforeSessionIds);
+    if (session) {
+      return { session, factions: rows.factions };
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+
+  throw new Error('created session was not visible after create_session completed');
+}
+
+function findCreatedSession(
+  sessions: readonly GameSessions[],
+  beforeSessionIds: ReadonlySet<number>
+): GameSessions | undefined {
+  return sessions
+    .filter(session =>
+      !beforeSessionIds.has(session.id) &&
+      session.playerAFactionId !== undefined &&
+      session.playerBFactionId !== undefined
+    )
+    .slice()
+    .sort((left, right) => right.id - left.id)[0];
+}
+
+function normalizeCreateName(value: string | undefined, fallback: string): string {
+  const normalized = value?.trim().replace(/\s+/g, ' ') ?? '';
+  return normalized || fallback;
+}
+
+function canonicalSlotName(name: string): string {
+  return normalizeCreateName(name, '').toLocaleLowerCase('en-US');
+}
+
+function canonicalSlotPair(names: readonly string[]): string {
+  return names.map(canonicalSlotName).sort().join('\0');
+}
+
+function assertDistinctSlotNames(playerAName: string, playerBName: string): void {
+  if (canonicalSlotName(playerAName) === canonicalSlotName(playerBName)) {
+    throw new Error('player and opponent names must be different');
+  }
+}
+
+function assertNoDuplicateSetupSession(
+  requested: { playerAName: string; playerBName: string },
+  sessions: readonly GameSessions[],
+  factions: readonly Factions[]
+): void {
+  const requestedPair = canonicalSlotPair([requested.playerAName, requested.playerBName]);
+
+  for (const session of sessions) {
+    if (session.state !== 'setup') {
+      continue;
+    }
+
+    const names = factions
+      .filter(faction => faction.sessionId === session.id)
+      .map(faction => faction.name);
+
+    if (names.length === 2 && canonicalSlotPair(names) === requestedPair) {
+      throw new Error('setup session already exists for these faction slots. Choose Resume Session or use different names.');
+    }
+  }
+}
+
+function createActionableCreateSessionError(err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/fatal error|internal/i.test(msg)) {
+    return new Error(
+      'Create session failed before setup completed. Use non-empty, unique player and opponent names, or resume an existing setup session.'
+    );
+  }
+
+  return err instanceof Error ? err : new Error(msg);
+}
+
+function toSessionRow(session: GameSessions): SessionRow {
+  return {
+    id: String(session.id),
+    code: `SOL-${session.id}`,
+    status: toSessionStatus(session.state),
+    currentTurn: session.currentTurn,
+    phase: session.turnPhase,
+  };
+}
+
+function toSessionStatus(state: string): SessionStatus {
+  if (state === 'active') return 'active';
+  if (state === 'completed' || state === 'complete') return 'complete';
+  if (state === 'creating') return 'creating';
+  return 'lobby';
+}
+
+function toPlayerSlotRow(faction: Factions, identity: string | null): PlayerSlotRow | null {
+  const metadata = parseSlotMetadata(faction);
+  if (!metadata?.slot_key || !isFactionSlotKey(metadata.slot_key)) {
+    return null;
+  }
+
+  const playerId = faction.playerId.toHexString();
+  const occupied = metadata.claim_status === 'claimed';
+  return {
+    sessionId: String(faction.sessionId),
+    slot: metadata.slot_key === 'player_a' ? 1 : 2,
+    identity: occupied ? playerId : null,
+    factionId: String(faction.id),
+    factionName: metadata.slot_name ?? faction.name,
+    playerName: occupied ? faction.name : null,
+    occupied,
+    visibility: occupied && playerId === identity ? 'own' : 'public',
+  };
+}
+
+function toPublicGameStateRows(
+  sessions: readonly GameSessions[],
+  factions: readonly PublicFactionProjection[]
+): PublicGameStateRow[] {
+  return sessions.map(session => {
+    const sessionId = String(session.id);
+    const sessionFactions = factions.filter(faction => faction.sessionId === session.id);
+    return {
+      sessionId,
+      turn: session.currentTurn,
+      year: session.currentYear,
+      phase: session.turnPhase,
+      controlScores: Object.fromEntries(
+        sessionFactions.map(faction => [String(faction.id), faction.controlScore])
+      ),
+      visibleFactionIds: sessionFactions.map(faction => String(faction.id)),
+    };
+  });
+}
+
+function withPublicVisibility(row: CelestialBodies): PublicWorldBodyRow;
+function withPublicVisibility(row: PublicFactionProjection): PublicFactionProjectionRow;
+function withPublicVisibility(row: PublicCityProjection): PublicWorldCityProjectionRow;
+function withPublicVisibility(row: PublicFleetProjection): PublicFleetProjectionRow;
+function withPublicVisibility(row: PublicColonyShipProjection): PublicColonyShipProjectionRow;
+function withPublicVisibility(row: PublicEventProjection): PublicEventProjectionRow;
+function withPublicVisibility<T extends object>(row: T): T & { visibility: 'public' } {
+  return { ...row, visibility: 'public' };
 }
 
 export function deriveSessionChoices(sessions: readonly GameSessions[]): SessionChoice[] {
@@ -325,4 +646,8 @@ function parseSlotMetadata(faction: Factions): SlotMetadata | undefined {
 
 function slotKeys(): readonly PlayerSlot[] {
   return ['player_a', 'player_b'];
+}
+
+function isFactionSlotKey(value: string): value is PlayerSlot {
+  return value === 'player_a' || value === 'player_b';
 }

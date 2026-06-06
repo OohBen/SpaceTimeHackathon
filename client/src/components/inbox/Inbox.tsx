@@ -1064,7 +1064,7 @@ function computeLlmRequests(
     )
     .sort((a, b) => {
       if (a.updatedTurn !== b.updatedTurn) return b.updatedTurn - a.updatedTurn;
-      return b.id.localeCompare(a.id);
+      return String(b.id).localeCompare(String(a.id));
     });
 }
 
@@ -1082,7 +1082,7 @@ function computeTurnSummary(
           summary.factionId === slot.factionId &&
           summary.turn === activeSession.currentTurn,
       )
-      .sort((a, b) => a.id.localeCompare(b.id))[0] ?? null
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)))[0] ?? null
   );
 }
 
