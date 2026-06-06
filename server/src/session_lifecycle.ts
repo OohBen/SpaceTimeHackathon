@@ -1,5 +1,7 @@
 import { Identity, type Timestamp } from 'spacetimedb';
 
+import { runWorldUpdate, type WorldUpdateContext } from './simulation_kernel.js';
+
 export const INITIAL_SESSION_STATE = 'setup';
 export const INITIAL_TURN_PHASE = 'setup';
 export const INITIAL_YEAR = 2150;
@@ -314,14 +316,15 @@ export function advanceTurnPhaseReducer(
 }
 
 export function advanceWorldReducer(
-  ctx: TurnPhaseContext,
+  ctx: WorldUpdateContext,
   input: AdvanceWorldInput
 ): void {
   const session = findSessionForPhaseUpdate(ctx, input.session_id);
   assertActiveSessionForWorldUpdate(session);
-  ctx.db.game_sessions.id.update(
-    transitionTurnPhase(session, 'deliberation', ctx.timestamp)
-  );
+  // Validate phase transition before running kernel so phase errors surface before simulation.
+  const nextSession = transitionTurnPhase(session, 'deliberation', ctx.timestamp);
+  runWorldUpdate(ctx, session);
+  ctx.db.game_sessions.id.update(nextSession);
 }
 
 export function transitionTurnPhase(

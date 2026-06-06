@@ -27,6 +27,7 @@ import {
   type SessionLifecycleContext,
   type TurnPhaseContext,
 } from './session_lifecycle.js';
+import type { WorldUpdateContext } from './simulation_kernel.js';
 
 const timestamp = Timestamp.UNIX_EPOCH;
 const srcPath = (file: string) => resolve(import.meta.dirname, file);
@@ -244,7 +245,7 @@ function makeJoinResumeCtx(
   };
 }
 
-function makeTurnPhaseCtx(sessions: GameSessionRow[]): TurnPhaseContext {
+function makeTurnPhaseCtx(sessions: GameSessionRow[]): WorldUpdateContext {
   return {
     timestamp,
     db: {
@@ -259,6 +260,22 @@ function makeTurnPhaseCtx(sessions: GameSessionRow[]): TurnPhaseContext {
           },
         },
       },
+      factions: {
+        id: {
+          find: () => null,
+          update: row => row,
+        },
+      },
+      cities: { iter: () => [].values() },
+      colony_ships: {
+        iter: () => [].values(),
+        id: { update: row => row },
+      },
+      projects: {
+        iter: () => [].values(),
+        id: { update: row => row },
+      },
+      events: { insert: row => row },
     },
   };
 }
