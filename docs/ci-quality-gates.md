@@ -24,7 +24,7 @@ npm run test:contracts
 | Dependency review | Pull request check | Package name, advisory, severity, and changed lockfile in the check annotation. |
 | CodeQL | CodeQL check | SARIF alert path and query name in the GitHub Security annotation. |
 | Actionlint | `npm run lint:actions`, then `actionlint` | Workflow file and expression or YAML syntax location. |
-| Markdownlint | `npm run lint:markdown`, then `npx markdownlint-cli2` | Markdown file and rule id. |
+| Markdownlint | `npm run lint:markdown`, then `npx markdownlint-cli2 "**/*.md" "#**/node_modules/**"` | Markdown file and rule id. |
 | Contract check | `npm run test:contracts` | Missing reducer, route, env key, request type, or LLM field. |
 
 ## Remediation
