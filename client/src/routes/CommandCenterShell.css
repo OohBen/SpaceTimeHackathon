@@ -165,6 +165,10 @@
   line-height: 1.55;
 }
 
+.command-shell__hud-absent {
+  color: #9aada5;
+}
+
 @media (max-width: 760px) {
   .command-shell__header {
     grid-template-columns: 1fr;

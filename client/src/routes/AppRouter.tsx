@@ -8,6 +8,7 @@ import {
   type SessionBackend,
   type SessionBackendResult,
 } from '../session/spacetime';
+import { useHudData, type HudData } from './hud';
 import type { PlayerSlot, SetupParams, SetupState } from './types';
 import './CommandCenterShell.css';
 
@@ -209,6 +210,7 @@ function CommandCenterShell({
   onBack: () => void;
 }) {
   const panelTitle = activePanel === 'overview' ? 'Command Overview' : 'Session Brief';
+  const hud = useHudData(String(session.factionId));
 
   return (
     <div className="command-shell">
@@ -218,13 +220,7 @@ function CommandCenterShell({
           <h2>Command Center</h2>
           <p className="command-shell__session-line">Session {session.sessionId}</p>
         </div>
-        <div className="command-shell__context" aria-label="Current player context">
-          <span>
-            Your slot: <strong>{session.playerSlot}</strong>
-          </span>
-          <span>Commander: {session.playerName}</span>
-          <span>Faction {session.factionId}</span>
-        </div>
+        <GlobalHud hud={hud} factionId={session.factionId} playerSlot={session.playerSlot} playerName={session.playerName} />
         <button className="command-shell__back" type="button" onClick={onBack}>
           Back to Menu
         </button>
@@ -282,6 +278,67 @@ function CommandCenterShell({
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function GlobalHud({
+  hud,
+  factionId,
+  playerSlot,
+  playerName,
+}: {
+  hud: HudData;
+  factionId: number;
+  playerSlot: string;
+  playerName: string;
+}) {
+  const factionLabel = hud.factionName ?? `Faction ${factionId}`;
+  const turnLabel = hud.turn != null ? `Turn ${hud.turn}` : null;
+  const yearLabel = hud.year != null ? `Year ${hud.year}` : null;
+  const turnYear = [turnLabel, yearLabel].filter(Boolean).join(' · ') || null;
+  const resourceSummary =
+    hud.resources != null
+      ? Object.entries(hud.resources)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ')
+      : null;
+
+  return (
+    <div className="command-shell__context" aria-label="Current player context">
+      <span>
+        Your slot: <strong>{playerSlot}</strong>
+      </span>
+      <span>Commander: {playerName}</span>
+      <span aria-label="Faction identity">{factionLabel}</span>
+      {turnYear ? (
+        <span aria-label="Turn and year">{turnYear}</span>
+      ) : (
+        <span aria-label="Turn and year" className="command-shell__hud-absent">
+          Turn —
+        </span>
+      )}
+      {hud.phase ? (
+        <span aria-label="Phase">{hud.phase}</span>
+      ) : (
+        <span aria-label="Phase" className="command-shell__hud-absent">
+          Phase —
+        </span>
+      )}
+      {hud.controlScore != null ? (
+        <span aria-label="Control score">Control: {hud.controlScore}</span>
+      ) : (
+        <span aria-label="Control score" className="command-shell__hud-absent">
+          Control —
+        </span>
+      )}
+      {resourceSummary ? (
+        <span aria-label="Resources">{resourceSummary}</span>
+      ) : (
+        <span aria-label="Resources" className="command-shell__hud-absent">
+          Resources —
+        </span>
+      )}
     </div>
   );
 }
