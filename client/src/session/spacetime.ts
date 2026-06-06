@@ -211,12 +211,25 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
         throw new Error('SpacetimeDB connection is not ready');
       }
 
-      const playerAName = state.playerSlot === 'player_b' ? (state.opponentName ?? 'Player A') : state.playerName;
-      const playerBName = state.playerSlot === 'player_b' ? state.playerName : (state.opponentName ?? 'Player B');
       const beforeRows = readSessionRows(conn, sessions, factions);
+      const playerAName =
+        state.playerSlot === 'player_b'
+          ? normalizeCreateName(state.opponentName, 'Player A')
+          : normalizeCreateName(state.playerName, 'Player A');
+      const playerBName =
+        state.playerSlot === 'player_b'
+          ? normalizeCreateName(state.playerName, 'Player B')
+          : normalizeCreateName(state.opponentName, 'Player B');
+
+      assertDistinctSlotNames(playerAName, playerBName);
+      assertNoDuplicateSetupSession({ playerAName, playerBName }, beforeRows.sessions, beforeRows.factions);
       const beforeSessionIds = new Set(beforeRows.sessions.map(session => session.id));
 
-      await sessionReducers(conn).createSession({ playerAName, playerBName });
+      try {
+        await sessionReducers(conn).createSession({ playerAName, playerBName });
+      } catch (err) {
+        throw createActionableCreateSessionError(err);
+      }
 
       const created = await waitForCreatedSession(conn, beforeSessionIds, sessions, factions);
       const playerSlot = state.playerSlot ?? 'player_a';
@@ -333,6 +346,58 @@ function findCreatedSession(
     )
     .slice()
     .sort((left, right) => right.id - left.id)[0];
+}
+
+function normalizeCreateName(value: string | undefined, fallback: string): string {
+  const normalized = value?.trim().replace(/\s+/g, ' ') ?? '';
+  return normalized || fallback;
+}
+
+function canonicalSlotName(name: string): string {
+  return normalizeCreateName(name, '').toLocaleLowerCase('en-US');
+}
+
+function canonicalSlotPair(names: readonly string[]): string {
+  return names.map(canonicalSlotName).sort().join('\0');
+}
+
+function assertDistinctSlotNames(playerAName: string, playerBName: string): void {
+  if (canonicalSlotName(playerAName) === canonicalSlotName(playerBName)) {
+    throw new Error('player and opponent names must be different');
+  }
+}
+
+function assertNoDuplicateSetupSession(
+  requested: { playerAName: string; playerBName: string },
+  sessions: readonly GameSessions[],
+  factions: readonly Factions[]
+): void {
+  const requestedPair = canonicalSlotPair([requested.playerAName, requested.playerBName]);
+
+  for (const session of sessions) {
+    if (session.state !== 'setup') {
+      continue;
+    }
+
+    const names = factions
+      .filter(faction => faction.sessionId === session.id)
+      .map(faction => faction.name);
+
+    if (names.length === 2 && canonicalSlotPair(names) === requestedPair) {
+      throw new Error('setup session already exists for these faction slots. Choose Resume Session or use different names.');
+    }
+  }
+}
+
+function createActionableCreateSessionError(err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/fatal error|internal/i.test(msg)) {
+    return new Error(
+      'Create session failed before setup completed. Use non-empty, unique player and opponent names, or resume an existing setup session.'
+    );
+  }
+
+  return err instanceof Error ? err : new Error(msg);
 }
 
 function toSessionRow(session: GameSessions): SessionRow {

@@ -174,6 +174,94 @@ describe('create session backend', () => {
       isResume: false,
     });
   });
+
+  it('uses a default opponent name when the create form leaves opponent blank', async () => {
+    const sessions: GameSessions[] = [];
+    const factions: Factions[] = [];
+    const reducers = {
+      createSession: vi.fn(async () => {
+        sessions.push({
+          ...session,
+          id: 12,
+          playerAFactionId: 201,
+          playerBFactionId: 202,
+        });
+        factions.push(
+          faction(201, 'player_a', identityPlaceholder as Factions['playerId'], 'claimable', 'Atlas', 12),
+          faction(202, 'player_b', identityPlaceholder as Factions['playerId'], 'claimable', 'Player B', 12)
+        );
+      }),
+      joinOrResumeSession: vi.fn(async () => undefined),
+    };
+    const conn = {
+      reducers,
+      db: {
+        game_sessions: { iter: () => sessions.values() },
+        factions: { iter: () => factions.values() },
+      },
+    } as unknown as DbConnection;
+    const backend = createSessionBackend({
+      conn,
+      isConnected: true,
+      identity: 'aaaaaaaa',
+      sessions: [],
+      factions: [],
+    });
+
+    await backend.createAndJoin({
+      mode: 'create',
+      playerName: 'Atlas',
+      opponentName: '',
+      playerSlot: 'player_a',
+    });
+
+    expect(reducers.createSession).toHaveBeenCalledWith({
+      playerAName: 'Atlas',
+      playerBName: 'Player B',
+    });
+  });
+
+  it('rejects duplicate setup slot names before calling the reducer', async () => {
+    const reducers = {
+      createSession: vi.fn(async () => undefined),
+      joinOrResumeSession: vi.fn(async () => undefined),
+    };
+    const existingSession = {
+      ...session,
+      id: 21,
+      state: 'setup',
+      playerAFactionId: 301,
+      playerBFactionId: 302,
+    };
+    const existingFactions = [
+      faction(301, 'player_a', identityPlaceholder as Factions['playerId'], 'claimable', 'United Earth', 21),
+      faction(302, 'player_b', identityPlaceholder as Factions['playerId'], 'claimable', 'Mars Compact', 21),
+    ];
+    const conn = {
+      reducers,
+      db: {
+        game_sessions: { iter: () => [existingSession].values() },
+        factions: { iter: () => existingFactions.values() },
+      },
+    } as unknown as DbConnection;
+    const backend = createSessionBackend({
+      conn,
+      isConnected: true,
+      identity: 'aaaaaaaa',
+      sessions: [existingSession],
+      factions: existingFactions,
+    });
+
+    await expect(
+      backend.createAndJoin({
+        mode: 'create',
+        playerName: ' mars compact ',
+        opponentName: 'UNITED   EARTH',
+        playerSlot: 'player_a',
+      })
+    ).rejects.toThrow(/setup session already exists/i);
+    expect(reducers.createSession).not.toHaveBeenCalled();
+  });
 });
 
 describe('live SpacetimeDB store hydration', () => {
