@@ -6,6 +6,10 @@ import {
   createSessionReducer,
   joinOrResumeSessionReducer,
 } from './session_lifecycle.js';
+import {
+  commanderDecisionReducer,
+  runDeliberationReducer,
+} from './turn_decisions.js';
 
 // SpacetimeDB CLI entry point for the Solar Dominion module.
 const spacetimedb = schema(tables);
@@ -39,6 +43,23 @@ export const advance_world = spacetimedb.reducer(
     session_id: t.u32(),
   },
   advanceWorldReducer
+);
+
+export const run_deliberation = spacetimedb.reducer(
+  {
+    faction_id: t.u32(),
+  },
+  runDeliberationReducer
+);
+
+export const commander_decision = spacetimedb.reducer(
+  {
+    faction_id: t.u32(),
+    proposal_id: t.u32(),
+    decision: t.string(),
+    allocation: t.i32(),
+  },
+  commanderDecisionReducer
 );
 
 export default spacetimedb;
