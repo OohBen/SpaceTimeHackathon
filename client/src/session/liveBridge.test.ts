@@ -292,6 +292,7 @@ describe('buildLiveSnapshot', () => {
       factionId: 101,
       turn: 3,
       summaryJson: '{"event":"turn_summary"}',
+      narrativeJson: undefined,
       acknowledged: false,
       acknowledgedAt: undefined,
       createdAt: {} as TurnSummaries['createdAt'],
