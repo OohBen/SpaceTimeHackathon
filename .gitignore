@@ -25,6 +25,7 @@ GEMINI.md
 .copilot/
 .windsurf/
 .codex/
+.codex-tmp/
 .gemini/
 
 # ── OS ──────────────────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ build/
 .spacetimedb-local-data/
 .next/
 .nuxt/
+artifacts/
 *.log
 npm-debug.log*
 
