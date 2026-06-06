@@ -19,6 +19,7 @@ import {
   type PersonnelRow,
   type PrivateFactionStateRow,
   type PublicGameStateRow,
+  type SessionRow,
   type TurnSummaryRow,
 } from '../state/session-store';
 import {
@@ -299,6 +300,7 @@ function PanelContent({
   const sessionId = String(session.sessionId);
   const factionId = String(session.factionId);
   const operationalState = useStore(sessionStore);
+  const activeSession = operationalState.sessionsById[sessionId] ?? null;
   const publicGameState = selectPublicGameStateForSession(operationalState, sessionId);
   const privateFactionState = selectPrivateFactionStateForSession(
     operationalState,
@@ -393,6 +395,19 @@ function PanelContent({
     );
   }
 
+  if (panel === 'end-game') {
+    return (
+      <EndGamePanel
+        session={activeSession}
+        currentFaction={currentFaction}
+        publicGameState={publicGameState}
+        turnSummary={latestTurnSummary}
+        events={sessionEvents}
+        factions={sessionFactions}
+      />
+    );
+  }
+
   const panelDef = findPanelDef(panel);
   return (
     <div className="command-shell__brief" aria-label={`${panelDef.label} panel placeholder`}>
@@ -401,6 +416,100 @@ function PanelContent({
         Session {session.sessionId} remains available in the shared shell while this view waits for
         implementation data.
       </p>
+    </div>
+  );
+}
+
+function EndGamePanel({
+  session,
+  currentFaction,
+  publicGameState,
+  turnSummary,
+  events,
+  factions,
+}: {
+  session: SessionRow | null;
+  currentFaction: FactionRow | null;
+  publicGameState: PublicGameStateRow | null;
+  turnSummary: TurnSummaryRow | null;
+  events: EventRow[];
+  factions: FactionRow[];
+}) {
+  const payload = parseResolutionSummary(turnSummary?.summaryJson);
+  const controlScores = Object.keys(payload.controlScores).length
+    ? payload.controlScores
+    : publicGameState?.controlScores ?? factionControlScores(factions);
+  const standings = sortedControlStandings(controlScores);
+  const explicitWinnerId =
+    normalizeId(session?.winnerFactionId) ?? normalizeId(victoryWinnerFactionId(events));
+  const isComplete =
+    session?.status === 'complete' ||
+    session?.status === 'completed' ||
+    session?.phase === 'complete' ||
+    publicGameState?.phase === 'complete' ||
+    explicitWinnerId !== null;
+  const winnerId = explicitWinnerId ?? (isComplete ? standings[0]?.id : null) ?? null;
+  const winnerLabel = winnerId ? factionName(factions, currentFaction, winnerId) : 'Winner pending';
+  const turn = turnSummary?.turn ?? publicGameState?.turn ?? session?.currentTurn ?? null;
+  const headline =
+    payload.headline ??
+    (isComplete ? 'Final command review ready' : 'End-game review waiting for victory check');
+  const summaryEvents =
+    payload.events.length > 0
+      ? payload.events
+      : events.slice(0, 5).map((event) => `${event.eventType}: ${formatEventPayload(event)}`);
+
+  return (
+    <div className="command-shell__data-panel" aria-label="End game review">
+      <div className="command-shell__metric-grid">
+        <div>
+          <span>State</span>
+          <strong>{isComplete ? 'Session complete' : 'Awaiting final state'}</strong>
+        </div>
+        <div>
+          <span>Winner</span>
+          <strong>{winnerId && isComplete ? `${winnerLabel} victory` : winnerLabel}</strong>
+        </div>
+        <div>
+          <span>Final turn</span>
+          <strong>{turn != null ? `Turn ${turn}` : 'Unknown'}</strong>
+        </div>
+      </div>
+
+      <section className="command-shell__ledger" aria-label="Final outcome headline">
+        <h4>Final report</h4>
+        <p>{headline}</p>
+      </section>
+
+      <div className="command-shell__split-grid">
+        <section className="command-shell__ledger" aria-label="Final control standings">
+          <h4>Control standings</h4>
+          {standings.length > 0 ? (
+            <ol className="command-shell__plain-list">
+              {standings.map(({ id, score }) => (
+                <li key={id}>
+                  {factionName(factions, currentFaction, id)} Control {score}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>Final control scores have not arrived.</p>
+          )}
+        </section>
+
+        <section className="command-shell__ledger" aria-label="Final event highlights">
+          <h4>Highlights</h4>
+          {summaryEvents.length > 0 ? (
+            <ol className="command-shell__plain-list">
+              {summaryEvents.slice(0, 5).map((event) => (
+                <li key={event}>{event}</li>
+              ))}
+            </ol>
+          ) : (
+            <p>No final events have arrived.</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -1026,6 +1135,39 @@ function factionName(
   }
 
   return factions.find((faction) => String(faction.id) === factionId)?.name ?? `Faction ${factionId}`;
+}
+
+function factionControlScores(factions: FactionRow[]): Record<string, number> {
+  return Object.fromEntries(factions.map((faction) => [String(faction.id), faction.controlScore]));
+}
+
+function sortedControlStandings(controlScores: Record<string, number>): Array<{ id: string; score: number }> {
+  return Object.entries(controlScores)
+    .map(([id, score]) => ({ id, score }))
+    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+}
+
+function victoryWinnerFactionId(events: EventRow[]): string | number | null {
+  for (const event of events) {
+    if (event.eventType !== 'victory_checked') {
+      continue;
+    }
+    const payload = parseJsonObject(event.payload);
+    if (payload?.winner_faction_id != null) {
+      return typeof payload.winner_faction_id === 'string' || typeof payload.winner_faction_id === 'number'
+        ? payload.winner_faction_id
+        : null;
+    }
+  }
+
+  return null;
+}
+
+function normalizeId(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return String(value);
 }
 
 function formatSigned(value: number): string {

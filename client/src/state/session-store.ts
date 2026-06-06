@@ -9,7 +9,7 @@ export type ConnectionStatus =
   | 'reconnecting'
   | 'disconnected'
   | 'failed';
-export type SessionStatus = 'creating' | 'lobby' | 'active' | 'complete';
+export type SessionStatus = 'creating' | 'lobby' | 'active' | 'complete' | 'completed';
 export type VisibilityScope = 'public' | 'own' | 'ownFaction';
 
 export interface ConnectionState {
@@ -25,6 +25,7 @@ export interface SessionRow {
   status: SessionStatus;
   currentTurn: number;
   phase: string;
+  winnerFactionId?: string | number | null;
 }
 
 export interface PlayerSlotRow {

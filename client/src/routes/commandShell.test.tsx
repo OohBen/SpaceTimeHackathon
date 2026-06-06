@@ -188,6 +188,80 @@ function hydrateStrategicPanelState() {
   });
 }
 
+function hydrateCompletedGameState() {
+  act(() => {
+    const hydrate = sessionStore.getState().actions
+      .hydrateSubscription as (snapshot: Record<string, unknown>) => void;
+
+    hydrate({
+      sessions: [
+        {
+          id: '42',
+          code: 'GAME1',
+          status: 'complete',
+          currentTurn: 10,
+          phase: 'complete',
+          winnerFactionId: '202',
+        },
+      ],
+      publicGameStates: [
+        {
+          sessionId: '42',
+          turn: 10,
+          year: 2356,
+          phase: 'complete',
+          controlScores: { '202': 82, '303': 45 },
+          visibleFactionIds: ['202', '303'],
+        },
+      ],
+      factions: [
+        {
+          id: '202',
+          sessionId: '42',
+          name: 'Solar Republic',
+          credits: 280,
+          politicalCapital: 42,
+          doctrineVector: '{"strategy":80,"approach":40,"command":70,"focus":60,"style":50}',
+          controlScore: 82,
+          readyForTurn: true,
+        },
+        {
+          id: '303',
+          sessionId: '42',
+          name: 'Martian League',
+          credits: 110,
+          politicalCapital: 14,
+          doctrineVector: '{"strategy":45,"approach":65,"command":50,"focus":40,"style":60}',
+          controlScore: 45,
+          readyForTurn: true,
+        },
+      ],
+      turnSummaries: [
+        {
+          id: 'turn-summary-10',
+          sessionId: '42',
+          factionId: '202',
+          turn: 10,
+          summaryJson:
+            '{"headline":"Solar Republic secures Callisto corridor","events":["Callisto shipyard secured","Martian League command accepts ceasefire"],"controlScores":{"202":82,"303":45},"resourceDeltas":{"credits":120,"science":18}}',
+          acknowledged: true,
+        },
+      ],
+      events: [
+        {
+          id: 'victory-10',
+          sessionId: '42',
+          factionId: '202',
+          turn: 10,
+          eventType: 'victory_checked',
+          payload:
+            '{"result":"winner","winner_faction_id":202,"reason":"turn_limit","control_delta":37}',
+        },
+      ],
+    });
+  });
+}
+
 describe('Command Center shell', () => {
   beforeEach(() => {
     useSessionStore.getState().reset();
@@ -449,6 +523,26 @@ describe('Command Center shell', () => {
       expect(panel).toHaveTextContent(/credits -40/i);
       expect(panel).toHaveTextContent(/Acknowledgement pending/i);
       expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders end-game review inside the command shell when the session is complete', () => {
+      enterStoredGameContext();
+      hydrateCompletedGameState();
+      usePanelStore.getState().setPanel('end-game');
+      const gamePath = window.location.pathname;
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(screen.getByLabelText(/end game review/i)).toBeDefined();
+      expect(panel).toHaveTextContent(/Session complete/i);
+      expect(panel).toHaveTextContent(/Solar Republic victory/i);
+      expect(panel).toHaveTextContent(/Turn 10/i);
+      expect(panel).toHaveTextContent(/Control 82/i);
+      expect(panel).toHaveTextContent(/Solar Republic secures Callisto corridor/i);
+      expect(panel).toHaveTextContent(/Callisto shipyard secured/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+      expect(window.location.pathname).toBe(gamePath);
     });
 
     it('active panel persists across remount via local storage', () => {
