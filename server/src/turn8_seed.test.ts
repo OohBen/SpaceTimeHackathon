@@ -125,6 +125,75 @@ describe('Turn 8 deterministic seed', () => {
     );
   });
 
+  it('seeds public scenario cue events for Mars pressure and Callisto opportunity', () => {
+    const seed = buildTurn8Seed();
+    const cueEvents = seed.events
+      .filter((event) => event.event_type.startsWith('scenario_cue_'))
+      .sort((left, right) => left.event_type.localeCompare(right.event_type));
+
+    expect(cueEvents.map((event) => event.event_type)).toEqual([
+      'scenario_cue_callisto_opportunity',
+      'scenario_cue_mars_pressure',
+    ]);
+
+    const cues = Object.fromEntries(
+      cueEvents.map((event) => [event.event_type, parseJson<Record<string, unknown>>(event.payload)])
+    );
+    expect(cues.scenario_cue_mars_pressure).toMatchObject({
+      body: 'Mars',
+      city: 'Pavonis Hub',
+      cue: 'mars_pressure',
+      label: 'Mars pressure: Pavonis Hub strained supply',
+      severity: 'warning',
+    });
+    expect(cues.scenario_cue_callisto_opportunity).toMatchObject({
+      body: 'Callisto',
+      city: 'Callisto Outpost',
+      cue: 'callisto_opportunity',
+      label: 'Callisto opportunity: ice and volatiles window',
+      severity: 'info',
+    });
+  });
+
+  it('attaches deterministic display-only narrative to seeded commander briefings', () => {
+    const seed = buildTurn8Seed();
+    const narratedBriefings = seed.commander_inbox.filter((message) => message.narrative_json);
+
+    expect(narratedBriefings).toHaveLength(seed.commander_inbox.length);
+
+    const prose = narratedBriefings
+      .map((message) => parseJson<{ text: string }>(message.narrative_json!).text)
+      .join('\n');
+    expect(prose).toMatch(/Mars/i);
+    expect(prose).toMatch(/Pavonis Hub/i);
+    expect(prose).toMatch(/Callisto/i);
+
+    for (const message of narratedBriefings) {
+      const narrative = parseJson<Record<string, unknown>>(message.narrative_json!);
+      expect(narrative).toMatchObject({
+        authoritative: false,
+        display_only: true,
+        request_type: 'inbox',
+        schema_version: 1,
+        source: 'fixture',
+        surface: 'inbox',
+      });
+      expect(narrative.metadata).toMatchObject({
+        faction_id: message.faction_id,
+        privacy_scope: 'own_faction',
+        session_id: 1,
+        turn: 8,
+      });
+    }
+
+    const inboxRequests = seed.llm_requests.filter((request) => request.request_type === 'inbox');
+    expect(inboxRequests).toHaveLength(2);
+    expect(inboxRequests.every((request) => request.status === 'completed')).toBe(true);
+    expect(
+      inboxRequests.map((request) => parseJson<{ source: string }>(request.response_json!).source)
+    ).toEqual(['deterministic_fixture', 'deterministic_fixture']);
+  });
+
   it('makes required world-state deltas from Turn 1 baseline explicit and testable', () => {
     const baseline = buildTurn1Seed();
     const seed = buildTurn8Seed();
