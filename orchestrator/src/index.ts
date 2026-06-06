@@ -163,6 +163,8 @@ export type {
   OrchestratorHttpServerHandle,
   OrchestratorServerConfig,
 } from "./http_server.js";
+export { buildOrchestratorHealthPayload } from "./hosted_health.js";
+export type { HostedOrchestratorHealthPayload } from "./hosted_health.js";
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   startOrchestratorServer().catch((cause) => {
