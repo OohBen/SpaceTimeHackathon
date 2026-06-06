@@ -3,6 +3,9 @@ export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_SPACETIME_HOST = "http://localhost:3000";
 export const DEFAULT_SPACETIME_DB_NAME = "solar-dominion";
 
+export const DEFAULT_OPENROUTER_TIMEOUT_MS = 30_000;
+export const MAX_OPENROUTER_TIMEOUT_MS = 120_000;
+
 type EnvRecord = Record<string, string | undefined>;
 
 export type LlmProviderMode = "live" | "mock" | "fixture";
@@ -16,6 +19,7 @@ export type OpenRouterConfig = {
   apiKey: string;
   baseUrl: string;
   model: string;
+  timeoutMs?: number;
 };
 
 export type LiveLlmProviderConfig = {
@@ -66,6 +70,7 @@ type FetchRequestInit = {
   body: string;
   headers: Record<string, string>;
   method: "POST";
+  signal?: AbortSignal;
 };
 
 export type FetchLike = (
@@ -86,6 +91,28 @@ export class OpenRouterRequestError extends Error {
   constructor(public readonly status: number, detail: string) {
     super(`OpenRouter request failed with ${status}: ${detail}`);
     this.name = "OpenRouterRequestError";
+  }
+}
+
+export class OpenRouterTimeoutError extends Error {
+  public readonly provider = "openrouter";
+
+  constructor(public readonly timeoutMs: number) {
+    super(`OpenRouter request timed out after ${timeoutMs}ms`);
+    this.name = "OpenRouterTimeoutError";
+  }
+}
+
+export class OpenRouterNetworkError extends Error {
+  public readonly provider = "openrouter";
+
+  constructor(public readonly cause: unknown) {
+    super(
+      `OpenRouter transport failure: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`
+    );
+    this.name = "OpenRouterNetworkError";
   }
 }
 
@@ -130,17 +157,34 @@ export function createOpenRouterClient(
 
   return {
     async completeText(request) {
-      const response = await fetchImpl(
-        `${normalizedConfig.baseUrl}/chat/completions`,
-        {
-          body: JSON.stringify(toOpenRouterChatRequest(normalizedConfig, request)),
-          headers: {
-            authorization: `Bearer ${normalizedConfig.apiKey}`,
-            "content-type": "application/json",
-          },
-          method: "POST",
+      const controller = new AbortController();
+      const timeoutMs = normalizedConfig.timeoutMs ?? DEFAULT_OPENROUTER_TIMEOUT_MS;
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      let response: Response;
+      try {
+        response = await fetchImpl(
+          `${normalizedConfig.baseUrl}/chat/completions`,
+          {
+            body: JSON.stringify(
+              toOpenRouterChatRequest(normalizedConfig, request)
+            ),
+            headers: {
+              authorization: `Bearer ${normalizedConfig.apiKey}`,
+              "content-type": "application/json",
+            },
+            method: "POST",
+            signal: controller.signal,
+          }
+        );
+      } catch (cause) {
+        if (controller.signal.aborted) {
+          throw new OpenRouterTimeoutError(timeoutMs);
         }
-      );
+        throw new OpenRouterNetworkError(cause);
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (!response.ok) {
         throw new OpenRouterRequestError(
@@ -169,6 +213,7 @@ function readOpenRouterConfig(env: EnvRecord): OpenRouterConfig {
     ),
     baseUrl: readOptional(env.OPENROUTER_BASE_URL) ?? OPENROUTER_BASE_URL,
     model: readOptional(env.OPENROUTER_MODEL) ?? DEFAULT_OPENROUTER_MODEL,
+    timeoutMs: readTimeoutMs(env.OPENROUTER_TIMEOUT_MS),
   });
 }
 
@@ -185,7 +230,36 @@ function normalizeOpenRouterConfig(config: OpenRouterConfig): OpenRouterConfig {
       "openrouter_model_missing",
       "OPENROUTER_MODEL must not be blank"
     ),
+    timeoutMs: normalizeTimeoutMs(config.timeoutMs),
   };
+}
+
+function readTimeoutMs(value: string | undefined): number | undefined {
+  const trimmed = readOptional(value);
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    throw new OpenRouterConfigError(
+      "openrouter_timeout_invalid",
+      `OPENROUTER_TIMEOUT_MS must be a positive integer <= ${MAX_OPENROUTER_TIMEOUT_MS}`
+    );
+  }
+  return normalizeTimeoutMs(parsed);
+}
+
+function normalizeTimeoutMs(value: number | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Number.isFinite(value) || value <= 0 || value > MAX_OPENROUTER_TIMEOUT_MS) {
+    throw new OpenRouterConfigError(
+      "openrouter_timeout_invalid",
+      `OPENROUTER_TIMEOUT_MS must be a positive integer <= ${MAX_OPENROUTER_TIMEOUT_MS}`
+    );
+  }
+  return value;
 }
 
 function readSpacetimeConfig(env: EnvRecord): SpacetimeConfig {
