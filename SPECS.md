@@ -176,6 +176,44 @@ Authoritative state lives in SpacetimeDB. Field names may evolve during implemen
 - `error`
 - `created_turn`
 
+## Access Policy
+
+Authoritative access policy version: `1`.
+
+Identity scope is per SpacetimeDB `ctx.sender` and per game session. `join_or_resume_session(session_id, player_slot)` binds a browser identity to exactly one faction slot by replacing the claimable placeholder `factions.player_id`. A claimed slot can be resumed only by the same identity. Claimable placeholder identities are not private-data owners. Hosted mode keeps the same rule: external auth may determine the sender identity, but access is still evaluated by matching that identity to a claimed `factions.player_id` within the session.
+
+### Subscription Visibility Matrix
+
+| Entity | Public subscription | Faction owner subscription | Access key | Notes |
+|---|---|---|---|---|
+| `game_sessions` | Full | Full | `session_id` context | Shared session state: phase, turn, timer, winner, and faction links. |
+| `celestial_bodies` | Full | Full | `session_id` | Shared solar-system map catalog. |
+| `factions` | Projection | Full | `id` | Public projection may include name, control score, readiness; owner full row includes identity, resources, doctrine. |
+| `cities` | Projection | Full | `faction_id` | Public map/control projection; owner full row includes exact operating stats. |
+| `fleets` | Projection | Full | `faction_id` | Public presence/strength projection; owner full row includes orders. |
+| `colony_ships` | Projection | Full | `faction_id` | Public transit/status projection; owner full row includes manifest and launch context. |
+| `events` | Projection | Full | `faction_id` | Rows with no `faction_id` are shared; faction-addressed rows are private unless projected. |
+| `personnel`, `proposals`, `commander_inbox`, `projects`, `turn_summaries`, `llm_requests` | None | Full | `faction_id` | Private command data for the owning faction. |
+| `personnel_relationships` | None | Full | derived personnel faction | Inherits visibility from connected personnel. |
+| `intelligence_records` | None | Full | `observer_faction_id` | Intel belongs to the observing faction. |
+| `trade_agreements` | None | Participant full | `faction_a_id`, `faction_b_id` | Visible to participating factions unless later published as shared events. |
+
+### Reducer Access Matrix
+
+| Reducer | Required identity scope | Authoritative data touched |
+|---|---|---|
+| `create_session` | Anonymous sender allowed | Creates `game_sessions`, claimable `factions`. |
+| `join_or_resume_session` | Slot claim or same claimed identity | Reads/writes `game_sessions`, `factions`. |
+| `advance_turn_phase` | System-only/admin repair | Reads/writes `game_sessions`; normal gameplay should use bounded reducers. |
+| `advance_world` | Session participant | Reads `game_sessions`, `factions`; advances session phase. |
+| `run_deliberation` | Faction owner | Reads `factions`, `game_sessions`, `llm_requests`; writes `llm_requests`. |
+| `commander_decision` | Faction owner | Reads `factions`, `game_sessions`, `proposals`; writes `factions`, `proposals`. |
+| `submit_turn` | Faction owner | Reads/writes faction readiness, proposals, events, and session phase. |
+| `expire_turn` | Session participant after deadline | Auto-defers proposals and triggers resolution after authoritative timeout. |
+| `simulate_turn` | Session participant or automation | Reads shared turn state; writes `turn_summaries`, `events`, session phase. |
+| `ack_resolution` | Faction owner | Acknowledges only the owner's `turn_summaries` row. |
+| `check_victory` | Session participant or automation | Reads shared state and writes session victory state/events. |
+
 ## API Routes and Reducers
 
 SpacetimeDB reducers are the primary API. Any HTTP service is only for external LLM orchestration.
@@ -248,6 +286,7 @@ SpacetimeDB reducers are the primary API. Any HTTP service is only for external 
 - Players cannot spend resources they do not have.
 - Proposal decisions must be faction-owned; one player cannot decide for the other.
 - Public subscriptions expose shared world state only; private faction subscriptions expose full faction detail.
+- Claimable placeholder identities are setup metadata only and never authorize private reads or reducer actions.
 - City morale stays in 0-100 range and affects output/control score.
 - Infrastructure levels stay in 1-5 range.
 - Game ends at Turn 30 or if one faction holds decisive dominance for 3 consecutive turns.
