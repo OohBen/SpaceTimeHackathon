@@ -1,5 +1,8 @@
 import { Identity, type Timestamp } from 'spacetimedb';
 
+import { runWorldUpdate, type WorldUpdateContext } from './simulation_kernel.js';
+import type { EventRow } from './turn1_seed.js';
+
 export const INITIAL_SESSION_STATE = 'setup';
 export const INITIAL_TURN_PHASE = 'setup';
 export const INITIAL_YEAR = 2150;
@@ -143,6 +146,14 @@ export interface TurnPhaseContext {
         find(id: number): GameSessionRow | null;
         update(row: GameSessionRow): GameSessionRow;
       };
+    };
+  };
+}
+
+export interface AdvanceWorldContext extends WorldUpdateContext {
+  db: WorldUpdateContext['db'] & {
+    events: WorldUpdateContext['db']['events'] & {
+      iter(): Iterable<EventRow>;
     };
   };
 }
@@ -314,14 +325,32 @@ export function advanceTurnPhaseReducer(
 }
 
 export function advanceWorldReducer(
-  ctx: TurnPhaseContext,
+  ctx: AdvanceWorldContext,
   input: AdvanceWorldInput
 ): void {
   const session = findSessionForPhaseUpdate(ctx, input.session_id);
   assertActiveSessionForWorldUpdate(session);
-  ctx.db.game_sessions.id.update(
-    transitionTurnPhase(session, 'deliberation', ctx.timestamp)
-  );
+  const nextSession = transitionTurnPhase(session, 'deliberation', ctx.timestamp);
+  if (!hasWorldAdvancedEvent(ctx, session)) {
+    runWorldUpdate(ctx, session);
+  }
+  ctx.db.game_sessions.id.update(nextSession);
+}
+
+function hasWorldAdvancedEvent(
+  ctx: AdvanceWorldContext,
+  session: GameSessionRow
+): boolean {
+  for (const event of ctx.db.events.iter()) {
+    if (
+      event.session_id === session.id &&
+      event.turn === session.current_turn &&
+      event.event_type === 'world_advanced'
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function transitionTurnPhase(

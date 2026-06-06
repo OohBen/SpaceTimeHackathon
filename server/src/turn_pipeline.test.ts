@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   advanceWorldReducer,
   advanceTurnPhaseReducer,
+  type AdvanceWorldContext,
   type TurnPhaseContext,
 } from './session_lifecycle.js';
 import {
@@ -147,6 +148,10 @@ function makeWorldCtx(rows: PipelineRows): WorldUpdateContext {
   return makePipelineCtx(rows.factions[0].player_id, rows) as unknown as WorldUpdateContext;
 }
 
+function makeAdvanceWorldCtx(rows: PipelineRows): AdvanceWorldContext {
+  return makePipelineCtx(rows.factions[0].player_id, rows) as unknown as AdvanceWorldContext;
+}
+
 function makeResolutionCtx(
   sender: Identity,
   rows: PipelineRows
@@ -217,7 +222,7 @@ function runSeededWorldUpdateToSummary() {
   const [factionA, factionB] = rows.factions;
 
   runWorldUpdate(makeWorldCtx(rows), rows.game_sessions[0]);
-  advanceWorldReducer(makeWorldCtx(rows), {
+  advanceWorldReducer(makeAdvanceWorldCtx(rows), {
     session_id: rows.game_sessions[0].id,
   });
   queueDeliberationForBothFactions(rows);
@@ -311,6 +316,57 @@ describe('turn pipeline reducers', () => {
     expect(
       first.summaryJson.map(summary => JSON.parse(summary).simulation_outputs)
     ).toEqual([first.worldPayload, first.worldPayload]);
+  });
+
+  it('advanceWorldReducer alone emits world_advanced and propagates simulation_outputs into summaries', () => {
+    const rows = makeRows('world_update');
+    const [factionA, factionB] = rows.factions;
+
+    advanceWorldReducer(makeAdvanceWorldCtx(rows), {
+      session_id: rows.game_sessions[0].id,
+    });
+
+    const events = worldAdvancedEvents(rows);
+    expect(events).toHaveLength(1);
+    const worldPayload = JSON.parse(events[0].payload);
+    expect(worldPayload).toMatchObject({
+      session_id: rows.game_sessions[0].id,
+      turn: rows.game_sessions[0].current_turn,
+    });
+    expect(worldPayload.control_scores).toBeDefined();
+    expect(worldPayload.credit_income).toBeDefined();
+
+    queueDeliberationForBothFactions(rows);
+    enterDecision(rows);
+    decideFirstOpenProposal(rows, factionA.id, 'approved');
+    decideFirstOpenProposal(rows, factionB.id, 'rejected');
+    submitTurnReducer(makeAdvancementCtx(factionA.player_id, rows), {
+      faction_id: factionA.id,
+    });
+    submitTurnReducer(makeAdvancementCtx(factionB.player_id, rows), {
+      faction_id: factionB.id,
+    });
+    simulateTurnReducer(makeResolutionCtx(factionA.player_id, rows), {
+      session_id: rows.game_sessions[0].id,
+    });
+
+    const summaryOutputs = rows.turn_summaries.map(
+      summary => JSON.parse(summary.summary_json).simulation_outputs
+    );
+    expect(summaryOutputs).toEqual([worldPayload, worldPayload]);
+  });
+
+  it('advanceWorldReducer is idempotent when the kernel already emitted a world_advanced event', () => {
+    const rows = makeRows('world_update');
+
+    runWorldUpdate(makeWorldCtx(rows), rows.game_sessions[0]);
+    expect(worldAdvancedEvents(rows)).toHaveLength(1);
+
+    advanceWorldReducer(makeAdvanceWorldCtx(rows), {
+      session_id: rows.game_sessions[0].id,
+    });
+    expect(worldAdvancedEvents(rows)).toHaveLength(1);
+    expect(rows.game_sessions[0].turn_phase).toBe('deliberation');
   });
 
   it('auto-defers timeout proposals before simulation summary and acknowledgements', async () => {
