@@ -30,16 +30,22 @@ for (const file of markdownFiles) {
   const rel = relative(root, file);
   const lines = readFileSync(file, "utf8").split(/\r?\n/);
   let fenceCount = 0;
+  let inFence = false;
 
   lines.forEach((line, index) => {
+    if (/^```/.test(line.trim())) {
+      fenceCount += 1;
+      inFence = !inFence;
+      return;
+    }
+    if (inFence) {
+      return;
+    }
     if (line.startsWith("\t")) {
       failures.push(`${rel}:${index + 1}: heading/list indentation starts with a tab`);
     }
-    if (/^#+[^#\s]/.test(line)) {
+    if (/^#{1,6}(?![#\s\d])/.test(line)) {
       failures.push(`${rel}:${index + 1}: heading marker needs a following space`);
-    }
-    if (/^```/.test(line.trim())) {
-      fenceCount += 1;
     }
   });
 

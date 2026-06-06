@@ -45,7 +45,7 @@ const patterns = [
   },
   {
     id: "generic-secret-assignment",
-    regex: /\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*["']?(?!example|placeholder|redacted|dummy|test|mock|fixture|<|\$\{\{)[A-Za-z0-9_./+=-]{20,}/i
+    regex: /\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*["'](?!example|placeholder|redacted|dummy|test|mock|fixture|<|\$\{\{)[A-Za-z0-9_./+=-]{20,}["']/i
   }
 ];
 
