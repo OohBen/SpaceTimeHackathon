@@ -9,8 +9,11 @@
     "orchestrator"
   ],
   "scripts": {
-    "test": "npm run test --workspaces --if-present && npm run ci:quality",
+    "test": "npm run test:runner && npm run test --workspaces --if-present && npm run ci:quality",
+    "test:runner": "node --test scripts/local-demo-runner.test.mjs",
     "build": "npm run build --workspaces --if-present",
+    "demo": "node scripts/local-demo-runner.mjs",
+    "demo:smoke": "node scripts/local-demo-runner.mjs --smoke",
     "dev:client": "npm run dev --workspace=client",
     "dev:orchestrator": "npm run dev --workspace=orchestrator",
     "spacetime:build": "npm run spacetime:build --workspace=server",
