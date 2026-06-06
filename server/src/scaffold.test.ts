@@ -7,6 +7,7 @@ const serverRoot = resolve(import.meta.dirname, '..');
 
 describe('server scaffold', () => {
   it('module entry point exists', () => {
+    expect(existsSync(resolve(serverRoot, 'src/index.ts'))).toBe(true);
     expect(existsSync(resolve(serverRoot, 'src/module.ts'))).toBe(true);
   });
 
