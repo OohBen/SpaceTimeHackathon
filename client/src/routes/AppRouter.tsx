@@ -11,6 +11,7 @@ import {
 import { useHudData, type HudData } from './hud';
 import type { PlayerSlot, SetupParams, SetupState } from './types';
 import { usePanelStore, CORE_PANELS, type PanelId } from './panels';
+import { Inbox } from '../components/inbox/Inbox';
 import './CommandCenterShell.css';
 
 type View = 'landing' | 'setup' | 'game';
@@ -297,6 +298,10 @@ function PanelContent({
         </p>
       </div>
     );
+  }
+
+  if (panel === 'inbox') {
+    return <Inbox />;
   }
 
   return (

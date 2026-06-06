@@ -117,6 +117,21 @@ describe('session reducer actions', () => {
     expect(selectReducerCall(store.getState(), 'expireTurn:9001')?.status).toBe('loading');
   });
 
+  it('builds typed deliberation, simulation, and acknowledgement reducer descriptors', () => {
+    expect(reducerRegistry.runDeliberation({ factionId: 7 })).toEqual({
+      reducer: 'run_deliberation',
+      args: { factionId: 7 },
+    });
+    expect(reducerRegistry.simulateTurn({ sessionId: 9001 })).toEqual({
+      reducer: 'simulate_turn',
+      args: { sessionId: 9001 },
+    });
+    expect(reducerRegistry.ackResolution({ factionId: 7 })).toEqual({
+      reducer: 'ack_resolution',
+      args: { factionId: 7 },
+    });
+  });
+
   it('dispatches the rest of the turn pipeline through scoped reducer state keys', () => {
     const calls: ReducerCallDescriptor[] = [];
     const store = createSessionStore();
