@@ -16,18 +16,21 @@ the judge-ready default because it needs no external network or OpenRouter key.
 - spacetime CLI available on `PATH`.
 - `npm install` already run from the repository root.
 - Ports `3000`, `8787`, and `5173` free.
+- The runner may recreate `.spacetimedb-local-data/`; it does not clear the
+  user's global SpacetimeDB data directory.
 
 ## Startup Sequence
 
 1. Preflight tools, dependencies, env, fixture file, URLs, and ports.
 2. Build the SpacetimeDB module with `npm run spacetime:build`.
-3. Start local SpacetimeDB on `http://localhost:3000`.
-4. Publish `solar-dominion`.
-5. Start the orchestrator on `http://localhost:8787`.
-6. Confirm `GET http://localhost:8787/health` returns provider readiness.
-7. Set module deliberation mode to `queue`.
-8. Start the Vite frontend on `http://localhost:5173`.
-9. Confirm the frontend HTTP route responds.
+3. Reset `.spacetimedb-local-data/`.
+4. Start local SpacetimeDB on `http://localhost:3000` using that data dir.
+5. Publish `solar-dominion`.
+6. Start the orchestrator on `http://localhost:8787`.
+7. Confirm `GET http://localhost:8787/health` returns provider readiness.
+8. Set module deliberation mode to `queue`.
+9. Start the Vite frontend on `http://localhost:5173`.
+10. Confirm the frontend HTTP route responds.
 
 ## Expected Output
 

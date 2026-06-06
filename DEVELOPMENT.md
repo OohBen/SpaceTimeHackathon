@@ -100,8 +100,10 @@ The command preflights Node.js, npm, the spacetime CLI, workspace installs,
 ports 3000/8787/5173, LLM mode configuration, fixture files, and frontend
 SpacetimeDB URLs before starting long-running services. It starts SpacetimeDB,
 publishes `solar-dominion`, starts the orchestrator health server, starts Vite,
-then prints the demo URL. See `docs/P4E2-local-runner-operator-guide.md` for
-expected output and recovery steps.
+then prints the demo URL. The runner resets its own `.spacetimedb-local-data/`
+directory before startup so repeated rehearsals do not depend on global local
+SpacetimeDB state. See `docs/P4E2-local-runner-operator-guide.md` for expected
+output and recovery steps.
 
 ## Workspace Layout
 
