@@ -1,0 +1,159 @@
+name: Security and Quality Gates
+
+on:
+  pull_request:
+    branches:
+      - main
+      - "epic/**"
+  push:
+    branches:
+      - main
+      - "epic/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets-scan:
+    name: Secrets scan (Gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root package
+        run: npm ci
+
+      - name: Fast local secret pattern scan
+        run: npm run scan:secrets
+
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Upload local secret scan SARIF
+        if: always() && hashFiles('artifacts/gitleaks.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: artifacts/gitleaks.sarif
+
+      - name: Remediation - secrets scan
+        if: failure()
+        run: |
+          echo "Remediation: rotate any leaked credential before merging."
+          echo "Fast diagnosis: open artifacts/gitleaks.sarif and inspect file, line, and rule id."
+          echo "If a finding is a placeholder, add a narrow allowlist entry in .gitleaks.toml."
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: always
+
+      - name: Remediation - dependency review
+        if: failure()
+        run: |
+          echo "Remediation: upgrade or remove the vulnerable package, then regenerate the lockfile."
+          echo "Fast diagnosis: read the dependency review annotation for package, advisory, and severity."
+          echo "If the alert is accepted risk, document the rationale in the PR before asking for review."
+
+  workflow-lint:
+    name: Actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fast local workflow checks
+        run: npm run lint:actions
+
+      - name: Install actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12 /usr/local/bin
+
+      - name: Run actionlint
+        run: actionlint -color
+
+      - name: Remediation - actionlint
+        if: failure()
+        run: |
+          echo "Remediation: fix the workflow syntax or expression named in the actionlint output."
+          echo "Fast diagnosis: run npm run lint:actions first, then actionlint locally for parser details."
+
+  markdown-lint:
+    name: Markdownlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root package
+        run: npm ci
+
+      - name: Fast local markdown checks
+        run: npm run lint:markdown
+
+      - name: Run markdownlint
+        run: npx --yes markdownlint-cli2 "**/*.md" "#node_modules" "#dist" "#build" "#.claude" "#.codex-tmp" "#AIDER.md" "#ANTIGRAVITY.md" "#CLAUDE.md" "#CODEX.md" "#GEMINI.md"
+
+      - name: Remediation - markdownlint
+        if: failure()
+        run: |
+          echo "Remediation: fix the markdown rule violations shown above or narrow .markdownlint-cli2.jsonc."
+          echo "Fast diagnosis: run npm run lint:markdown for quick structural checks."
+
+  contract-check:
+    name: Repository contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root package
+        run: npm ci
+
+      - name: Validate backend/frontend/LLM contract
+        run: npm run test:contracts
+
+      - name: Remediation - contract check
+        if: failure()
+        run: |
+          echo "Remediation: update contracts/llm-orchestrator.contract.json and SPECS.md together."
+          echo "Fast diagnosis: npm run test:contracts prints the missing reducer, env key, or LLM field."
