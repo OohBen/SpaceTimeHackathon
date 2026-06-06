@@ -149,10 +149,6 @@ function AppRouterView({
       }
     }
 
-    if (session.status === 'ready') {
-      return;
-    }
-
     if (router.view === 'game' && router.gameRoute && hasCompleteSessionContext(session)) {
       if (!storedContextMatchesRoute(session, router.gameRoute)) {
         const routed = findRoutedSlot(backend, router.gameRoute);
@@ -169,6 +165,10 @@ function AppRouterView({
         playerSlot: session.playerSlot,
         playerName: session.playerName,
       });
+      return;
+    }
+
+    if (session.status === 'ready') {
       return;
     }
 
@@ -262,16 +262,15 @@ function findRoutedSlot(
   const session = backend.sessions.find((row) => row.id === route.sessionId);
   if (!session) return null;
 
-  const factionId =
-    route.playerSlot === 'player_a'
-      ? session.playerAFactionId
-      : session.playerBFactionId;
-  if (factionId === undefined) return null;
+  const choice = backend
+    .getSlotChoices(session.id)
+    .find((slot) => slot.key === route.playerSlot && slot.status === 'yours');
+  if (!choice || choice.factionId === undefined) return null;
 
-  const faction = backend.factions.find((row) => row.id === factionId);
+  const faction = backend.factions.find((row) => row.id === choice.factionId);
   return {
     sessionId: session.id,
-    factionId,
+    factionId: choice.factionId,
     playerSlot: route.playerSlot,
     playerName: faction?.name ?? route.playerSlot,
     isResume: true,

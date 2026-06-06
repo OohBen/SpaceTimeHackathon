@@ -616,7 +616,10 @@ export function selectCurrentPlayerSlot(state: SessionState): PlayerSlotRow | nu
   if (!activeSessionId) return null;
 
   if (state.activePlayerSlot !== null) {
-    return state.playerSlotsByKey[playerSlotKey(activeSessionId, state.activePlayerSlot)] ?? null;
+    const routedSlot = state.playerSlotsByKey[playerSlotKey(activeSessionId, state.activePlayerSlot)] ?? null;
+    if (!routedSlot) return null;
+    if (!identity) return null;
+    return routedSlot.identity === identity ? routedSlot : null;
   }
 
   if (!identity) return null;

@@ -157,7 +157,6 @@ const tablesSchema = __schema({
     ],
     constraints: [
       { name: 'factions_id_key', constraint: 'unique', columns: ['id'] },
-      { name: 'factions_player_id_key', constraint: 'unique', columns: ['playerId'] },
     ],
   }, FactionsRow),
   fleets: __table({

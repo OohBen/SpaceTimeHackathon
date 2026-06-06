@@ -283,12 +283,6 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
         playerSlot,
       });
 
-      const opponentSlot: PlayerSlot = playerSlot === 'player_a' ? 'player_b' : 'player_a';
-      await sessionReducers(conn).joinOrResumeSession({
-        sessionId: created.session.id,
-        playerSlot: opponentSlot,
-      });
-
       // Seed a turn-1 world so the session is immediately playable (star map,
       // cities, personnel). Idempotent server-side; best-effort so a seed hiccup
       // never blocks entering the session.
@@ -492,12 +486,12 @@ function toPlayerSlotRow(faction: Factions, identity: string | null): PlayerSlot
   return {
     sessionId: String(faction.sessionId),
     slot: metadata.slot_key === 'player_a' ? 1 : 2,
-    identity: occupied ? identity ?? playerId : null,
+    identity: occupied ? playerId : null,
     factionId: String(faction.id),
     factionName: metadata.slot_name ?? faction.name,
     playerName: occupied ? faction.name : null,
     occupied,
-    visibility: occupied ? 'own' : 'public',
+    visibility: occupied && playerId === identity ? 'own' : 'public',
   };
 }
 

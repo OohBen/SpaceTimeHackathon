@@ -1,4 +1,5 @@
 import { Identity, type Timestamp } from 'spacetimedb';
+import { SenderError } from 'spacetimedb/server';
 
 import { runWorldUpdate, type WorldUpdateContext } from './simulation_kernel.js';
 import type { EventRow } from './turn1_seed.js';
@@ -456,6 +457,8 @@ export function joinOrResumeSession(
     throw new Error(`slot ${playerSlot} placeholder identity mismatch`);
   }
 
+  assertSenderDoesNotOwnOpponentSlot(ctx, opponentFactionId, playerSlot);
+
   const updatedSlot: FactionSlotMetadata = { ...slot, claim_status: 'claimed' };
   const updatedDoctrine: FactionDoctrineVector = { ...doctrineVector, slot: updatedSlot };
   const updatedFaction: FactionRow = {
@@ -497,6 +500,24 @@ function checkBothSlotsClaimed(
   if (!opponentFaction) return false;
   const opponentDoctrine: FactionDoctrineVector = JSON.parse(opponentFaction.doctrine_vector);
   return opponentDoctrine.slot.claim_status === 'claimed';
+}
+
+function assertSenderDoesNotOwnOpponentSlot(
+  ctx: JoinOrResumeContext,
+  opponentFactionId: number,
+  playerSlot: FactionSlotKey
+): void {
+  const opponentFaction = ctx.db.factions.id.find(opponentFactionId);
+  if (!opponentFaction) return;
+  const opponentDoctrine: FactionDoctrineVector = JSON.parse(opponentFaction.doctrine_vector);
+  if (
+    opponentDoctrine.slot.claim_status === 'claimed' &&
+    opponentFaction.player_id.toHexString() === ctx.sender.toHexString()
+  ) {
+    throw new SenderError(
+      `cannot claim ${playerSlot}; this browser already owns the other slot in this session`
+    );
+  }
 }
 
 function findSessionForPhaseUpdate(

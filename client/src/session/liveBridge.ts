@@ -77,7 +77,11 @@ export function buildLiveSnapshot(rows: LiveTableRows): SubscriptionSnapshot {
   for (const faction of factions) {
     factionById.set(faction.id, faction);
   }
-  const ownedFactionIds = new Set(factions.map(faction => faction.id));
+  const ownedFactionIds = new Set(
+    factions
+      .filter(faction => ownsFaction(faction, rows.identity))
+      .map(faction => faction.id),
+  );
 
   const sessions: SessionRow[] = rows.sessions.map(translateSession);
   const playerSlots: PlayerSlotRow[] = factions.map(faction =>
@@ -200,12 +204,12 @@ function translatePlayerSlot(faction: Factions, identity?: string | null): Playe
   return {
     sessionId: String(faction.sessionId),
     slot: PLAYER_SLOT_ORDER[slotKey],
-    identity: occupied ? identity ?? ownerHex : null,
+    identity: occupied ? ownerHex : null,
     factionId: String(faction.id),
     factionName: slot?.slot_name ?? faction.name,
     playerName: faction.name,
     occupied,
-    visibility: occupied ? 'own' : 'public',
+    visibility: occupied && ownerHex === identity ? 'own' : 'public',
   };
 }
 
@@ -314,4 +318,9 @@ function parseSlotMetadata(faction: Factions): FactionSlotMetadata | undefined {
   } catch {
     return undefined;
   }
+}
+
+function ownsFaction(faction: Factions, identityHex: string | null): boolean {
+  if (!identityHex) return false;
+  return faction.playerId.toHexString() === identityHex;
 }
