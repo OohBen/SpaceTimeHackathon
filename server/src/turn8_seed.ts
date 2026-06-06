@@ -2,6 +2,10 @@ import { Identity, Timestamp } from 'spacetimedb';
 
 import { buildSlotIdentity } from './session_lifecycle.js';
 import {
+  attachNarrativeToCommanderInbox,
+  type NarrativeAttachmentPayload,
+} from './narrative_attachment.js';
+import {
   TURN1_SEED_INSERT_ORDER,
   type Turn1SeedRows,
   type Turn1SeedBatch,
@@ -18,6 +22,7 @@ import {
   type ProjectRow,
   type IntelligenceRecordRow,
   type EventRow,
+  type TurnSummaryRow,
   type TradeAgreementRow,
   type LlmRequestRow,
 } from './turn1_seed.js';
@@ -129,6 +134,67 @@ const stableValue = (value: unknown): unknown => {
 };
 
 const stableJson = (value: unknown): string => JSON.stringify(stableValue(value));
+
+function inboxNarrativePayload(
+  sessionId: number,
+  factionId: number,
+  headline: string,
+  prose: string
+): NarrativeAttachmentPayload {
+  return {
+    authoritative: false,
+    display_only: true,
+    headline,
+    metadata: {
+      faction_id: factionId,
+      privacy_scope: 'own_faction',
+      session_id: sessionId,
+      turn: TURN8_TURN,
+    },
+    prose,
+    request_type: 'inbox',
+    schema_version: 1,
+    source: 'fixture',
+    surface: 'inbox',
+  };
+}
+
+function attachTurn8InboxNarratives(
+  sessionId: number,
+  rows: CommanderInboxRow[]
+): CommanderInboxRow[] {
+  const narrativeById: Record<number, { headline: string; prose: string }> = {
+    1: {
+      headline: 'Mars pressure, Callisto window',
+      prose:
+        'Command staff frames Turn 8 around the Mars pressure versus Callisto opportunity decision. Pavonis Hub is strained, while Callisto Outpost can turn ice and volatiles into durable leverage.',
+    },
+    2: {
+      headline: 'Callisto survey window',
+      prose:
+        'The Callisto survey is the clean opportunity. Mars remains pressured around Pavonis Hub, so delaying the outer-system push gives the Compact room to contest the ice and volatiles window.',
+    },
+    3: {
+      headline: 'Pavonis strain, Callisto opening',
+      prose:
+        'Pavonis Hub is strained under Mars pressure, but the larger decision is whether to spend this turn on relief or contest Callisto before Earth locks the opportunity.',
+    },
+    4: {
+      headline: 'Escort choice at Callisto',
+      prose:
+        'Mars command sees the judge-facing tradeoff: stabilize Pavonis Hub now or escort a Callisto push while the ice and volatiles window is still open.',
+    },
+  };
+
+  return rows.map((row) => {
+    const narrative = narrativeById[row.id];
+    if (!narrative) return row;
+    return attachNarrativeToCommanderInbox(
+      row,
+      inboxNarrativePayload(sessionId, row.faction_id, narrative.headline, narrative.prose)
+    );
+  });
+}
 
 function buildSlotDoctrineVector(
   sessionId: number,
@@ -517,7 +583,7 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
     },
   ];
 
-  const commander_inbox: CommanderInboxRow[] = [
+  const commander_inbox: CommanderInboxRow[] = attachTurn8InboxNarratives(sessionId, [
     {
       id: 1,
       faction_id: FACTION_A_ID,
@@ -558,7 +624,7 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       requires_decision: true,
       status: 'unread',
     },
-  ];
+  ]);
 
   const fleets: FleetRow[] = [
     { id: 1, faction_id: FACTION_A_ID, posting_city_id: 1, strength: 460, orders: 'home_guard' },
@@ -683,6 +749,38 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       session_id: sessionId,
       faction_id: undefined,
       turn: TURN8_TURN,
+      event_type: 'scenario_cue_mars_pressure',
+      payload: stableJson({
+        body: 'Mars',
+        city: 'Pavonis Hub',
+        cue: 'mars_pressure',
+        label: 'Mars pressure: Pavonis Hub strained supply',
+        severity: 'warning',
+        source: 'turn8_judge_scenario',
+        surface: 'map_detail',
+      }),
+    },
+    {
+      id: 5,
+      session_id: sessionId,
+      faction_id: undefined,
+      turn: TURN8_TURN,
+      event_type: 'scenario_cue_callisto_opportunity',
+      payload: stableJson({
+        body: 'Callisto',
+        city: 'Callisto Outpost',
+        cue: 'callisto_opportunity',
+        label: 'Callisto opportunity: ice and volatiles window',
+        severity: 'info',
+        source: 'turn8_judge_scenario',
+        surface: 'map_detail',
+      }),
+    },
+    {
+      id: 6,
+      session_id: sessionId,
+      faction_id: undefined,
+      turn: TURN8_TURN,
       event_type: 'turn_opened',
       payload: stableJson({ phase: 'deliberation', proposal_count: proposals.length }),
     },
@@ -700,6 +798,8 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
     },
   ];
 
+  const turn_summaries: TurnSummaryRow[] = [];
+
   const llm_requests: LlmRequestRow[] = [
     {
       id: 1,
@@ -714,10 +814,13 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
         proposal_ids: [1, 2],
         turn: TURN8_TURN,
       }),
-      status: 'complete',
+      status: 'completed',
       response_json: stableJson({ proposal_ids: [1, 2], source: 'deterministic_fixture' }),
       error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
       created_turn: TURN8_TURN,
+      updated_turn: TURN8_TURN,
     },
     {
       id: 2,
@@ -732,10 +835,61 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
         proposal_ids: [3, 4],
         turn: TURN8_TURN,
       }),
-      status: 'complete',
+      status: 'completed',
       response_json: stableJson({ proposal_ids: [3, 4], source: 'deterministic_fixture' }),
       error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
       created_turn: TURN8_TURN,
+      updated_turn: TURN8_TURN,
+    },
+    {
+      id: 3,
+      session_id: sessionId,
+      faction_id: FACTION_A_ID,
+      request_type: 'inbox',
+      context_json: stableJson({
+        commander_inbox_ids: [1, 2],
+        faction_id: FACTION_A_ID,
+        scenario_cues: ['mars_pressure', 'callisto_opportunity'],
+        scenario_id: 'turn-8-judge',
+        surface: 'inbox',
+        turn: TURN8_TURN,
+      }),
+      status: 'completed',
+      response_json: stableJson({
+        commander_inbox_ids: [1, 2],
+        source: 'deterministic_fixture',
+      }),
+      error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
+      created_turn: TURN8_TURN,
+      updated_turn: TURN8_TURN,
+    },
+    {
+      id: 4,
+      session_id: sessionId,
+      faction_id: FACTION_B_ID,
+      request_type: 'inbox',
+      context_json: stableJson({
+        commander_inbox_ids: [3, 4],
+        faction_id: FACTION_B_ID,
+        scenario_cues: ['mars_pressure', 'callisto_opportunity'],
+        scenario_id: 'turn-8-judge',
+        surface: 'inbox',
+        turn: TURN8_TURN,
+      }),
+      status: 'completed',
+      response_json: stableJson({
+        commander_inbox_ids: [3, 4],
+        source: 'deterministic_fixture',
+      }),
+      error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
+      created_turn: TURN8_TURN,
+      updated_turn: TURN8_TURN,
     },
   ];
 
@@ -753,8 +907,10 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
     projects,
     intelligence_records,
     events,
+    turn_summaries,
     trade_agreements,
     llm_requests,
+    module_settings: [],
   };
 }
 

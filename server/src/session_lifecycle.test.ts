@@ -3,6 +3,10 @@ import { resolve } from 'path';
 import { Identity, Timestamp } from 'spacetimedb';
 import { describe, expect, it } from 'vitest';
 import {
+  advanceTurnPhaseReducer,
+  advanceWorldReducer,
+  ALLOWED_TURN_PHASE_TRANSITIONS,
+  ACTIVE_SESSION_STATE,
   buildSessionLifecycleRows,
   buildSlotIdentity,
   createSessionReducer,
@@ -13,15 +17,88 @@ import {
   joinOrResumeSession,
   joinOrResumeSessionReducer,
   normalizeCreateSessionInput,
+  parseTurnPhase,
+  transitionTurnPhase,
+  TURN_PHASES,
   type CreateSessionInput,
   type FactionRow,
   type GameSessionRow,
   type JoinOrResumeContext,
   type SessionLifecycleContext,
+  type AdvanceWorldContext,
+  type TurnPhaseContext,
 } from './session_lifecycle.js';
+import { buildTurn1Seed, type Turn1SeedRows } from './turn1_seed.js';
 
 const timestamp = Timestamp.UNIX_EPOCH;
 const srcPath = (file: string) => resolve(import.meta.dirname, file);
+
+type RowWithId = { id: number };
+
+function makeSeedTable<T extends RowWithId>(rows: T[]) {
+  return {
+    iter: () => rows.values(),
+    insert: (row: T): T => {
+      const nextId = rows.reduce((max, existing) => Math.max(max, existing.id), 0) + 1;
+      const inserted = { ...row, id: row.id === 0 ? nextId : row.id };
+      rows.push(inserted);
+      return inserted;
+    },
+    id: {
+      find: (id: number) => rows.find(row => row.id === id) ?? null,
+      update: (row: T): T => {
+        const idx = rows.findIndex(existing => existing.id === row.id);
+        if (idx === -1) throw new Error(`row ${row.id} not found`);
+        rows[idx] = row;
+        return row;
+      },
+    },
+  };
+}
+
+function buildAdvanceWorldHarness(): { rows: Turn1SeedRows; ctx: AdvanceWorldContext } {
+  const seed = buildTurn1Seed();
+  const rows: Turn1SeedRows = {
+    game_sessions: seed.game_sessions.map(session => ({
+      ...session,
+      state: ACTIVE_SESSION_STATE,
+      turn_phase: 'world_update',
+    })),
+    factions: seed.factions.map(faction => ({ ...faction })),
+    celestial_bodies: seed.celestial_bodies.map(row => ({ ...row })),
+    cities: seed.cities.map(row => ({ ...row })),
+    personnel: seed.personnel.map(row => ({ ...row })),
+    personnel_relationships: seed.personnel_relationships.map(row => ({ ...row })),
+    proposals: seed.proposals.map(row => ({ ...row })),
+    commander_inbox: seed.commander_inbox.map(row => ({ ...row })),
+    fleets: seed.fleets.map(row => ({ ...row })),
+    colony_ships: seed.colony_ships.map(row => ({ ...row })),
+    projects: seed.projects.map(row => ({ ...row })),
+    intelligence_records: seed.intelligence_records.map(row => ({ ...row })),
+    events: seed.events.map(row => ({ ...row })),
+    turn_summaries: seed.turn_summaries.map(row => ({ ...row })),
+    trade_agreements: seed.trade_agreements.map(row => ({ ...row })),
+    llm_requests: [],
+    module_settings: [],
+  };
+
+  const ctx: AdvanceWorldContext = {
+    timestamp,
+    db: {
+      game_sessions: makeSeedTable(rows.game_sessions),
+      factions: makeSeedTable(rows.factions),
+      cities: makeSeedTable(rows.cities),
+      celestial_bodies: makeSeedTable(rows.celestial_bodies),
+      colony_ships: makeSeedTable(rows.colony_ships),
+      fleets: makeSeedTable(rows.fleets),
+      projects: makeSeedTable(rows.projects),
+      proposals: makeSeedTable(rows.proposals),
+      events: makeSeedTable(rows.events),
+    },
+  };
+
+  return { rows, ctx };
+}
 
 function makeFakeContext(): SessionLifecycleContext & {
   sessions: GameSessionRow[];
@@ -236,6 +313,25 @@ function makeJoinResumeCtx(
   };
 }
 
+function makeTurnPhaseCtx(sessions: GameSessionRow[]): TurnPhaseContext {
+  return {
+    timestamp,
+    db: {
+      game_sessions: {
+        id: {
+          find: id => sessions.find(s => s.id === id) ?? null,
+          update: row => {
+            const idx = sessions.findIndex(s => s.id === row.id);
+            if (idx === -1) throw new Error(`session ${row.id} not found`);
+            sessions[idx] = row;
+            return row;
+          },
+        },
+      },
+    },
+  };
+}
+
 describe('join_or_resume_session reducer', () => {
   const playerA = Identity.fromString('a'.padStart(64, '0'));
   const playerB = Identity.fromString('b'.padStart(64, '0'));
@@ -312,7 +408,8 @@ describe('join_or_resume_session reducer', () => {
       session_id: 1,
       player_slot: 'player_b',
     });
-    expect(sessions[0].state).toBe('active');
+    expect(sessions[0].state).toBe(ACTIVE_SESSION_STATE);
+    expect(sessions[0].turn_phase).toBe('world_update');
   });
 
   it('rejects unknown player slots', () => {
@@ -370,5 +467,169 @@ describe('join_or_resume_session reducer', () => {
     expect(src).toMatch(/export\s+const\s+join_or_resume_session\s*=/);
     expect(src).toContain('session_id: t.u32()');
     expect(src).toContain('player_slot: t.string()');
+  });
+});
+
+describe('turn phase state machine', () => {
+  function activeSession(phase: string): GameSessionRow {
+    const rows = buildSessionLifecycleRows(
+      { player_a_name: 'United Earth Authority', player_b_name: 'Mars Compact' },
+      timestamp,
+      7,
+      [1, 2]
+    );
+
+    return {
+      ...rows.session,
+      state: ACTIVE_SESSION_STATE,
+      turn_phase: phase,
+      turn_deadline: timestamp,
+    };
+  }
+
+  it('defines the spec turn phases and allowed transitions explicitly', () => {
+    expect(TURN_PHASES).toEqual([
+      'setup',
+      'world_update',
+      'deliberation',
+      'decision',
+      'resolution',
+      'summary',
+      'complete',
+    ]);
+    expect(ALLOWED_TURN_PHASE_TRANSITIONS).toEqual({
+      setup: ['world_update'],
+      world_update: ['deliberation'],
+      deliberation: ['decision'],
+      decision: ['resolution'],
+      resolution: ['summary'],
+      summary: ['world_update', 'complete'],
+      complete: [],
+    });
+  });
+
+  it('parses known phases and rejects unknown phases', () => {
+    expect(parseTurnPhase('decision')).toBe('decision');
+    expect(() => parseTurnPhase('combat')).toThrow(/unknown turn phase/);
+  });
+
+  it('permits the configured phase path and clears stale deadlines outside decision', () => {
+    const session = activeSession('deliberation');
+
+    const decision = transitionTurnPhase(session, 'decision', timestamp);
+    expect(decision).toMatchObject({
+      id: session.id,
+      state: ACTIVE_SESSION_STATE,
+      turn_phase: 'decision',
+      turn_deadline: timestamp,
+      player_a_faction_id: session.player_a_faction_id,
+      player_b_faction_id: session.player_b_faction_id,
+      winner_faction_id: session.winner_faction_id,
+    });
+
+    const resolution = transitionTurnPhase(decision, 'resolution', timestamp);
+    expect(resolution.turn_phase).toBe('resolution');
+    expect(resolution.turn_deadline).toBeUndefined();
+    expect(resolution.current_turn).toBe(session.current_turn);
+    expect(resolution.current_year).toBe(session.current_year);
+  });
+
+  it('rejects invalid phase jumps', () => {
+    expect(() =>
+      transitionTurnPhase(activeSession('world_update'), 'resolution', timestamp)
+    ).toThrow(/invalid turn phase transition world_update -> resolution/);
+    expect(() =>
+      transitionTurnPhase(activeSession('complete'), 'world_update', timestamp)
+    ).toThrow(/already complete/);
+  });
+
+  it('rejects active phase transitions before faction links are initialized', () => {
+    const rows = buildSessionLifecycleRows(
+      { player_a_name: 'United Earth Authority', player_b_name: 'Mars Compact' },
+      timestamp,
+      7
+    );
+
+    expect(() =>
+      transitionTurnPhase(rows.session, 'world_update', timestamp)
+    ).toThrow(/not fully initialized/);
+  });
+
+  it('advance_turn_phase reducer updates only authoritative phase state', () => {
+    const sessions = [activeSession('decision')];
+    const before = sessions[0];
+
+    advanceTurnPhaseReducer(makeTurnPhaseCtx(sessions), {
+      session_id: before.id,
+      next_phase: 'resolution',
+    });
+
+    expect(sessions[0]).toMatchObject({
+      id: before.id,
+      state: before.state,
+      current_year: before.current_year,
+      current_turn: before.current_turn,
+      player_a_faction_id: before.player_a_faction_id,
+      player_b_faction_id: before.player_b_faction_id,
+      winner_faction_id: before.winner_faction_id,
+      turn_phase: 'resolution',
+      turn_deadline: undefined,
+    });
+  });
+
+  it('advance_world moves world_update sessions into deliberation without changing identity links', () => {
+    const { rows, ctx } = buildAdvanceWorldHarness();
+    const before = { ...rows.game_sessions[0] };
+
+    advanceWorldReducer(ctx, { session_id: before.id });
+
+    expect(rows.game_sessions[0]).toMatchObject({
+      id: before.id,
+      state: before.state,
+      current_year: before.current_year,
+      current_turn: before.current_turn,
+      player_a_faction_id: before.player_a_faction_id,
+      player_b_faction_id: before.player_b_faction_id,
+      winner_faction_id: before.winner_faction_id,
+      turn_phase: 'deliberation',
+      turn_deadline: undefined,
+    });
+    expect(
+      rows.events.some(
+        event =>
+          event.session_id === before.id &&
+          event.turn === before.current_turn &&
+          event.event_type === 'world_advanced'
+      )
+    ).toBe(true);
+  });
+
+  it('advance_world rejects non-world-update phases', () => {
+    const sessions = [activeSession('decision')];
+
+    expect(() =>
+      advanceWorldReducer(
+        makeTurnPhaseCtx(sessions) as unknown as AdvanceWorldContext,
+        { session_id: 7 }
+      )
+    ).toThrow(/invalid turn phase transition decision -> deliberation/);
+  });
+
+  it('advance_world rejects setup sessions even if their phase is world_update', () => {
+    const sessions = [{ ...activeSession('world_update'), state: INITIAL_SESSION_STATE }];
+
+    expect(() =>
+      advanceWorldReducer(
+        makeTurnPhaseCtx(sessions) as unknown as AdvanceWorldContext,
+        { session_id: 7 }
+      )
+    ).toThrow(/must be active/);
+  });
+
+  it('registers phase reducers in index.ts', () => {
+    const src = readFileSync(srcPath('index.ts'), 'utf8');
+    expect(src).toMatch(/export\s+const\s+advance_turn_phase\s*=/);
+    expect(src).toContain('next_phase: t.string()');
+    expect(src).toMatch(/export\s+const\s+advance_world\s*=/);
   });
 });
