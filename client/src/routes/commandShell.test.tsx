@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, act } from '@testing-library/react';
+import { fireEvent, render, screen, act, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRouter } from './AppRouter';
 import type { SessionBackend } from '../session/spacetime';
@@ -42,7 +42,151 @@ function resetSessionStore() {
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
     privateFactionStateByKey: {},
+    publicFactionsByKey: {},
+    worldBodiesById: {},
+    publicFactionsById: {},
+    publicCitiesById: {},
+    publicFleetsById: {},
+    publicColonyShipsById: {},
+    publicEventsById: {},
+    proposalsById: {},
+    proposalsSubscription: { status: 'idle' },
     reducerCalls: {},
+  });
+}
+
+function hydrateSeededWorldMap() {
+  act(() => {
+    sessionStore.getState().actions.hydrateSubscription({
+      sessions: [{ id: '42', code: 'SOL-42', status: 'active', currentTurn: 8, phase: 'orders' }],
+      publicGameStates: [
+        {
+          sessionId: '42',
+          turn: 8,
+          year: 2360,
+          phase: 'orders',
+          controlScores: { '202': 46, '303': 44 },
+          visibleFactionIds: ['202', '303'],
+        },
+      ],
+      worldBodies: [
+        {
+          id: 10,
+          sessionId: 42,
+          name: 'Earth',
+          systemTier: 'inner',
+          commsLagTurns: 0,
+          travelTimeTurns: 1,
+          resourceDeposits: '{"energy":"moderate"}',
+          position: '{"x":0,"y":0}',
+          visibility: 'public',
+        },
+        {
+          id: 20,
+          sessionId: 42,
+          name: 'Mars',
+          systemTier: 'inner',
+          commsLagTurns: 1,
+          travelTimeTurns: 2,
+          resourceDeposits: '{"metals":"rich"}',
+          position: '{"x":4,"y":1}',
+          visibility: 'public',
+        },
+        {
+          id: 30,
+          sessionId: 42,
+          name: 'Callisto',
+          systemTier: 'outer',
+          commsLagTurns: 3,
+          travelTimeTurns: 5,
+          resourceDeposits: '{"volatiles":"rich"}',
+          position: '{"x":8,"y":4}',
+          visibility: 'public',
+        },
+      ],
+      publicFactions: [
+        {
+          id: 202,
+          sessionId: 42,
+          name: 'Earth Directorate',
+          controlScore: 46,
+          readyForTurn: true,
+          visibility: 'public',
+        },
+        {
+          id: 303,
+          sessionId: 42,
+          name: 'Mars Compact',
+          controlScore: 44,
+          readyForTurn: false,
+          visibility: 'public',
+        },
+      ],
+      publicCities: [
+        {
+          id: 1001,
+          sessionId: 42,
+          bodyId: 10,
+          factionId: 202,
+          name: 'Geneva Command',
+          developmentStage: 'capital',
+          visibility: 'public',
+        },
+        {
+          id: 2001,
+          sessionId: 42,
+          bodyId: 20,
+          factionId: 202,
+          name: 'Ares Shipyards',
+          developmentStage: 'industrial',
+          visibility: 'public',
+        },
+        {
+          id: 2002,
+          sessionId: 42,
+          bodyId: 20,
+          factionId: 303,
+          name: 'Valles Holdfast',
+          developmentStage: 'fortified',
+          visibility: 'public',
+        },
+      ],
+      publicFleets: [
+        {
+          id: 7001,
+          factionId: 202,
+          postingCityId: 2001,
+          strength: 24,
+          visibility: 'public',
+        },
+        {
+          id: 7002,
+          factionId: 303,
+          postingCityId: 2002,
+          strength: 19,
+          visibility: 'public',
+        },
+      ],
+      publicColonyShips: [
+        {
+          id: 8001,
+          factionId: 202,
+          destinationBodyId: 20,
+          arrivesTurn: 9,
+          status: 'in_transit',
+          visibility: 'public',
+        },
+      ],
+      publicEvents: [
+        {
+          id: 9001,
+          sessionId: 42,
+          turn: 8,
+          eventType: 'mars_contested',
+          visibility: 'public',
+        },
+      ],
+    });
   });
 }
 
@@ -141,7 +285,7 @@ describe('Command Center shell', () => {
 
     it('shows placeholder content for panels not yet implemented', () => {
       enterStoredGameContext();
-      usePanelStore.getState().setPanel('map');
+      usePanelStore.getState().setPanel('inbox');
 
       render(<AppRouter backend={backend()} />);
 
@@ -176,6 +320,61 @@ describe('Command Center shell', () => {
       render(<AppRouter backend={backend()} />);
       const sidebar = screen.getByRole('complementary', { name: /command sidebar/i });
       expect(sidebar.classList.contains('command-shell__sidebar')).toBe(true);
+    });
+  });
+
+  describe('Solar system map panel', () => {
+    it('renders seeded bodies, cities, fleets, and travel indicators inside the shell panel', () => {
+      enterStoredGameContext();
+      usePanelStore.getState().setPanel('map');
+      hydrateSeededWorldMap();
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/Star Map/i);
+      expect(screen.getByRole('img', { name: /solar system schematic map/i })).toBeDefined();
+      expect(screen.getByLabelText(/open detail for earth.*controlled by earth directorate/i)).toBeDefined();
+      expect(screen.getByLabelText(/open detail for mars.*contested/i)).toBeDefined();
+      expect(screen.getByLabelText(/open detail for ares shipyards/i)).toBeDefined();
+      expect(screen.getByLabelText(/open detail for valles holdfast/i)).toBeDefined();
+      expect(screen.getByLabelText(/fleet marker earth directorate strength 24/i)).toBeDefined();
+      expect(screen.getByLabelText(/fleet marker mars compact strength 19/i)).toBeDefined();
+      expect(screen.getByLabelText(/travel route earth directorate to mars arrives turn 9/i)).toBeDefined();
+    });
+
+    it('keeps faction control, travel state, and seeded demo density readable', () => {
+      enterStoredGameContext();
+      usePanelStore.getState().setPanel('map');
+      hydrateSeededWorldMap();
+
+      render(<AppRouter backend={backend()} />);
+
+      expect(screen.getAllByText(/Earth Directorate/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Mars Compact/i).length).toBeGreaterThan(0);
+      expect(screen.getByText('Controlled')).toBeDefined();
+      expect(screen.getByText('Contested')).toBeDefined();
+      expect(screen.getByText('Inbound travel')).toBeDefined();
+      expect(screen.getByText(/Arrives T9/i)).toBeDefined();
+      const summary = screen.getByLabelText(/map summary/i);
+      expect(within(summary).getByText(/3 bodies/i)).toBeDefined();
+      expect(within(summary).getByText(/3 cities/i)).toBeDefined();
+      expect(within(summary).getByText(/2 fleets/i)).toBeDefined();
+      expect(within(summary).getByText(/1 travel/i)).toBeDefined();
+    });
+
+    it('renders map rows for the routed game session when the shared map store points elsewhere', () => {
+      enterStoredGameContext();
+      usePanelStore.getState().setPanel('map');
+      hydrateSeededWorldMap();
+      act(() => {
+        sessionStore.setState({ activeSessionId: '999' });
+      });
+
+      render(<AppRouter backend={backend()} />);
+
+      expect(screen.getByRole('img', { name: /solar system schematic map/i })).toBeDefined();
+      expect(screen.getByLabelText(/open detail for earth.*controlled by earth directorate/i)).toBeDefined();
     });
   });
 

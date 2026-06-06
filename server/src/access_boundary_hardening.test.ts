@@ -11,14 +11,11 @@ import { buildPublicWorldProjection } from './public_world_projection.js';
 import {
   commanderDecisionReducer,
   type DecisionReducerContext,
-  type ModuleSettingsRow,
 } from './turn_decisions.js';
 import {
   buildTurn1Seed,
   turn1Seed,
-  type CityRow,
   type LlmRequestRow,
-  type PersonnelRow,
   type ProposalRow,
 } from './turn1_seed.js';
 import type { FactionRow, GameSessionRow } from './session_lifecycle.js';
@@ -49,11 +46,11 @@ function makeDecisionRows() {
       turn_phase: 'decision',
     })) as GameSessionRow[],
     factions: seed.factions.map((faction) => ({ ...faction })) as FactionRow[],
+    cities: seed.cities.map((city) => ({ ...city })),
+    personnel: seed.personnel.map((person) => ({ ...person })),
     proposals: seed.proposals.map((proposal) => ({ ...proposal })),
-    cities: seed.cities.map((city) => ({ ...city })) as CityRow[],
-    personnel: seed.personnel.map((person) => ({ ...person })) as PersonnelRow[],
     llmRequests: [] as LlmRequestRow[],
-    moduleSettings: [] as ModuleSettingsRow[],
+    moduleSettings: seed.module_settings.map((setting) => ({ ...setting })),
   };
 }
 
@@ -82,6 +79,11 @@ function makeDecisionCtx(
         },
       },
       proposals: {
+        iter: () => rows.proposals.values(),
+        insert: row => {
+          rows.proposals.push(row);
+          return row;
+        },
         id: {
           find: id => rows.proposals.find(proposal => proposal.id === id) ?? null,
           update: row => {
@@ -90,15 +92,6 @@ function makeDecisionCtx(
             rows.proposals[idx] = row;
             return row;
           },
-        },
-        iter: () => rows.proposals.values(),
-        insert: row => {
-          const inserted = {
-            ...row,
-            id: rows.proposals.reduce((max, proposal) => Math.max(max, proposal.id), 0) + 1,
-          };
-          rows.proposals.push(inserted);
-          return inserted;
         },
       },
       cities: {

@@ -83,12 +83,6 @@ cp .env.example .env
 | `OPENROUTER_API_KEY` | LLM mode `live` | API key for proposal generation |
 | `LLM_MODE` | orchestrator | `live`, `mock`, or `fixture` |
 
-The module itself never reads `LLM_MODE` or `OPENROUTER_API_KEY` — those gate the optional
-orchestrator service only. Deliberation behavior on the module is controlled by the
-`module_settings.deliberation_mode` row, flipped through the `set_deliberation_mode`
-reducer. See [docs/llm-queue-boundary.md](docs/llm-queue-boundary.md) for how to inspect
-queue rows and trigger the manual fallback path locally.
-
 ## Workspace Layout
 
 ```

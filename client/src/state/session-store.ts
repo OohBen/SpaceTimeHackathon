@@ -47,14 +47,6 @@ export interface PublicGameStateRow {
   visibleFactionIds: string[];
 }
 
-export interface PublicFactionRow {
-  id: string;
-  sessionId: string;
-  name: string;
-  controlScore: number;
-  readyForTurn: boolean;
-}
-
 export interface PrivateFactionStateRow {
   sessionId: string;
   factionId: string;
@@ -62,6 +54,71 @@ export interface PrivateFactionStateRow {
   morale: number;
   doctrine: string;
   visibility: Extract<VisibilityScope, 'ownFaction'>;
+}
+
+export interface PublicFactionRow {
+  id: string;
+  sessionId: string;
+  name: string;
+  controlScore: number;
+  readyForTurn: boolean;
+  visibility?: Extract<VisibilityScope, 'public'>;
+}
+
+export interface PublicWorldBodyRow {
+  id: number;
+  sessionId: number;
+  name: string;
+  systemTier: string;
+  commsLagTurns: number;
+  travelTimeTurns: number;
+  resourceDeposits: string;
+  position: string;
+  visibility: Extract<VisibilityScope, 'public'>;
+}
+
+export interface PublicFactionProjectionRow {
+  id: number;
+  sessionId: number;
+  name: string;
+  controlScore: number;
+  readyForTurn: boolean;
+  visibility: Extract<VisibilityScope, 'public'>;
+}
+
+export interface PublicWorldCityProjectionRow {
+  id: number;
+  sessionId: number;
+  bodyId: number;
+  factionId: number;
+  name: string;
+  developmentStage: string;
+  visibility: Extract<VisibilityScope, 'public'>;
+}
+
+export interface PublicFleetProjectionRow {
+  id: number;
+  factionId: number;
+  postingCityId: number;
+  strength: number;
+  visibility: Extract<VisibilityScope, 'public'>;
+}
+
+export interface PublicColonyShipProjectionRow {
+  id: number;
+  factionId: number;
+  destinationBodyId: number;
+  arrivesTurn: number;
+  status: string;
+  visibility: Extract<VisibilityScope, 'public'>;
+}
+
+export interface PublicEventProjectionRow {
+  id: number;
+  sessionId: number;
+  turn: number;
+  eventType: string;
+  visibility: Extract<VisibilityScope, 'public'>;
 }
 
 export type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'deferred' | string;
@@ -87,12 +144,19 @@ export type SubscriptionLoadStatus =
   | { status: 'ready' }
   | { status: 'error'; error: string };
 
+export type PublicFactionSnapshotRow = PublicFactionRow | PublicFactionProjectionRow;
+
 export interface SubscriptionSnapshot {
   sessions?: SessionRow[];
   playerSlots?: PlayerSlotRow[];
   publicGameStates?: PublicGameStateRow[];
-  publicFactions?: PublicFactionRow[];
   privateFactionStates?: PrivateFactionStateRow[];
+  worldBodies?: PublicWorldBodyRow[];
+  publicFactions?: PublicFactionSnapshotRow[];
+  publicCities?: PublicWorldCityProjectionRow[];
+  publicFleets?: PublicFleetProjectionRow[];
+  publicColonyShips?: PublicColonyShipProjectionRow[];
+  publicEvents?: PublicEventProjectionRow[];
   proposals?: ProposalRow[];
 }
 
@@ -103,10 +167,20 @@ export type SubscriptionEvent =
   | { table: 'playerSlots'; op: 'delete'; sessionId: string; slot: number }
   | { table: 'publicGameStates'; op: 'upsert'; row: PublicGameStateRow }
   | { table: 'publicGameStates'; op: 'delete'; sessionId: string }
-  | { table: 'publicFactions'; op: 'upsert'; row: PublicFactionRow }
-  | { table: 'publicFactions'; op: 'delete'; sessionId: string; id: string }
   | { table: 'privateFactionStates'; op: 'upsert'; row: PrivateFactionStateRow }
   | { table: 'privateFactionStates'; op: 'delete'; sessionId: string; factionId: string }
+  | { table: 'worldBodies'; op: 'upsert'; row: PublicWorldBodyRow }
+  | { table: 'worldBodies'; op: 'delete'; id: number }
+  | { table: 'publicFactions'; op: 'upsert'; row: PublicFactionSnapshotRow }
+  | { table: 'publicFactions'; op: 'delete'; sessionId?: string | number; id: string | number }
+  | { table: 'publicCities'; op: 'upsert'; row: PublicWorldCityProjectionRow }
+  | { table: 'publicCities'; op: 'delete'; id: number }
+  | { table: 'publicFleets'; op: 'upsert'; row: PublicFleetProjectionRow }
+  | { table: 'publicFleets'; op: 'delete'; id: number }
+  | { table: 'publicColonyShips'; op: 'upsert'; row: PublicColonyShipProjectionRow }
+  | { table: 'publicColonyShips'; op: 'delete'; id: number }
+  | { table: 'publicEvents'; op: 'upsert'; row: PublicEventProjectionRow }
+  | { table: 'publicEvents'; op: 'delete'; id: number }
   | { table: 'proposals'; op: 'upsert'; row: ProposalRow }
   | { table: 'proposals'; op: 'delete'; id: string };
 
@@ -130,8 +204,14 @@ export interface SessionState {
   sessionsById: Record<string, SessionRow>;
   playerSlotsByKey: Record<string, PlayerSlotRow>;
   publicGameStateBySessionId: Record<string, PublicGameStateRow>;
-  publicFactionsByKey: Record<string, PublicFactionRow>;
   privateFactionStateByKey: Record<string, PrivateFactionStateRow>;
+  publicFactionsByKey: Record<string, PublicFactionRow>;
+  worldBodiesById: Record<string, PublicWorldBodyRow>;
+  publicFactionsById: Record<string, PublicFactionProjectionRow>;
+  publicCitiesById: Record<string, PublicWorldCityProjectionRow>;
+  publicFleetsById: Record<string, PublicFleetProjectionRow>;
+  publicColonyShipsById: Record<string, PublicColonyShipProjectionRow>;
+  publicEventsById: Record<string, PublicEventProjectionRow>;
   proposalsById: Record<string, ProposalRow>;
   proposalsSubscription: SubscriptionLoadStatus;
   reducerCalls: Record<string, ReducerCallState>;
@@ -140,9 +220,9 @@ export interface SessionState {
 
 export interface SessionStoreActions {
   setConnection: (connection: Partial<ConnectionState>) => void;
+  setProposalsSubscription: (status: SubscriptionLoadStatus) => void;
   hydrateSubscription: (snapshot: SubscriptionSnapshot) => void;
   applySubscriptionEvent: (event: SubscriptionEvent) => void;
-  setProposalsSubscription: (status: SubscriptionLoadStatus) => void;
   beginReducerCall: (
     key: string,
     descriptor: ReducerCallDescriptor,
@@ -172,16 +252,18 @@ export function createSessionStore(): SessionStore {
     sessionsById: {},
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
-    publicFactionsByKey: {},
     privateFactionStateByKey: {},
+    publicFactionsByKey: {},
+    worldBodiesById: {},
+    publicFactionsById: {},
+    publicCitiesById: {},
+    publicFleetsById: {},
+    publicColonyShipsById: {},
+    publicEventsById: {},
     proposalsById: {},
     proposalsSubscription: { status: 'idle' },
     reducerCalls: {},
     actions: {
-      setProposalsSubscription(status) {
-        set(() => ({ proposalsSubscription: status }));
-      },
-
       setConnection(connection) {
         set((state) => ({
           connection: {
@@ -193,13 +275,23 @@ export function createSessionStore(): SessionStore {
         }));
       },
 
+      setProposalsSubscription(status) {
+        set(() => ({ proposalsSubscription: status }));
+      },
+
       hydrateSubscription(snapshot) {
         set((state) => {
           const sessionsById = { ...state.sessionsById };
           const playerSlotsByKey = { ...state.playerSlotsByKey };
           const publicGameStateBySessionId = { ...state.publicGameStateBySessionId };
-          const publicFactionsByKey = { ...state.publicFactionsByKey };
           const privateFactionStateByKey = { ...state.privateFactionStateByKey };
+          const publicFactionsByKey = { ...state.publicFactionsByKey };
+          const worldBodiesById = { ...state.worldBodiesById };
+          const publicFactionsById = { ...state.publicFactionsById };
+          const publicCitiesById = { ...state.publicCitiesById };
+          const publicFleetsById = { ...state.publicFleetsById };
+          const publicColonyShipsById = { ...state.publicColonyShipsById };
+          const publicEventsById = { ...state.publicEventsById };
           const proposalsById = { ...state.proposalsById };
 
           for (const session of snapshot.sessions ?? []) {
@@ -211,18 +303,26 @@ export function createSessionStore(): SessionStore {
           for (const gameState of snapshot.publicGameStates ?? []) {
             publicGameStateBySessionId[gameState.sessionId] = gameState;
           }
-          for (const faction of snapshot.publicFactions ?? []) {
-            publicFactionsByKey[publicFactionKey(faction.sessionId, faction.id)] = faction;
-          }
           for (const factionState of snapshot.privateFactionStates ?? []) {
             privateFactionStateByKey[
               privateFactionKey(factionState.sessionId, factionState.factionId)
             ] = factionState;
           }
+          for (const faction of snapshot.publicFactions ?? []) {
+            const normalized = normalizePublicFactionRow(faction);
+            publicFactionsByKey[publicFactionKey(normalized.sessionId, normalized.id)] = normalized;
+            if (isPublicFactionProjectionRow(faction)) {
+              publicFactionsById[entityKey(faction.id)] = faction;
+            }
+          }
           for (const proposal of snapshot.proposals ?? []) {
             proposalsById[proposal.id] = proposal;
           }
-
+          indexById(worldBodiesById, snapshot.worldBodies);
+          indexById(publicCitiesById, snapshot.publicCities);
+          indexById(publicFleetsById, snapshot.publicFleets);
+          indexById(publicColonyShipsById, snapshot.publicColonyShips);
+          indexById(publicEventsById, snapshot.publicEvents);
           const proposalsSubscription: SubscriptionLoadStatus =
             snapshot.proposals !== undefined ? { status: 'ready' } : state.proposalsSubscription;
 
@@ -230,8 +330,14 @@ export function createSessionStore(): SessionStore {
             sessionsById,
             playerSlotsByKey,
             publicGameStateBySessionId,
-            publicFactionsByKey,
             privateFactionStateByKey,
+            publicFactionsByKey,
+            worldBodiesById,
+            publicFactionsById,
+            publicCitiesById,
+            publicFleetsById,
+            publicColonyShipsById,
+            publicEventsById,
             proposalsById,
             proposalsSubscription,
             activeSessionId: nextActiveSessionId(state.activeSessionId, sessionsById),
@@ -351,14 +457,6 @@ export function selectPublicGameState(state: SessionState): PublicGameStateRow |
   return state.publicGameStateBySessionId[state.activeSessionId] ?? null;
 }
 
-export function selectPublicFactionsForActiveSession(state: SessionState): PublicFactionRow[] {
-  if (!state.activeSessionId) return [];
-
-  return Object.values(state.publicFactionsByKey)
-    .filter((faction) => faction.sessionId === state.activeSessionId)
-    .sort((a, b) => a.id.localeCompare(b.id));
-}
-
 export function selectPrivateFactionState(
   state: SessionState,
   factionId: string,
@@ -380,19 +478,13 @@ export function selectProposalById(state: SessionState, id: string): ProposalRow
 }
 
 export function selectInboxProposalsForCurrentPlayer(state: SessionState): ProposalRow[] {
-  const activeSessionId = state.activeSessionId;
   const slot = selectCurrentPlayerSlot(state);
-  if (!activeSessionId || !slot) return [];
+  const activeSessionId = state.activeSessionId;
+  if (!slot || !activeSessionId) return [];
 
   return Object.values(state.proposalsById)
-    .filter(
-      (proposal) =>
-        proposal.sessionId === activeSessionId && proposal.factionId === slot.factionId,
-    )
-    .sort((a, b) => {
-      if (a.turn !== b.turn) return b.turn - a.turn;
-      return a.id.localeCompare(b.id);
-    });
+    .filter((proposal) => proposal.sessionId === activeSessionId && proposal.factionId === slot.factionId)
+    .sort((left, right) => left.turn - right.turn || left.title.localeCompare(right.title));
 }
 
 function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<SessionState> {
@@ -433,16 +525,6 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
     return { publicGameStateBySessionId };
   }
 
-  if (event.table === 'publicFactions') {
-    const publicFactionsByKey = { ...state.publicFactionsByKey };
-    if (event.op === 'delete') {
-      delete publicFactionsByKey[publicFactionKey(event.sessionId, event.id)];
-    } else {
-      publicFactionsByKey[publicFactionKey(event.row.sessionId, event.row.id)] = event.row;
-    }
-    return { publicFactionsByKey };
-  }
-
   if (event.table === 'privateFactionStates') {
     const privateFactionStateByKey = { ...state.privateFactionStateByKey };
     if (event.op === 'delete') {
@@ -454,13 +536,90 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
     return { privateFactionStateByKey };
   }
 
-  const proposalsById = { ...state.proposalsById };
-  if (event.op === 'delete') {
-    delete proposalsById[event.id];
-  } else {
-    proposalsById[event.row.id] = event.row;
+  if (event.table === 'worldBodies') {
+    const worldBodiesById = updateById(state.worldBodiesById, event);
+    return { worldBodiesById };
   }
-  return { proposalsById };
+  if (event.table === 'publicFactions') {
+    const publicFactionsByKey = { ...state.publicFactionsByKey };
+    const publicFactionsById = { ...state.publicFactionsById };
+    if (event.op === 'delete') {
+      if (event.sessionId !== undefined) {
+        delete publicFactionsByKey[publicFactionKey(String(event.sessionId), String(event.id))];
+      }
+      delete publicFactionsById[entityKey(Number(event.id))];
+    } else {
+      const normalized = normalizePublicFactionRow(event.row);
+      publicFactionsByKey[publicFactionKey(normalized.sessionId, normalized.id)] = normalized;
+      if (isPublicFactionProjectionRow(event.row)) {
+        publicFactionsById[entityKey(event.row.id)] = event.row;
+      }
+    }
+    return { publicFactionsByKey, publicFactionsById };
+  }
+  if (event.table === 'publicCities') {
+    const publicCitiesById = updateById(state.publicCitiesById, event);
+    return { publicCitiesById };
+  }
+  if (event.table === 'publicFleets') {
+    const publicFleetsById = updateById(state.publicFleetsById, event);
+    return { publicFleetsById };
+  }
+  if (event.table === 'publicColonyShips') {
+    const publicColonyShipsById = updateById(state.publicColonyShipsById, event);
+    return { publicColonyShipsById };
+  }
+  if (event.table === 'proposals') {
+    const proposalsById = { ...state.proposalsById };
+    if (event.op === 'delete') {
+      delete proposalsById[event.id];
+    } else {
+      proposalsById[event.row.id] = event.row;
+    }
+    return { proposalsById };
+  }
+
+  const publicEventsById = updateById(state.publicEventsById, event);
+  return { publicEventsById };
+}
+
+function normalizePublicFactionRow(row: PublicFactionSnapshotRow): PublicFactionRow {
+  return {
+    id: String(row.id),
+    sessionId: String(row.sessionId),
+    name: row.name,
+    controlScore: row.controlScore,
+    readyForTurn: row.readyForTurn,
+    visibility: row.visibility,
+  };
+}
+
+function isPublicFactionProjectionRow(
+  row: PublicFactionSnapshotRow,
+): row is PublicFactionProjectionRow {
+  return typeof row.id === 'number' && typeof row.sessionId === 'number';
+}
+
+function indexById<T extends { id: number }>(
+  target: Record<string, T>,
+  rows: readonly T[] | undefined,
+): void {
+  for (const row of rows ?? []) {
+    target[entityKey(row.id)] = row;
+  }
+}
+
+function updateById<T extends { id: number }>(
+  current: Record<string, T>,
+  event: { op: 'upsert'; row: T } | { op: 'delete'; id: number },
+): Record<string, T> {
+  const next = { ...current };
+  if (event.op === 'delete') {
+    delete next[entityKey(event.id)];
+  } else {
+    next[entityKey(event.row.id)] = event.row;
+  }
+  return next;
 }
 
 function nextActiveSessionId(
@@ -481,6 +640,10 @@ function privateFactionKey(sessionId: string, factionId: string): string {
 
 function publicFactionKey(sessionId: string, factionId: string): string {
   return `${sessionId}:${factionId}`;
+}
+
+function entityKey(id: number): string {
+  return String(id);
 }
 
 function errorMessage(error: unknown): string {
