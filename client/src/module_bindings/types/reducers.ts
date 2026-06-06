@@ -6,3 +6,12 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AdvanceTurnPhaseReducer from "../advance_turn_phase_reducer";
+import AdvanceWorldReducer from "../advance_world_reducer";
+import CreateSessionReducer from "../create_session_reducer";
+import JoinOrResumeSessionReducer from "../join_or_resume_session_reducer";
+
+export type AdvanceTurnPhaseParams = __Infer<typeof AdvanceTurnPhaseReducer>;
+export type AdvanceWorldParams = __Infer<typeof AdvanceWorldReducer>;
+export type CreateSessionParams = __Infer<typeof CreateSessionReducer>;
+export type JoinOrResumeSessionParams = __Infer<typeof JoinOrResumeSessionReducer>;
