@@ -130,4 +130,97 @@ export const tables = {
       status: t.string(),
     }
   ),
+
+  fleets: table(
+    {},
+    {
+      id: t.u32().primaryKey().autoInc(),
+      faction_id: t.u32(),
+      posting_city_id: t.u32(),
+      strength: t.i32(),
+      orders: t.option(t.string()),
+    }
+  ),
+
+  colony_ships: table(
+    {},
+    {
+      id: t.u32().primaryKey().autoInc(),
+      faction_id: t.u32(),
+      origin_city_id: t.u32(),
+      destination_body_id: t.u32(),
+      manifest: t.string(),
+      departed_turn: t.u32(),
+      arrives_turn: t.u32(),
+      status: t.string(),
+    }
+  ),
+
+  projects: table(
+    {},
+    {
+      id: t.u32().primaryKey().autoInc(),
+      faction_id: t.u32(),
+      city_id: t.u32(),
+      type: t.string(),
+      name: t.string(),
+      progress: t.i32(),
+      resources_assigned: t.i32(),
+      est_completion: t.u32(),
+      status: t.string(),
+    }
+  ),
+
+  intelligence_records: table(
+    {},
+    {
+      id: t.u32().primaryKey().autoInc(),
+      observer_faction_id: t.u32(),
+      target_faction_id: t.u32(),
+      intel_type: t.string(),
+      value: t.string(),
+      accuracy: t.i32(),
+      acquired_turn: t.u32(),
+    }
+  ),
+
+  events: table(
+    {},
+    {
+      id: t.u32().primaryKey().autoInc(),
+      session_id: t.u32(),
+      faction_id: t.option(t.u32()),
+      turn: t.u32(),
+      event_type: t.string(),
+      payload: t.string(),
+    }
+  ),
+
+  trade_agreements: table(
+    {},
+    {
+      id: t.u32().primaryKey().autoInc(),
+      session_id: t.u32(),
+      faction_a_id: t.u32(),
+      faction_b_id: t.u32(),
+      terms: t.string(),
+      signed_turn: t.u32(),
+      expires_turn: t.option(t.u32()),
+    }
+  ),
+
+  llm_requests: table(
+    {},
+    {
+      id: t.u32().primaryKey().autoInc(),
+      session_id: t.u32(),
+      faction_id: t.u32(),
+      request_type: t.string(),
+      context_json: t.string(),
+      status: t.string(),
+      response_json: t.option(t.string()),
+      error: t.option(t.string()),
+      created_turn: t.u32(),
+    }
+  ),
 };
