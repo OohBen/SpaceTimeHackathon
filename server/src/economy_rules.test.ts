@@ -257,6 +257,23 @@ describe('applyDoctrineDrift', () => {
     expect(doctrine.science).toBe(0.52);
   });
 
+  it('maps current proposal contract departments to doctrine axes', () => {
+    const factions = [makeFaction(1), makeFaction(2)];
+    const proposals = [
+      makeProposal(1, 1, 3, 'Defense', 'approved'),
+      makeProposal(2, 1, 3, 'Research', 'approved'),
+      makeProposal(3, 1, 3, 'Executive', 'approved'),
+    ];
+    const ctx = makeCtx(factions, [], proposals);
+
+    applyDoctrineDrift(ctx, [1, 2], 3);
+
+    const doctrine = JSON.parse(factions[0].doctrine_vector);
+    expect(doctrine.security).toBe(0.52);
+    expect(doctrine.science).toBe(0.52);
+    expect(doctrine.expansion).toBe(0.52);
+  });
+
   it('aggregates multiple approved proposals on the same axis', () => {
     const factions = [makeFaction(1), makeFaction(2)];
     const proposals = [

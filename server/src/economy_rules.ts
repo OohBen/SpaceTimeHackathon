@@ -80,9 +80,12 @@ export function applyPoliticalCapitalDecay(
 // Doctrine axes drift +0.02 per approved proposal from mapped departments; clamped [0, 1].
 const DEPARTMENT_TO_AXIS: Record<string, string> = {
   Colonization: 'expansion',
+  Defense: 'security',
   Diplomatic: 'diplomacy',
+  Executive: 'expansion',
   Intelligence: 'security',
   Military: 'security',
+  Research: 'science',
   Science: 'science',
 };
 
