@@ -1,4 +1,5 @@
 import type { Timestamp } from 'spacetimedb';
+import type { FactionRow, GameSessionRow } from './session_lifecycle.js';
 import {
   buildTurn1Seed,
   type CelestialBodyRow,
@@ -34,24 +35,6 @@ type Table<Row extends RowWithId> = {
     update: (row: Row) => Row;
   };
 };
-
-interface GameSessionRow {
-  id: number;
-  state: string;
-  current_year: number;
-  current_turn: number;
-  player_a_faction_id: number | undefined;
-  player_b_faction_id: number | undefined;
-  turn_phase: string;
-  turn_deadline: Timestamp | undefined;
-  winner_faction_id: number | undefined;
-  created_at: Timestamp;
-  updated_at: Timestamp;
-}
-
-interface FactionRow extends RowWithId {
-  session_id: number;
-}
 
 export interface SeedDemoWorldDb {
   game_sessions: Table<GameSessionRow>;
