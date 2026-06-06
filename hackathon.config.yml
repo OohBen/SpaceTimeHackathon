@@ -5,10 +5,10 @@
 
 gates:
   project_breakdown:
-    human_required: true
+    human_required: false
     grilling: true
   epic_breakdown:
-    human_required: true
+    human_required: false
     grilling: false
   task_breakdown:
     human_required: false
@@ -16,7 +16,7 @@ gates:
   task_completion:
     human_required: false
   code_review:
-    human_required: true
+    human_required: false
   epic_review:
     human_required: true
 
