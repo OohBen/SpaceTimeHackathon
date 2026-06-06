@@ -1,0 +1,19 @@
+{
+  "name": "solar-dominion",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client",
+    "orchestrator"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "dev:client": "npm run dev --workspace=client",
+    "dev:orchestrator": "npm run dev --workspace=orchestrator"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
