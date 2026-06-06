@@ -1,7 +1,8 @@
 import type { Timestamp } from 'spacetimedb';
 
 import type { FactionRow, GameSessionRow } from './session_lifecycle.js';
-import type { CityRow, ColonyShipRow, EventRow, ProjectRow } from './turn1_seed.js';
+import type { CityRow, ColonyShipRow, EventRow, ProjectRow, ProposalRow } from './turn1_seed.js';
+import { applyDoctrineDrift, applyMoraleDrift, applyPoliticalCapitalDecay } from './economy_rules.js';
 
 export interface WorldUpdateContext {
   timestamp: Timestamp;
@@ -20,6 +21,9 @@ export interface WorldUpdateContext {
     };
     cities: {
       iter(): Iterable<CityRow>;
+      id: {
+        update(row: CityRow): CityRow;
+      };
     };
     colony_ships: {
       iter(): Iterable<ColonyShipRow>;
@@ -33,6 +37,9 @@ export interface WorldUpdateContext {
         update(row: ProjectRow): ProjectRow;
       };
     };
+    proposals: {
+      iter(): Iterable<ProposalRow>;
+    };
     events: {
       insert(row: EventRow): EventRow;
     };
@@ -45,7 +52,8 @@ export interface WorldUpdateSnapshot {
   completed_project_ids: number[];
 }
 
-// EXECUTION ORDER: city_income -> colony_arrivals -> project_advancement -> world_advanced_event
+// EXECUTION ORDER: city_income -> morale_drift -> political_capital_decay -> doctrine_drift
+//                  -> colony_arrivals -> project_advancement -> world_advanced_event
 // All steps iterate rows sorted by id ascending for stable, deterministic ordering.
 export function runWorldUpdate(
   ctx: WorldUpdateContext,
@@ -54,6 +62,9 @@ export function runWorldUpdate(
   const factionIds = getSessionFactionIds(session);
 
   const creditIncome = applyCityIncome(ctx, factionIds);
+  applyMoraleDrift(ctx, factionIds);
+  applyPoliticalCapitalDecay(ctx, factionIds);
+  applyDoctrineDrift(ctx, factionIds, session.current_turn - 1);
   const arrivedShipIds = advanceColonyShips(ctx, factionIds, session.current_turn);
   const completedProjectIds = advanceProjects(ctx, factionIds);
 

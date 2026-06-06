@@ -8,7 +8,7 @@ import {
   type WorldUpdateContext,
   type WorldUpdateSnapshot,
 } from './simulation_kernel.js';
-import type { CityRow, ColonyShipRow, EventRow, ProjectRow } from './turn1_seed.js';
+import type { CityRow, ColonyShipRow, EventRow, ProjectRow, ProposalRow } from './turn1_seed.js';
 import { buildTurn1Seed } from './turn1_seed.js';
 
 const timestamp = new Timestamp(100n);
@@ -120,13 +120,13 @@ function makeCtx(
       game_sessions: {
         id: {
           find: () => null,
-          update: row => row,
+          update: (row: GameSessionRow) => row,
         },
       },
       factions: {
         id: {
-          find: id => factionMap.get(id) ?? null,
-          update: row => {
+          find: (id: number) => factionMap.get(id) ?? null,
+          update: (row: FactionRow) => {
             factionMap.set(row.id, { ...row });
             return row;
           },
@@ -134,11 +134,12 @@ function makeCtx(
       },
       cities: {
         iter: () => cities.values(),
+        id: { update: (row: CityRow) => row },
       },
       colony_ships: {
         iter: () => colonyShips.values(),
         id: {
-          update: row => {
+          update: (row: ColonyShipRow) => {
             shipMap.set(row.id, { ...row });
             colonyShips[colonyShips.findIndex(s => s.id === row.id)] = { ...row };
             return row;
@@ -148,15 +149,16 @@ function makeCtx(
       projects: {
         iter: () => projects.values(),
         id: {
-          update: row => {
+          update: (row: ProjectRow) => {
             projectMap.set(row.id, { ...row });
             projects[projects.findIndex(p => p.id === row.id)] = { ...row };
             return row;
           },
         },
       },
+      proposals: { iter: () => ([] as ProposalRow[]).values() },
       events: {
-        insert: row => {
+        insert: (row: EventRow) => {
           const inserted = { ...row, id: events.length + 1 };
           events.push(inserted);
           return inserted;
@@ -432,9 +434,10 @@ describe('simulation_kernel: execution ordering', () => {
             update: (row: FactionRow) => { factionMap.set(row.id, { ...row }); return row; },
           },
         },
-        cities: { iter: () => seed.cities.values() },
+        cities: { iter: () => seed.cities.values(), id: { update: (r: any) => r } },
         colony_ships: { iter: () => [].values(), id: { update: (r: any) => r } },
         projects: { iter: () => [].values(), id: { update: (r: any) => r } },
+        proposals: { iter: () => [].values() },
         events: { insert: (r: any) => ({ ...r, id: 1 }) },
       },
     } as WorldUpdateContext);
