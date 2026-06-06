@@ -1,4 +1,4 @@
-export interface ReducerCallDescriptor<A = Record<string, unknown>> {
+export interface ReducerCallDescriptor<A = unknown> {
   reducer: string;
   args: A;
 }
