@@ -208,10 +208,10 @@ describe('queue boundary — no_live_dependency invariant', () => {
       {},
       {
         get(_target, key) {
-          throw new Error(`process.env.${String(key)} must not be read by run_deliberation`);
+          throw new Error(`environment variable ${String(key)} must not be read by run_deliberation`);
         },
         has() {
-          throw new Error('process.env must not be probed by run_deliberation');
+          throw new Error('environment variables must not be probed by run_deliberation');
         },
       }
     );

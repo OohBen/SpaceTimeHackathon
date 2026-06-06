@@ -563,6 +563,9 @@ function CityDetail({
   const fleets = (viewModel.fleetsByBodyId[city.bodyId] ?? []).filter(
     (fleet) => fleet.cityId === city.id,
   );
+  const bodyAlerts = body
+    ? body.alertIds.map((id) => viewModel.alertsById[id]).filter(Boolean)
+    : [];
 
   return (
     <section
@@ -610,6 +613,22 @@ function CityDetail({
           </dd>
         </div>
       </dl>
+
+      {bodyAlerts.length > 0 ? (
+        <section aria-label="City scenario cues" className="world-map__overlay-section">
+          <h5>Scenario cues</h5>
+          <ul className="world-map__overlay-list">
+            {bodyAlerts.map((alert) => (
+              <li key={alert.id}>
+                <span className={`world-map__alert-pill world-map__alert-pill--${alert.severity}`}>
+                  {alert.severity}
+                </span>
+                <span>{alert.label}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {fleets.length > 0 ? (
         <section aria-label="City fleets" className="world-map__overlay-section">

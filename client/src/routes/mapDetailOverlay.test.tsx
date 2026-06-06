@@ -151,6 +151,15 @@ function hydrateSeededWorldMap() {
           developmentStage: 'fortified',
           visibility: 'public',
         },
+        {
+          id: 3001,
+          sessionId: 42,
+          bodyId: 30,
+          factionId: 202,
+          name: 'Callisto Outpost',
+          developmentStage: 'establishment',
+          visibility: 'public',
+        },
       ],
       publicFleets: [
         {
@@ -184,6 +193,20 @@ function hydrateSeededWorldMap() {
           sessionId: 42,
           turn: 8,
           eventType: 'mars_contested',
+          visibility: 'public',
+        },
+        {
+          id: 9002,
+          sessionId: 42,
+          turn: 8,
+          eventType: 'scenario_cue_mars_pressure',
+          visibility: 'public',
+        },
+        {
+          id: 9003,
+          sessionId: 42,
+          turn: 8,
+          eventType: 'scenario_cue_callisto_opportunity',
           visibility: 'public',
         },
       ],
@@ -318,6 +341,30 @@ describe('Map detail overlay (P2E4T3/T4)', () => {
     const alertBoard = screen.getByRole('complementary', { name: /map alerts/i });
     expect(within(alertBoard).getAllByText(/Mars contested/i).length).toBeGreaterThan(0);
     expect(within(alertBoard).getByText(/Mars arrival imminent/i)).toBeDefined();
+  });
+
+  it('surfaces Turn 8 Mars pressure and Callisto opportunity cues in map and city detail', () => {
+    enterStoredGameContext();
+    usePanelStore.getState().setPanel('map');
+    hydrateSeededWorldMap();
+
+    render(<AppRouter backend={backend()} />);
+
+    const alertBoard = screen.getByRole('complementary', { name: /map alerts/i });
+    expect(
+      within(alertBoard).getByText(/Mars pressure: Pavonis Hub strained supply/i),
+    ).toBeDefined();
+    expect(
+      within(alertBoard).getByText(/Callisto opportunity: ice and volatiles window/i),
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /open detail for callisto outpost/i }));
+
+    const detail = screen.getByRole('dialog', { name: /selected city detail/i });
+    expect(within(detail).getByRole('heading', { name: /^Callisto Outpost$/i })).toBeDefined();
+    expect(
+      within(detail).getByText(/Callisto opportunity: ice and volatiles window/i),
+    ).toBeDefined();
   });
 
   it('keeps map markers legible by exposing accessible labels with control summaries', () => {

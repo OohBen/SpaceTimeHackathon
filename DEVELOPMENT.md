@@ -31,8 +31,10 @@ npm install          # installs all workspace dependencies
 |---|---|---|
 | `npm test` | Run all workspace tests | All test files pass |
 | `npm run build` | TypeScript type-check all workspaces | No errors |
+| `npm run demo` | Start the full judge-ready local demo stack in fixture mode | Ready lines for SpacetimeDB, orchestrator, and frontend |
+| `npm run demo:smoke` | Start the full stack, verify readiness, then tear down | Same ready lines, then ports are released |
 | `npm run dev:client` | Start Vite dev server for React frontend | http://localhost:5173 |
-| `npm run dev:orchestrator` | Start LLM orchestrator in watch mode | Listening on PORT |
+| `npm run dev:orchestrator` | Start LLM orchestrator in watch mode | http://localhost:8787/health |
 | `npm run spacetime:build` | Compile SpacetimeDB module artifact | Build output in server/ |
 | `npm run spacetime:start` | Start local SpacetimeDB | ws://localhost:3000 |
 | `npm run spacetime:publish` | Publish module to running SpacetimeDB | Module registered as `solar-dominion` |
@@ -81,7 +83,27 @@ cp .env.example .env
 | `SPACETIME_LISTEN_ADDR` | local server | SpacetimeDB local bind address |
 | `SPACETIME_DB_NAME` | orchestrator | Published module name |
 | `OPENROUTER_API_KEY` | LLM mode `live` | API key for proposal generation |
-| `LLM_MODE` | orchestrator | `live`, `mock`, or `fixture` |
+| `LLM_MODE` | orchestrator | `live`, `mock`, or `fixture`; local demo defaults to `fixture` |
+| `PORT` | orchestrator | HTTP port for `/health` (local demo default: `8787`) |
+| `VITE_SPACETIMEDB_URI` | client dev | SpacetimeDB HTTP URL used by the current session backend |
+| `VITE_SPACETIMEDB_MODULE` | client dev | Published module name used by the current session backend |
+
+## One-Command Local Demo
+
+Run the judge-ready local stack with:
+
+```sh
+npm run demo
+```
+
+The command preflights Node.js, npm, the spacetime CLI, workspace installs,
+ports 3000/8787/5173, LLM mode configuration, fixture files, and frontend
+SpacetimeDB URLs before starting long-running services. It starts SpacetimeDB,
+publishes `solar-dominion`, starts the orchestrator health server, starts Vite,
+then prints the demo URL. The runner resets its own `.spacetimedb-local-data/`
+directory before startup so repeated rehearsals do not depend on global local
+SpacetimeDB state. See `docs/P4E2-local-runner-operator-guide.md` for expected
+output and recovery steps.
 
 ## Workspace Layout
 
