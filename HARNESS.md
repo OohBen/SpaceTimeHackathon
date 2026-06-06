@@ -3,7 +3,7 @@
 This repo is designed for **Claude Code** (interactive mode with slash commands).
 If your team uses a different agent harness (Aider, Cursor, Codex, Gemini CLI,
 custom LLM runner, etc.), this document explains how to wire it up.
-
+ 
 The coordination protocol (GitHub Issues as shared brain, label state machine,
 branch-per-epic/task, PR-only close-out) is harness-agnostic. Only the invocation
 and context loading differ.
