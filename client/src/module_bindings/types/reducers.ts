@@ -15,6 +15,7 @@ import CreateSessionReducer from "../create_session_reducer";
 import ExpireTurnReducer from "../expire_turn_reducer";
 import JoinOrResumeSessionReducer from "../join_or_resume_session_reducer";
 import RunDeliberationReducer from "../run_deliberation_reducer";
+import SeedDemoTurn8Reducer from "../seed_demo_turn_8_reducer";
 import SeedDemoWorldReducer from "../seed_demo_world_reducer";
 import SetDeliberationModeReducer from "../set_deliberation_mode_reducer";
 import SimulateTurnReducer from "../simulate_turn_reducer";
@@ -29,8 +30,8 @@ export type CreateSessionParams = __Infer<typeof CreateSessionReducer>;
 export type ExpireTurnParams = __Infer<typeof ExpireTurnReducer>;
 export type JoinOrResumeSessionParams = __Infer<typeof JoinOrResumeSessionReducer>;
 export type RunDeliberationParams = __Infer<typeof RunDeliberationReducer>;
+export type SeedDemoTurn8Params = __Infer<typeof SeedDemoTurn8Reducer>;
 export type SeedDemoWorldParams = __Infer<typeof SeedDemoWorldReducer>;
 export type SetDeliberationModeParams = __Infer<typeof SetDeliberationModeReducer>;
 export type SimulateTurnParams = __Infer<typeof SimulateTurnReducer>;
 export type SubmitTurnParams = __Infer<typeof SubmitTurnReducer>;
-
