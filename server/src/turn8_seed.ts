@@ -37,8 +37,78 @@ export const TURN8_SEED_INSERT_ORDER = TURN1_SEED_INSERT_ORDER;
 
 const TURN8_YEAR = 2157;
 const TURN8_TURN = 8;
+const TURN1_YEAR = 2150;
+const TURN1_TURN = 1;
 const FACTION_A_ID = 1;
 const FACTION_B_ID = 2;
+
+export const TURN8_JUDGE_SCENARIO_DELTAS = {
+  baseline_seed: 'turn1',
+  scenario: 'mars_pressure_callisto_opportunity',
+  turn_state: {
+    current_year: { from: TURN1_YEAR, to: TURN8_YEAR, delta: TURN8_YEAR - TURN1_YEAR },
+    current_turn: { from: TURN1_TURN, to: TURN8_TURN, delta: TURN8_TURN - TURN1_TURN },
+    turn_phase: 'deliberation',
+  },
+  factions: {
+    '1': {
+      credits: { from: 1_200, to: 2_400, delta: 1_200 },
+      political_capital: { from: 55, to: 72, delta: 17 },
+      control_score: { from: 100, to: 140, delta: 40 },
+    },
+    '2': {
+      credits: { from: 1_200, to: 1_950, delta: 750 },
+      political_capital: { from: 55, to: 61, delta: 6 },
+      control_score: { from: 100, to: 118, delta: 18 },
+    },
+  },
+  cities: {
+    'Pavonis Hub': {
+      morale: { from: 72, to: 44, delta: -28 },
+      industrial_output: { from: 180, to: 165, delta: -15 },
+      garrison_strength: { from: 460, to: 680, delta: 220 },
+      supply_status: { from: 'stable', to: 'strained' },
+    },
+    'Callisto Outpost': {
+      baseline: 'absent',
+      faction_id: FACTION_A_ID,
+      population: 120_000,
+      development_stage: 'establishment',
+      supply_status: 'stable',
+    },
+  },
+  fleets: {
+    'New Geneva home guard': {
+      faction_id: FACTION_A_ID,
+      city: 'New Geneva',
+      strength: { from: 420, to: 460, delta: 40 },
+      orders: { from: 'home_guard', to: 'home_guard' },
+    },
+    'Pavonis perimeter defense': {
+      faction_id: FACTION_B_ID,
+      city: 'Pavonis Hub',
+      strength: { from: 420, to: 580, delta: 160 },
+      orders: { from: 'home_guard', to: 'perimeter_defense' },
+    },
+    'Callisto outpost guard': {
+      baseline: 'absent',
+      faction_id: FACTION_A_ID,
+      city: 'Callisto Outpost',
+      strength: 35,
+      orders: 'outpost_guard',
+    },
+  },
+  resources: {
+    Mars: {
+      deposits: { deuterium: 30, metals: 72, regolith: 88, water: 58 },
+      pressure: { city: 'Pavonis Hub', supply_status: 'strained', garrison_strength: 680 },
+    },
+    Callisto: {
+      deposits: { ice: 88, subsurface_metals: 55, volatiles: 74 },
+      opportunity: { city: 'Callisto Outpost', development_stage: 'establishment' },
+    },
+  },
+} as const;
 
 const identityFromHex = (hex: string): Identity => {
   const normalized = hex.replace(/^0x/u, '').padStart(64, '0');
@@ -425,8 +495,8 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       turn: TURN8_TURN,
       proposing_personnel_id: 6,
       department: 'Defense',
-      title: 'Pavonis supply relief convoy',
-      body: 'Authorize emergency supply convoy from Asteroid Belt to ease Pavonis Hub strained logistics.',
+      title: 'Pavonis pressure and Callisto push',
+      body: 'Pavonis Hub is under supply pressure, but a guarded Callisto push could contest the outer-system resource window before Earth consolidates it.',
       resource_cost: 160,
       confidence: 'HIGH',
       status: 'unread',
@@ -483,8 +553,8 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       faction_id: FACTION_B_ID,
       turn: TURN8_TURN,
       from_personnel_id: 6,
-      subject: 'Pavonis relief urgency',
-      body: 'Garrison morale at risk. Supply convoy must be approved this turn or defensive capability degrades.',
+      subject: 'Pavonis pressure / Callisto window',
+      body: 'Garrison morale is strained, but Callisto remains the attractive expansion target if command can spare escorts this turn.',
       requires_decision: true,
       status: 'unread',
     },
@@ -492,8 +562,8 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
 
   const fleets: FleetRow[] = [
     { id: 1, faction_id: FACTION_A_ID, posting_city_id: 1, strength: 460, orders: 'home_guard' },
-    { id: 2, faction_id: FACTION_A_ID, posting_city_id: 4, strength: 35, orders: 'outpost_guard' },
-    { id: 3, faction_id: FACTION_B_ID, posting_city_id: 3, strength: 580, orders: 'perimeter_defense' },
+    { id: 2, faction_id: FACTION_B_ID, posting_city_id: 3, strength: 580, orders: 'perimeter_defense' },
+    { id: 3, faction_id: FACTION_A_ID, posting_city_id: 4, strength: 35, orders: 'outpost_guard' },
   ];
 
   const colony_ships: ColonyShipRow[] = [
@@ -540,7 +610,15 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       observer_faction_id: FACTION_A_ID,
       target_faction_id: FACTION_B_ID,
       intel_type: 'contested_territory',
-      value: stableJson({ body: 'Mars', city: 'Pavonis Hub', garrison: 680, supply_status: 'strained' }),
+      value: stableJson({
+        body: 'Mars',
+        city: 'Pavonis Hub',
+        fleet_strength: 580,
+        garrison_strength: 680,
+        morale: 44,
+        pressure: 'supply_relief_required',
+        supply_status: 'strained',
+      }),
       accuracy: 82,
       acquired_turn: 7,
     },
@@ -549,7 +627,13 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       observer_faction_id: FACTION_B_ID,
       target_faction_id: FACTION_A_ID,
       intel_type: 'opportunity',
-      value: stableJson({ body: 'Callisto', note: 'Rival outpost established; subsurface survey likely imminent' }),
+      value: stableJson({
+        body: 'Callisto',
+        city: 'Callisto Outpost',
+        development_stage: 'establishment',
+        note: 'Rival outpost established; subsurface survey likely imminent',
+        resource_deposits: TURN8_JUDGE_SCENARIO_DELTAS.resources.Callisto.deposits,
+      }),
       accuracy: 75,
       acquired_turn: 7,
     },
@@ -558,7 +642,12 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       observer_faction_id: FACTION_A_ID,
       target_faction_id: FACTION_B_ID,
       intel_type: 'opportunity',
-      value: stableJson({ body: 'Callisto', note: 'Rival has no Jupiter-system presence; window to consolidate' }),
+      value: stableJson({
+        body: 'Callisto',
+        note: 'Rival has no Jupiter-system presence; window to consolidate',
+        opportunity: 'outer_system_consolidation',
+        resource_deposits: TURN8_JUDGE_SCENARIO_DELTAS.resources.Callisto.deposits,
+      }),
       accuracy: 88,
       acquired_turn: 8,
     },
@@ -583,6 +672,14 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
     },
     {
       id: 3,
+      session_id: sessionId,
+      faction_id: undefined,
+      turn: TURN8_TURN,
+      event_type: 'turn8_judge_scenario_seeded',
+      payload: stableJson(TURN8_JUDGE_SCENARIO_DELTAS),
+    },
+    {
+      id: 4,
       session_id: sessionId,
       faction_id: undefined,
       turn: TURN8_TURN,
