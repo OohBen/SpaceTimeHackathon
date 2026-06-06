@@ -6,9 +6,16 @@ import { ACTIVE_SESSION_STATE } from './session_lifecycle.js';
 import {
   runWorldUpdate,
   type WorldUpdateContext,
-  type WorldUpdateSnapshot,
 } from './simulation_kernel.js';
-import type { CityRow, ColonyShipRow, EventRow, ProjectRow, ProposalRow } from './turn1_seed.js';
+import type {
+  CelestialBodyRow,
+  CityRow,
+  ColonyShipRow,
+  EventRow,
+  FleetRow,
+  ProjectRow,
+  ProposalRow,
+} from './turn1_seed.js';
 import { buildTurn1Seed } from './turn1_seed.js';
 
 const timestamp = new Timestamp(100n);
@@ -46,7 +53,29 @@ function makeFaction(id: number, credits = 1000): FactionRow {
   };
 }
 
-function makeCity(id: number, factionId: number, industrialOutput: number): CityRow {
+function makeBody(
+  id: number,
+  position: Record<string, number>,
+  travelTimeTurns = 1
+): CelestialBodyRow {
+  return {
+    id,
+    session_id: 1,
+    name: `Body ${id}`,
+    system_tier: 'test',
+    comms_lag_turns: 0,
+    travel_time_turns: travelTimeTurns,
+    resource_deposits: '{}',
+    position: JSON.stringify(position),
+  };
+}
+
+function makeCity(
+  id: number,
+  factionId: number,
+  industrialOutput: number,
+  overrides: Partial<CityRow> = {}
+): CityRow {
   return {
     id,
     session_id: 1,
@@ -61,6 +90,7 @@ function makeCity(id: number, factionId: number, industrialOutput: number): City
     garrison_strength: 200,
     supply_status: 'stable',
     development_stage: 'full',
+    ...overrides,
   };
 }
 
@@ -79,6 +109,22 @@ function makeColonyShip(
     departed_turn: 1,
     arrives_turn: arrivesTurn,
     status,
+  };
+}
+
+function makeFleet(
+  id: number,
+  factionId: number,
+  postingCityId: number,
+  strength: number,
+  orders = 'home_guard'
+): FleetRow {
+  return {
+    id,
+    faction_id: factionId,
+    posting_city_id: postingCityId,
+    strength,
+    orders,
   };
 }
 
@@ -106,11 +152,18 @@ function makeCtx(
   factions: FactionRow[],
   cities: CityRow[],
   colonyShips: ColonyShipRow[],
-  projects: ProjectRow[]
+  projects: ProjectRow[],
+  options: {
+    bodies?: CelestialBodyRow[];
+    fleets?: FleetRow[];
+  } = {}
 ): WorldUpdateContext & { events: EventRow[] } {
   const events: EventRow[] = [];
+  const bodies = options.bodies ?? [];
+  const fleets = options.fleets ?? [];
   const factionMap = new Map(factions.map(f => [f.id, { ...f }]));
   const shipMap = new Map(colonyShips.map(s => [s.id, { ...s }]));
+  const fleetMap = new Map(fleets.map(f => [f.id, { ...f }]));
   const projectMap = new Map(projects.map(p => [p.id, { ...p }]));
 
   return {
@@ -136,12 +189,25 @@ function makeCtx(
         iter: () => cities.values(),
         id: { update: (row: CityRow) => row },
       },
+      celestial_bodies: {
+        iter: () => bodies.values(),
+      },
       colony_ships: {
         iter: () => colonyShips.values(),
         id: {
           update: (row: ColonyShipRow) => {
             shipMap.set(row.id, { ...row });
             colonyShips[colonyShips.findIndex(s => s.id === row.id)] = { ...row };
+            return row;
+          },
+        },
+      },
+      fleets: {
+        iter: () => fleets.values(),
+        id: {
+          update: (row: FleetRow) => {
+            fleetMap.set(row.id, { ...row });
+            fleets[fleets.findIndex(f => f.id === row.id)] = { ...row };
             return row;
           },
         },
@@ -175,6 +241,13 @@ function getFactionCredits(
   factionId: number
 ): number {
   return (ctx as any).db.factions.id.find(factionId)?.credits ?? 0;
+}
+
+function getFactionControlScore(
+  ctx: ReturnType<typeof makeCtx>,
+  factionId: number
+): number {
+  return (ctx as any).db.factions.id.find(factionId)?.control_score ?? 0;
 }
 
 // ─── tests ───────────────────────────────────────────────────────────────────
@@ -282,6 +355,82 @@ describe('simulation_kernel: colony ship arrivals', () => {
     const snap = runWorldUpdate(ctx, makeSession({ current_turn: 1 }));
 
     expect(snap.arrived_ship_ids).toEqual([1, 2, 3]);
+  });
+});
+
+describe('simulation_kernel: travel progression', () => {
+  it('reports in-transit ship progress from stable turn timing and body positions', () => {
+    const factions = [makeFaction(1, 500), makeFaction(2, 500)];
+    const cities = [makeCity(1, 1, 0, { body_id: 1 })];
+    const bodies = [makeBody(1, { x: 0, y: 0 }), makeBody(2, { x: 3, y: 4 })];
+    const ships = [
+      {
+        ...makeColonyShip(7, 1, 5),
+        origin_city_id: 1,
+        destination_body_id: 2,
+        departed_turn: 1,
+      },
+    ];
+    const ctx = makeCtx(factions, cities, ships, [], { bodies });
+
+    const snap = runWorldUpdate(ctx, makeSession({ current_turn: 3 }));
+
+    expect(snap.travel_progress[7]).toEqual({
+      destination_body_id: 2,
+      distance: 5,
+      elapsed_turns: 2,
+      origin_body_id: 1,
+      progress_pct: 50,
+      status: 'in_transit',
+      total_turns: 4,
+    });
+    expect(ships[0].status).toBe('in_transit');
+  });
+});
+
+describe('simulation_kernel: fleet strength and control pressure', () => {
+  it('keeps fleet strength updates within supported bounds', () => {
+    const factions = [makeFaction(1, 500), makeFaction(2, 500)];
+    const cities = [
+      makeCity(1, 1, 0, { supply_status: 'stable' }),
+      makeCity(2, 2, 0, { supply_status: 'critical' }),
+    ];
+    const fleets = [
+      makeFleet(1, 1, 1, 995),
+      makeFleet(2, 2, 2, 5, 'perimeter_defense'),
+    ];
+    const ctx = makeCtx(factions, cities, [], [], { fleets });
+
+    const snap = runWorldUpdate(ctx, makeSession());
+
+    expect(fleets.map(fleet => fleet.strength)).toEqual([1000, 0]);
+    expect(snap.fleet_strength_changes).toEqual({
+      1: { after: 1000, before: 995, delta: 5 },
+      2: { after: 0, before: 5, delta: -5 },
+    });
+  });
+
+  it('updates control scores from deterministic contested body pressure', () => {
+    const factions = [makeFaction(1, 500), makeFaction(2, 500)];
+    const cities = [
+      makeCity(1, 1, 0, { body_id: 3, garrison_strength: 80 }),
+      makeCity(2, 2, 0, { body_id: 3, garrison_strength: 260 }),
+    ];
+    const fleets = [makeFleet(1, 2, 2, 120, 'perimeter_defense')];
+    const ctx = makeCtx(factions, cities, [], [], {
+      bodies: [makeBody(3, { x: 4, y: 1 })],
+      fleets,
+    });
+
+    const snap = runWorldUpdate(ctx, makeSession());
+
+    expect(getFactionControlScore(ctx, 1)).toBe(97);
+    expect(getFactionControlScore(ctx, 2)).toBe(103);
+    expect(snap.contested_body_ids).toEqual([3]);
+    expect(snap.control_scores).toEqual({
+      1: { after: 97, before: 100, delta: -3 },
+      2: { after: 103, before: 100, delta: 3 },
+    });
   });
 });
 
@@ -436,6 +585,8 @@ describe('simulation_kernel: execution ordering', () => {
         },
         cities: { iter: () => seed.cities.values(), id: { update: (r: any) => r } },
         colony_ships: { iter: () => [].values(), id: { update: (r: any) => r } },
+        celestial_bodies: { iter: () => seed.celestial_bodies.values() },
+        fleets: { iter: () => seed.fleets.values(), id: { update: (r: any) => r } },
         projects: { iter: () => [].values(), id: { update: (r: any) => r } },
         proposals: { iter: () => [].values() },
         events: { insert: (r: any) => ({ ...r, id: 1 }) },

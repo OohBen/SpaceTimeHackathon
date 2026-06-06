@@ -25,7 +25,6 @@ import {
   type GameSessionRow,
   type JoinOrResumeContext,
   type SessionLifecycleContext,
-  type TurnPhaseContext,
 } from './session_lifecycle.js';
 import type { WorldUpdateContext } from './simulation_kernel.js';
 
@@ -291,7 +290,12 @@ function makeTurnPhaseCtx(sessions: GameSessionRow[]): WorldUpdateContext {
         iter: () => [].values(),
         id: { update: row => row },
       },
+      celestial_bodies: { iter: () => [].values() },
       colony_ships: {
+        iter: () => [].values(),
+        id: { update: row => row },
+      },
+      fleets: {
         iter: () => [].values(),
         id: { update: row => row },
       },
