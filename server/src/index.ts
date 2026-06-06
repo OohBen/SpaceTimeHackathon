@@ -1,7 +1,7 @@
 import { schema } from 'spacetimedb/server';
+import { tables } from './schema.js';
 
 // SpacetimeDB CLI entry point for the Solar Dominion module.
-// Tables and reducers are scaffolded in subsequent tasks (P1E2+).
-const spacetimedb = schema({});
+const spacetimedb = schema(tables);
 
 export default spacetimedb;

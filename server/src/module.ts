@@ -1,6 +1,3 @@
-import { schema } from 'spacetimedb/server';
-import { tables } from './schema.js';
-
-// SpacetimeDB module entry point for Solar Dominion.
-// Build with: npm run spacetime:build (requires spacetime CLI)
-export default schema(tables);
+// Compatibility module import path. Keep this re-exported from the CLI
+// entry point so build/generate/publish cannot drift from tests/imports.
+export { default } from './index.js';

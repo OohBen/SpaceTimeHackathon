@@ -38,11 +38,217 @@ import {
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import CelestialBodiesRow from "./celestial_bodies_table";
+import CitiesRow from "./cities_table";
+import ColonyShipsRow from "./colony_ships_table";
+import CommanderInboxRow from "./commander_inbox_table";
+import EventsRow from "./events_table";
+import FactionsRow from "./factions_table";
+import FleetsRow from "./fleets_table";
+import GameSessionsRow from "./game_sessions_table";
+import IntelligenceRecordsRow from "./intelligence_records_table";
+import LlmRequestsRow from "./llm_requests_table";
+import PersonnelRow from "./personnel_table";
+import PersonnelRelationshipsRow from "./personnel_relationships_table";
+import ProjectsRow from "./projects_table";
+import ProposalsRow from "./proposals_table";
+import TradeAgreementsRow from "./trade_agreements_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  celestial_bodies: __table({
+    name: 'celestial_bodies',
+    indexes: [
+      { accessor: 'id', name: 'celestial_bodies_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'celestial_bodies_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, CelestialBodiesRow),
+  cities: __table({
+    name: 'cities',
+    indexes: [
+      { accessor: 'cities_body_idx', name: 'cities_body_id_idx_btree', algorithm: 'btree', columns: [
+        'bodyId',
+      ] },
+      { accessor: 'cities_faction_idx', name: 'cities_faction_id_idx_btree', algorithm: 'btree', columns: [
+        'factionId',
+      ] },
+      { accessor: 'id', name: 'cities_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'cities_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, CitiesRow),
+  colony_ships: __table({
+    name: 'colony_ships',
+    indexes: [
+      { accessor: 'id', name: 'colony_ships_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'colony_ships_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ColonyShipsRow),
+  commander_inbox: __table({
+    name: 'commander_inbox',
+    indexes: [
+      { accessor: 'id', name: 'commander_inbox_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'commander_inbox_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, CommanderInboxRow),
+  events: __table({
+    name: 'events',
+    indexes: [
+      { accessor: 'id', name: 'events_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'events_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, EventsRow),
+  factions: __table({
+    name: 'factions',
+    indexes: [
+      { accessor: 'id', name: 'factions_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'factions_player_idx', name: 'factions_player_id_idx_btree', algorithm: 'btree', columns: [
+        'playerId',
+      ] },
+      { accessor: 'factions_session_idx', name: 'factions_session_id_idx_btree', algorithm: 'btree', columns: [
+        'sessionId',
+      ] },
+    ],
+    constraints: [
+      { name: 'factions_id_key', constraint: 'unique', columns: ['id'] },
+      { name: 'factions_player_id_key', constraint: 'unique', columns: ['playerId'] },
+    ],
+  }, FactionsRow),
+  fleets: __table({
+    name: 'fleets',
+    indexes: [
+      { accessor: 'id', name: 'fleets_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'fleets_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, FleetsRow),
+  game_sessions: __table({
+    name: 'game_sessions',
+    indexes: [
+      { accessor: 'id', name: 'game_sessions_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'game_sessions_state_idx', name: 'game_sessions_state_idx_btree', algorithm: 'btree', columns: [
+        'state',
+      ] },
+    ],
+    constraints: [
+      { name: 'game_sessions_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, GameSessionsRow),
+  intelligence_records: __table({
+    name: 'intelligence_records',
+    indexes: [
+      { accessor: 'id', name: 'intelligence_records_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'intelligence_records_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, IntelligenceRecordsRow),
+  llm_requests: __table({
+    name: 'llm_requests',
+    indexes: [
+      { accessor: 'id', name: 'llm_requests_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'llm_status_idx', name: 'llm_requests_status_idx_btree', algorithm: 'btree', columns: [
+        'status',
+      ] },
+    ],
+    constraints: [
+      { name: 'llm_requests_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, LlmRequestsRow),
+  personnel: __table({
+    name: 'personnel',
+    indexes: [
+      { accessor: 'personnel_faction_idx', name: 'personnel_faction_id_idx_btree', algorithm: 'btree', columns: [
+        'factionId',
+      ] },
+      { accessor: 'id', name: 'personnel_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'personnel_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PersonnelRow),
+  personnel_relationships: __table({
+    name: 'personnel_relationships',
+    indexes: [
+      { accessor: 'id', name: 'personnel_relationships_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'personnel_relationships_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, PersonnelRelationshipsRow),
+  projects: __table({
+    name: 'projects',
+    indexes: [
+      { accessor: 'id', name: 'projects_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'projects_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ProjectsRow),
+  proposals: __table({
+    name: 'proposals',
+    indexes: [
+      { accessor: 'proposals_faction_idx', name: 'proposals_faction_id_turn_idx_btree', algorithm: 'btree', columns: [
+        'factionId',
+        'turn',
+      ] },
+      { accessor: 'id', name: 'proposals_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'proposals_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ProposalsRow),
+  trade_agreements: __table({
+    name: 'trade_agreements',
+    indexes: [
+      { accessor: 'id', name: 'trade_agreements_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'trade_agreements_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, TradeAgreementsRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */

@@ -3,6 +3,7 @@ import { table, t } from 'spacetimedb/server';
 export const tables = {
   game_sessions: table(
     {
+      public: true,
       indexes: [
         { accessor: 'game_sessions_state_idx', algorithm: 'btree', columns: ['state'] as const },
       ],
@@ -24,8 +25,10 @@ export const tables = {
 
   factions: table(
     {
+      public: true,
       indexes: [
         { accessor: 'factions_session_idx', algorithm: 'btree', columns: ['session_id'] as const },
+        { accessor: 'factions_player_idx', algorithm: 'btree', columns: ['player_id'] as const },
       ],
       constraints: [
         { constraint: 'unique', columns: ['player_id'] as const },
@@ -45,7 +48,7 @@ export const tables = {
   ),
 
   celestial_bodies: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       session_id: t.u32(),
@@ -60,6 +63,7 @@ export const tables = {
 
   cities: table(
     {
+      public: true,
       indexes: [
         { accessor: 'cities_body_idx', algorithm: 'btree', columns: ['body_id'] as const },
         { accessor: 'cities_faction_idx', algorithm: 'btree', columns: ['faction_id'] as const },
@@ -84,6 +88,7 @@ export const tables = {
 
   personnel: table(
     {
+      public: true,
       indexes: [
         { accessor: 'personnel_faction_idx', algorithm: 'btree', columns: ['faction_id'] as const },
       ],
@@ -110,7 +115,7 @@ export const tables = {
   ),
 
   personnel_relationships: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       personnel_a_id: t.u32(),
@@ -122,6 +127,7 @@ export const tables = {
 
   proposals: table(
     {
+      public: true,
       indexes: [
         { accessor: 'proposals_faction_idx', algorithm: 'btree', columns: ['faction_id', 'turn'] as const },
       ],
@@ -142,7 +148,7 @@ export const tables = {
   ),
 
   commander_inbox: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       faction_id: t.u32(),
@@ -156,7 +162,7 @@ export const tables = {
   ),
 
   fleets: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       faction_id: t.u32(),
@@ -167,7 +173,7 @@ export const tables = {
   ),
 
   colony_ships: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       faction_id: t.u32(),
@@ -181,7 +187,7 @@ export const tables = {
   ),
 
   projects: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       faction_id: t.u32(),
@@ -196,7 +202,7 @@ export const tables = {
   ),
 
   intelligence_records: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       observer_faction_id: t.u32(),
@@ -209,7 +215,7 @@ export const tables = {
   ),
 
   events: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       session_id: t.u32(),
@@ -221,7 +227,7 @@ export const tables = {
   ),
 
   trade_agreements: table(
-    {},
+    { public: true },
     {
       id: t.u32().primaryKey().autoInc(),
       session_id: t.u32(),
@@ -235,6 +241,7 @@ export const tables = {
 
   llm_requests: table(
     {
+      public: true,
       indexes: [
         { accessor: 'llm_status_idx', algorithm: 'btree', columns: ['status'] as const },
       ],
