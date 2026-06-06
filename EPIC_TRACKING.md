@@ -6,6 +6,45 @@ Generated from GitHub issues and remote `origin/epic/*` branches on 2026-06-06.
 
 Each epic issue maps to `epic/<issue-number>-<slug>`. Every active epic below has a matching remote branch.
 
+## Branch Target Contract
+
+| Work type | Source branch | Work branch | PR target | Merge method |
+|---|---|---|---|---|
+| Task | Epic branch | `task/<issue-number>-<slug>` | Parent epic branch | Squash |
+| Epic verify | Epic branch | `verify/<epic-issue-number>-<slug>` or task verify branch | Parent epic branch | Squash |
+| Epic release | `main` plus epic branch | Epic branch | `main` | Regular merge commit |
+
+No active epic has a missing branch plan. The branch column in `## Epic Inventory` is the normalized target for every task and verify PR under that epic.
+
+## Task Linkage Contract
+
+- Every task issue must name its parent epic in `## Parent`; the parent epic's branch is the task PR base.
+- Every task branch must be created from the latest `origin/epic/<issue-number>-<slug>` before implementation.
+- Every task PR body must include `Closes #<task-issue-number>` on its own line, but agents must still close the task issue manually after squash merge because GitHub only auto-closes issues from default-branch merges.
+- Every task close-out must clear `in-progress`, `review-ready`, and `in-review` labels, then close with `state_reason=completed`.
+- Every verify task is the final child in its epic and gates only the epic-to-main merge. It must not be auto-merged to `main`; `epic_review.human_required` remains true.
+
+## Workflow Checkpoints
+
+| Checkpoint | Required state | GitHub action |
+|---|---|---|
+| Claim | `ai-approved`, no `blocked`, no assignee, all `## Blocked By` issues closed | Replace state label with `in-progress`, assign self, comment claim |
+| Branch | Work starts from latest parent epic branch | Push task branch immediately after claim |
+| Baseline | Validation command selected before edits | Record failed/passing baseline when applicable |
+| Completion | Acceptance criteria met and tests pass | Push commits, open PR to parent epic branch, label task `review-ready` |
+| Review | `code_review.human_required=false` | AI review may comment PASS/changes; self-approval can be blocked by GitHub |
+| Task merge | Clean review and checks | Squash merge task PR into epic branch |
+| Task close | Task PR merged | Manually close issue and repair labels before claiming next task |
+| Epic merge | Verify task complete, epic PR targets `main` | Human review required; regular merge commit only |
+
+## Queue Guardrails
+
+- Always paginate issue scans. This repository has more than 100 issues, so single-page `per_page=100` queries are incomplete.
+- Exclude labels `project` and `epic` from task claim queues even if those issues also carry `ai-approved`.
+- Exclude verify tasks from ordinary task-review sweeps unless the current goal is epic verification.
+- Treat `blocked` as additive only. Recompute it from `## Blocked By`; add it when any dependency is open, remove it when all dependencies are closed.
+- If a task PR merged into an epic branch, do not assume GitHub closed the issue. Fetch the issue, close it if still open, then unblock downstream issues.
+
 ## Project Map
 
 | Project | Issue | Blocks | Blocked by |
@@ -72,7 +111,7 @@ These are coarse planning waves, not parallel-safe topological layers. Use each 
 ## Gaps And Ambiguities
 
 - `#40` issue body still says `Epic branch: $branch`; actual branch is `epic/33-solar-dominion`.
-- `#39` has open `## Blocked By` dependencies but is missing the additive `blocked` label, so label-only queues can show false claimable work.
+- `#39` had open `## Blocked By` dependencies but was missing the additive `blocked` label. Repaired on 2026-06-06; keep it blocked until #41, #42, and #43 close.
 - Epic issue bodies for `#23` through `#32` have several markdown headings flattened onto single lines in GitHub output. Strict section parsers can miss `Dependencies` or `Child Issues`; prefer issue-number dependency cells in this file or normalize those bodies in a follow-up maintenance task.
 - Project container issues `#1` through `#5` carry `ai-approved`; claim logic must exclude label `project`.
 - Epic dependency fields use names, while task dependency fields use issue numbers. This file maps names to issue numbers for stable handoff.
