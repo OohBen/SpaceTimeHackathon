@@ -3,18 +3,25 @@ import type { SpacetimeClient } from '../../spacetime/client';
 import {
   commanderDecisionAction,
   commanderDecisionKey,
+  expireTurnAction,
+  expireTurnKey,
+  submitTurnAction,
+  submitTurnKey,
 } from '../../spacetime/session-actions';
 import type { CommanderDecision, CommanderDecisionArgs } from '../../spacetime/reducers';
 import {
   sessionStore,
+  selectActiveSession,
   selectCurrentPlayerSlot,
   selectPrivateFactionState,
   selectReducerCall,
   selectProposalsSubscriptionStatus,
   type PlayerSlotRow,
   type PrivateFactionStateRow,
+  type PublicFactionRow,
   type ProposalRow,
   type ReducerCallState,
+  type SessionRow,
   type SessionState,
   type SessionStore,
   type SubscriptionLoadStatus,
@@ -31,9 +38,13 @@ interface InboxView {
   proposals: ProposalRow[];
   subscription: SubscriptionLoadStatus;
   selected: ProposalRow | null;
+  activeSession: SessionRow | null;
   currentSlot: PlayerSlotRow | null;
   factionState: PrivateFactionStateRow | null;
+  publicFactions: PublicFactionRow[];
   decisionCall: ReducerCallState | null;
+  submitTurnCall: ReducerCallState | null;
+  expireTurnCall: ReducerCallState | null;
 }
 
 export function Inbox({
@@ -49,26 +60,55 @@ export function Inbox({
   const proposalsById = useStoreSlice(store, (state) => state.proposalsById);
   const subscription = useStoreSlice(store, selectProposalsSubscriptionStatus);
   const activeSessionId = useStoreSlice(store, (state) => state.activeSessionId);
+  const activeSession = useStoreSlice(store, selectActiveSession);
   const currentSlot = useStoreSlice(store, selectCurrentPlayerSlot);
+  const publicFactionsByKey = useStoreSlice(store, (state) => state.publicFactionsByKey);
+  const publicFactions = useMemo(() => {
+    if (!activeSessionId) return [];
+    return Object.values(publicFactionsByKey)
+      .filter((faction) => faction.sessionId === activeSessionId)
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }, [activeSessionId, publicFactionsByKey]);
   const factionState = useStoreSlice(store, (state) =>
     currentSlot ? selectPrivateFactionState(state, currentSlot.factionId) : null,
   );
   const decisionCall = useStoreSlice(store, (state) =>
     activeSelectedId ? selectReducerCall(state, commanderDecisionKey(activeSelectedId)) : null,
   );
+  const submitTurnCall = useStoreSlice(store, (state) =>
+    currentSlot ? selectReducerCall(state, submitTurnKey(currentSlot.factionId)) : null,
+  );
+  const expireTurnCall = useStoreSlice(store, (state) =>
+    activeSessionId ? selectReducerCall(state, expireTurnKey(activeSessionId)) : null,
+  );
 
   const view = useMemo<InboxView>(() => {
     const proposals = computeInboxProposals(proposalsById, activeSessionId, currentSlot);
     const selected = activeSelectedId ? proposalsById[activeSelectedId] ?? null : null;
-    return { proposals, subscription, selected, currentSlot, factionState, decisionCall };
+    return {
+      proposals,
+      subscription,
+      selected,
+      activeSession,
+      currentSlot,
+      factionState,
+      publicFactions,
+      decisionCall,
+      submitTurnCall,
+      expireTurnCall,
+    };
   }, [
     proposalsById,
     subscription,
     activeSessionId,
+    activeSession,
     currentSlot,
     activeSelectedId,
     factionState,
+    publicFactions,
     decisionCall,
+    submitTurnCall,
+    expireTurnCall,
   ]);
 
   const handleSelect = (id: string | null) => {
@@ -89,6 +129,7 @@ export function Inbox({
         padding: 16,
       }}
     >
+      <TurnWorkflowPanel view={view} store={store} client={client} />
       <ProposalList
         view={view}
         selectedId={activeSelectedId}
@@ -97,6 +138,191 @@ export function Inbox({
       <ProposalReader view={view} store={store} client={client} />
     </section>
   );
+}
+
+interface TurnWorkflowPanelProps {
+  view: InboxView;
+  store: SessionStore;
+  client?: SpacetimeClient;
+}
+
+function TurnWorkflowPanel({ view, store, client }: TurnWorkflowPanelProps) {
+  if (!view.activeSession || !view.currentSlot) return null;
+
+  const activeSession = view.activeSession;
+  const currentSlot = view.currentSlot;
+  const sessionId = toNonNegativeInteger(activeSession.id);
+  const factionId = toNonNegativeInteger(currentSlot.factionId);
+  const currentTurn = activeSession.currentTurn;
+  const pendingDecisions = view.proposals.filter(
+    (proposal) => proposal.turn === currentTurn && isOpenForDecision(proposal),
+  );
+  const ownFaction =
+    view.publicFactions.find((faction) => faction.id === currentSlot.factionId) ?? null;
+  const opponentFactions = view.publicFactions.filter(
+    (faction) => faction.id !== currentSlot.factionId,
+  );
+  const opponentReady =
+    opponentFactions.length === 0
+      ? 'unknown'
+      : opponentFactions.every((faction) => faction.readyForTurn)
+        ? 'ready'
+        : 'not ready';
+  const ownReady = ownFaction?.readyForTurn ?? false;
+  const inDecisionPhase = activeSession.phase === 'decision';
+  const submitLoading = view.submitTurnCall?.status === 'loading';
+  const timeoutLoading = view.expireTurnCall?.status === 'loading';
+  const readyToSubmit =
+    pendingDecisions.length === 0 &&
+    inDecisionPhase &&
+    Boolean(client) &&
+    factionId !== null &&
+    !ownReady &&
+    !submitLoading;
+  const canProcessTimeout =
+    inDecisionPhase && Boolean(client) && sessionId !== null && !timeoutLoading;
+
+  const handleSubmitTurn = () => {
+    if (!client || factionId === null || !readyToSubmit) return;
+    submitTurnAction(store, client, { factionId });
+  };
+
+  const handleProcessTimeout = () => {
+    if (!client || sessionId === null || !canProcessTimeout) return;
+    expireTurnAction(store, client, { sessionId });
+  };
+
+  return (
+    <section
+      aria-label="Turn submission"
+      style={{
+        borderBottom: '1px solid #e2e4ea',
+        display: 'grid',
+        gap: 10,
+        gridColumn: '1 / -1',
+        paddingBottom: 14,
+      }}
+    >
+      <div
+        data-testid="turn-readiness"
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}
+      >
+        <strong>Turn {view.activeSession?.currentTurn ?? '-'}</strong>
+        <span>You: {ownReady ? 'ready' : 'not ready'}</span>
+        <span>Opponent: {opponentReady}</span>
+      </div>
+
+      <p data-testid="turn-submit-readiness" style={{ margin: 0 }}>
+        {pendingDecisions.length === 0
+          ? 'Ready to submit: all required decisions recorded.'
+          : `Not ready: ${pendingDecisions.length} decision${
+              pendingDecisions.length === 1 ? '' : 's'
+            } pending.`}
+      </p>
+
+      <TurnSubmitStatus
+        clientReady={Boolean(client)}
+        factionIdReady={factionId !== null}
+        inDecisionPhase={inDecisionPhase}
+        ownReady={ownReady}
+        call={view.submitTurnCall}
+      />
+
+      <TurnTimeoutStatus call={view.expireTurnCall} />
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <button type="button" disabled={!readyToSubmit} onClick={handleSubmitTurn}>
+          Submit turn
+        </button>
+        <button type="button" disabled={!canProcessTimeout} onClick={handleProcessTimeout}>
+          Process timeout
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function TurnSubmitStatus({
+  clientReady,
+  factionIdReady,
+  inDecisionPhase,
+  ownReady,
+  call,
+}: {
+  clientReady: boolean;
+  factionIdReady: boolean;
+  inDecisionPhase: boolean;
+  ownReady: boolean;
+  call: ReducerCallState | null;
+}) {
+  if (call?.status === 'loading') {
+    return (
+      <p data-testid="turn-submit-status" role="status" style={{ margin: 0 }}>
+        Submitting turn...
+      </p>
+    );
+  }
+  if (call?.status === 'success' || ownReady) {
+    return (
+      <p data-testid="turn-submit-status" role="status" style={{ margin: 0 }}>
+        Turn submitted. Waiting for opponent.
+      </p>
+    );
+  }
+  if (call?.status === 'error') {
+    return (
+      <p data-testid="turn-submit-status" role="alert" style={{ color: '#a00', margin: 0 }}>
+        Backend rejected turn submit: {call.error}
+      </p>
+    );
+  }
+  if (!inDecisionPhase) {
+    return (
+      <p data-testid="turn-submit-status" style={{ margin: 0 }}>
+        Submit available during decision phase.
+      </p>
+    );
+  }
+  if (!factionIdReady) {
+    return (
+      <p data-testid="turn-submit-status" role="alert" style={{ color: '#a00', margin: 0 }}>
+        Live numeric faction ID required before turn submit.
+      </p>
+    );
+  }
+  if (!clientReady) {
+    return (
+      <p data-testid="turn-submit-status" style={{ margin: 0 }}>
+        Backend connection unavailable.
+      </p>
+    );
+  }
+  return null;
+}
+
+function TurnTimeoutStatus({ call }: { call: ReducerCallState | null }) {
+  if (call?.status === 'loading') {
+    return (
+      <p data-testid="turn-timeout-status" role="status" style={{ margin: 0 }}>
+        Processing timeout...
+      </p>
+    );
+  }
+  if (call?.status === 'success') {
+    return (
+      <p data-testid="turn-timeout-status" role="status" style={{ margin: 0 }}>
+        Timeout processed; unresolved proposals auto-deferred.
+      </p>
+    );
+  }
+  if (call?.status === 'error') {
+    return (
+      <p data-testid="turn-timeout-status" role="alert" style={{ color: '#a00', margin: 0 }}>
+        Backend rejected timeout: {call.error}
+      </p>
+    );
+  }
+  return null;
 }
 
 interface ProposalListProps {
@@ -245,6 +471,11 @@ function ProposalReader({
         <dt>Decision</dt>
         <dd>{proposal.decision ?? 'pending'}</dd>
       </dl>
+      {isAutoDeferredByTimeout(proposal) ? (
+        <p role="status" style={{ margin: '8px 0', color: '#7a4b00' }}>
+          Auto-deferred by timeout.
+        </p>
+      ) : null}
       <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.body}</p>
       <ProposalDecisionControls
         proposal={proposal}
@@ -467,7 +698,7 @@ function useStoreSlice<T>(store: SessionStore, selector: (state: SessionState) =
   );
 }
 
-const openProposalStatuses = new Set(['unread', 'read']);
+const openProposalStatuses = new Set(['pending', 'unread', 'read']);
 const terminalProposalStatuses = new Set(['approved', 'rejected', 'deferred', 'auto_deferred']);
 
 function isOpenForDecision(proposal: ProposalRow): boolean {
@@ -476,6 +707,18 @@ function isOpenForDecision(proposal: ProposalRow): boolean {
 
 function hasTerminalDecision(proposal: ProposalRow): boolean {
   return proposal.decision !== null || terminalProposalStatuses.has(proposal.status);
+}
+
+function isAutoDeferredByTimeout(proposal: ProposalRow): boolean {
+  if (proposal.status !== 'auto_deferred') return false;
+  if (!proposal.decision) return true;
+
+  try {
+    const decision = JSON.parse(proposal.decision) as { reason?: unknown };
+    return decision.reason === 'timeout';
+  } catch {
+    return true;
+  }
 }
 
 function parseAllocation(value: string): number | null {

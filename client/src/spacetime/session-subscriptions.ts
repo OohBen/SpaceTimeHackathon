@@ -10,6 +10,7 @@ export const SESSION_SUBSCRIPTION_QUERIES = [
   'SELECT * FROM sessions',
   'SELECT * FROM player_slots',
   'SELECT * FROM public_game_state',
+  'SELECT * FROM public_factions',
   'SELECT * FROM private_faction_state',
   'SELECT * FROM proposals',
 ] as const;
