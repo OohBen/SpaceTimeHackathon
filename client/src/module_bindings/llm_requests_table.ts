@@ -19,8 +19,5 @@ export default __t.row({
   status: __t.string(),
   responseJson: __t.option(__t.string()).name("response_json"),
   error: __t.option(__t.string()),
-  errorCode: __t.option(__t.string()).name("error_code"),
-  attemptCount: __t.u32().name("attempt_count"),
   createdTurn: __t.u32().name("created_turn"),
-  updatedTurn: __t.u32().name("updated_turn"),
 });

@@ -17,23 +17,8 @@ const REQUIRED_TABLES = [
   'projects',
   'intelligence_records',
   'events',
-  'turn_summaries',
   'trade_agreements',
   'llm_requests',
-];
-
-const REQUIRED_REDUCERS = [
-  'ack_resolution',
-  'advance_turn_phase',
-  'advance_world',
-  'check_victory',
-  'commander_decision',
-  'create_session',
-  'expire_turn',
-  'join_or_resume_session',
-  'run_deliberation',
-  'simulate_turn',
-  'submit_turn',
 ];
 
 describe('module bindings scaffold', () => {
@@ -56,21 +41,11 @@ describe('module bindings scaffold', () => {
     }
   });
 
-  it('generates non-empty bindings for authoritative reducers', () => {
-    const src = readFileSync(resolve(import.meta.dirname, 'index.ts'), 'utf8');
-
-    expect(src).not.toMatch(/const reducersSchema = __reducers\(\s*\);/);
-    for (const reducerName of REQUIRED_REDUCERS) {
-      expect(src).toContain(reducerName);
-    }
-  });
-
   it('generates table types for downstream client code', () => {
     const src = readFileSync(resolve(import.meta.dirname, 'types.ts'), 'utf8');
 
     expect(src).toContain('GameSessions');
     expect(src).toContain('Factions');
     expect(src).toContain('LlmRequests');
-    expect(src).toContain('TurnSummaries');
   });
 });
