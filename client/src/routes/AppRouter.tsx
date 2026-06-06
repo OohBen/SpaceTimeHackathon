@@ -150,21 +150,22 @@ function AppRouterView({
     }
 
     if (router.view === 'game' && router.gameRoute && hasCompleteSessionContext(session)) {
-      if (!storedContextMatchesRoute(session, router.gameRoute)) {
-        const routed = findRoutedSlot(backend, router.gameRoute);
-        if (routed) {
-          session.setReady(routed);
-          onSessionReady?.(routed.sessionId, routed.playerSlot);
-        }
+      const routeMatchesStoredContext = storedContextMatchesRoute(session, router.gameRoute);
+      const routed = findRoutedSlot(backend, router.gameRoute);
+
+      if (routeMatchesStoredContext && routed) {
         return;
       }
 
-      session.setReady({
-        sessionId: session.sessionId,
-        factionId: session.factionId,
-        playerSlot: session.playerSlot,
-        playerName: session.playerName,
-      });
+      if (routed) {
+        session.setReady(routed);
+        onSessionReady?.(routed.sessionId, routed.playerSlot);
+        return;
+      }
+
+      if (session.status === 'ready') {
+        session.reset();
+      }
       return;
     }
 
