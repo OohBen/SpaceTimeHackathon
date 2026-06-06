@@ -1,0 +1,5 @@
+default: true
+MD013: false   # line length — user prose shouldn't be wrapped
+MD033: false   # inline HTML — used in issue templates
+MD041: false   # first line h1 — PLAN.md starts with a comment block
+MD024: false   # duplicate headings — skills repeat ## Rules etc.
