@@ -78,6 +78,10 @@ async function checkOrchestrator(baseUrl, config) {
     throw new Error(`orchestrator /health returned non-JSON body: ${body.slice(0, 120)}`);
   }
 
+  if (!isRecord(parsed)) {
+    throw new Error(`orchestrator /health returned non-object JSON body: ${body.slice(0, 120)}`);
+  }
+
   if (parsed.status !== 'ok') {
     throw new Error(`orchestrator unhealthy payload: ${JSON.stringify(parsed)}`);
   }
@@ -169,7 +173,7 @@ function readExpectedDemoMode(env) {
   if (value === 'fixture' || value === 'live' || value === 'mock') {
     return value;
   }
-  throw new Error(`VITE_DEMO_MODE must be one of: fixture, live, mock; received ${JSON.stringify(value)}`);
+  throw new Error(`VITE_DEMO_MODE or DEMO_MODE must be one of: fixture, live, mock; received ${JSON.stringify(value)}`);
 }
 
 function optionalString(value) {
