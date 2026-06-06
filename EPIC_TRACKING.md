@@ -54,7 +54,7 @@ Each epic issue maps to `epic/<issue-number>-<slug>`. Every active epic below ha
 |---|---:|---|---|---|
 | Epic Tracking - Solar Dominion | #33 | `epic/33-solar-dominion` | None | #40, #41, #42, #43, verify #39 |
 
-## Dependency Layers
+## Coarse Dependency Waves
 
 | Layer | Epics |
 |---|---|
@@ -67,10 +67,13 @@ Each epic issue maps to `epic/<issue-number>-<slug>`. Every active epic below ha
 | Glue and local demo | #23, #24, #25, #26, #27 |
 | Hosted/hardening/stretch | #28, #29, #30, #31, #32 |
 
+These are coarse planning waves, not parallel-safe topological layers. Use each epic's `Depends on` cell before claiming work.
+
 ## Gaps And Ambiguities
 
 - `#40` issue body still says `Epic branch: $branch`; actual branch is `epic/33-solar-dominion`.
 - `#39` has open `## Blocked By` dependencies but is missing the additive `blocked` label, so label-only queues can show false claimable work.
+- Epic issue bodies for `#23` through `#32` have several markdown headings flattened onto single lines in GitHub output. Strict section parsers can miss `Dependencies` or `Child Issues`; prefer issue-number dependency cells in this file or normalize those bodies in a follow-up maintenance task.
 - Project container issues `#1` through `#5` carry `ai-approved`; claim logic must exclude label `project`.
 - Epic dependency fields use names, while task dependency fields use issue numbers. This file maps names to issue numbers for stable handoff.
 - P2E1 `#12` depends on P1E6 `#11`, but child task `#120` was intentionally completed early as a scaffold-only slice. Future P2E1 tasks still need backend/access-control dependencies respected.
