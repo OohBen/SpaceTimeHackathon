@@ -91,6 +91,15 @@ function makeDecisionCtx(
           rows.llmRequests.push(inserted);
           return inserted;
         },
+        id: {
+          find: id => rows.llmRequests.find(request => request.id === id) ?? null,
+          update: row => {
+            const idx = rows.llmRequests.findIndex(request => request.id === row.id);
+            if (idx === -1) throw new Error(`llm_request ${row.id} not found`);
+            rows.llmRequests[idx] = row;
+            return row;
+          },
+        },
       },
       module_settings: {
         id: {

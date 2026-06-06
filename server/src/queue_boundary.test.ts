@@ -92,6 +92,15 @@ function makeCtx(sender: Identity, rows: Rows): DecisionReducerContext {
           rows.llmRequests.push(inserted);
           return inserted;
         },
+        id: {
+          find: (id) => rows.llmRequests.find((r) => r.id === id) ?? null,
+          update: (row) => {
+            const idx = rows.llmRequests.findIndex((r) => r.id === row.id);
+            if (idx === -1) throw new Error(`llm_request ${row.id}`);
+            rows.llmRequests[idx] = row;
+            return row;
+          },
+        },
       },
       module_settings: {
         id: {

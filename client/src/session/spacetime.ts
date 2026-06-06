@@ -67,6 +67,7 @@ export interface SessionBackend {
 interface SessionReducers {
   joinOrResumeSession(input: { sessionId: number; playerSlot: PlayerSlot }): Promise<void>;
   createSession(input: { playerAName: string; playerBName: string }): Promise<void>;
+  seedDemoWorld(input: { sessionId: number }): Promise<void>;
 }
 
 interface BackendOptions {
@@ -263,6 +264,15 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
         sessionId: created.session.id,
         playerSlot,
       });
+
+      // Seed a turn-1 world so the session is immediately playable (star map,
+      // cities, personnel). Idempotent server-side; best-effort so a seed hiccup
+      // never blocks entering the session.
+      try {
+        await sessionReducers(conn).seedDemoWorld({ sessionId: created.session.id });
+      } catch (err) {
+        console.error('seed_demo_world failed for session', created.session.id, err);
+      }
 
       return {
         sessionId: created.session.id,

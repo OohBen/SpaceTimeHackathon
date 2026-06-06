@@ -80,3 +80,4 @@ success_check.ps1
 *.swp
 *.swo
 mnt/
+.vercel

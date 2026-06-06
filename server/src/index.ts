@@ -8,6 +8,8 @@ import {
 } from './session_lifecycle.js';
 import {
   commanderDecisionReducer,
+  failDeliberationReducer,
+  fulfillDeliberationReducer,
   runDeliberationReducer,
   setDeliberationModeReducer,
 } from './turn_decisions.js';
@@ -88,6 +90,16 @@ export const set_deliberation_mode = spacetimedb.reducer(
     mode: t.string(),
   },
   setDeliberationModeReducer
+);
+
+export const fulfill_deliberation = spacetimedb.reducer(
+  { request_id: t.u32(), items_json: t.string() },
+  fulfillDeliberationReducer
+);
+
+export const fail_deliberation = spacetimedb.reducer(
+  { request_id: t.u32(), error: t.string(), error_code: t.string() },
+  failDeliberationReducer
 );
 
 export const submit_turn = spacetimedb.reducer(

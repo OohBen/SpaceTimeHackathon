@@ -6,8 +6,13 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "worker": "tsx src/worker.ts",
+    "generate": "spacetime generate --lang typescript --module-path ../server --out-dir ./src/module_bindings --yes",
     "build": "tsc --noEmit",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "spacetimedb": "^2.4.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

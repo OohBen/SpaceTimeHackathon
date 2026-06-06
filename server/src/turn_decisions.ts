@@ -60,6 +60,24 @@ export interface SetDeliberationModeInput {
   mode: string;
 }
 
+export interface FulfillDeliberationInput {
+  request_id: number;
+  items_json: string;
+}
+
+export interface FailDeliberationInput {
+  request_id: number;
+  error: string;
+  error_code: string;
+}
+
+type AdvisoryProposalItem = {
+  title?: string;
+  body?: string;
+};
+
+const LIVE_WORKER_SOURCE = 'live_worker';
+
 export interface DecisionReducerContext {
   sender: Identity;
   timestamp: Timestamp;
@@ -92,6 +110,10 @@ export interface DecisionReducerContext {
     llm_requests: {
       iter(): Iterable<LlmRequestRow>;
       insert(row: LlmRequestRow): LlmRequestRow;
+      id: {
+        find(id: number): LlmRequestRow | null;
+        update(row: LlmRequestRow): LlmRequestRow;
+      };
     };
     module_settings: {
       id: {
@@ -187,6 +209,125 @@ export function commanderDecisionReducer(
       resource_cost: proposal.resource_cost,
     }),
   });
+}
+
+// Worker write-back reducer. Intentionally does NOT assert faction ownership — the external queue worker calls this with its own identity. Safe because output is advisory text overlaid on deterministic proposals.
+export function fulfillDeliberationReducer(
+  ctx: DecisionReducerContext,
+  input: FulfillDeliberationInput
+): void {
+  const request = findLlmRequest(ctx, input.request_id);
+  if (request.request_type !== LLM_REQUEST_TYPE.proposals) {
+    throw new Error(
+      `llm_request ${request.id} request_type ${request.request_type} is not supported (only proposals)`
+    );
+  }
+  assertRequestOpen(request);
+
+  const faction = ctx.db.factions.id.find(request.faction_id);
+  if (!faction) {
+    throw new Error(`faction ${request.faction_id} not found`);
+  }
+  const session = ctx.db.game_sessions.id.find(request.session_id);
+  if (!session) {
+    throw new Error(`session ${request.session_id} not found`);
+  }
+
+  const cities = collectByFaction(ctx.db.cities.iter(), faction.id);
+  const personnel = collectByFaction(ctx.db.personnel.iter(), faction.id);
+  const existingProposals = collectByFactionTurn(
+    ctx.db.proposals.iter(),
+    request.faction_id,
+    request.created_turn
+  );
+
+  const drafts = generateFallbackProposals({
+    session,
+    faction,
+    cities,
+    personnel,
+    existingProposals,
+  });
+
+  const items = parseAdvisoryItems(input.items_json);
+
+  const overlayCount = Math.min(drafts.length, items.length);
+  for (let i = 0; i < overlayCount; i += 1) {
+    const item = items[i];
+    if (typeof item.title === 'string' && item.title.length > 0) {
+      drafts[i].title = item.title;
+    }
+    if (typeof item.body === 'string' && item.body.length > 0) {
+      drafts[i].body = item.body;
+    }
+  }
+
+  const insertedIds = drafts.map((draft) => insertFallbackProposal(ctx, draft).id);
+
+  ctx.db.llm_requests.id.update({
+    ...request,
+    status: LLM_REQUEST_STATUS.completed,
+    response_json: stableJson({
+      proposal_ids: insertedIds,
+      source: LIVE_WORKER_SOURCE,
+    }),
+    error: undefined,
+    error_code: undefined,
+    updated_turn: session.current_turn,
+  });
+}
+
+// Worker write-back reducer. Intentionally does NOT assert faction ownership — the external queue worker calls this with its own identity. Safe because output is advisory text overlaid on deterministic proposals.
+export function failDeliberationReducer(
+  ctx: DecisionReducerContext,
+  input: FailDeliberationInput
+): void {
+  const request = findLlmRequest(ctx, input.request_id);
+  assertRequestOpen(request);
+
+  ctx.db.llm_requests.id.update({
+    ...request,
+    status: LLM_REQUEST_STATUS.failed,
+    error: input.error,
+    error_code: input.error_code,
+    attempt_count: request.attempt_count + 1,
+    updated_turn: request.updated_turn,
+  });
+}
+
+function findLlmRequest(
+  ctx: DecisionReducerContext,
+  requestId: number
+): LlmRequestRow {
+  const request = ctx.db.llm_requests.id.find(requestId);
+  if (!request) {
+    throw new Error(`llm_request ${requestId} not found`);
+  }
+  return request;
+}
+
+function assertRequestOpen(request: LlmRequestRow): void {
+  if (
+    request.status !== LLM_REQUEST_STATUS.queued &&
+    request.status !== LLM_REQUEST_STATUS.processing
+  ) {
+    throw new Error(
+      `llm_request ${request.id} is not open (status ${request.status})`
+    );
+  }
+}
+
+function parseAdvisoryItems(itemsJson: string): AdvisoryProposalItem[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(itemsJson);
+  } catch {
+    throw new Error('invalid items_json: not valid JSON');
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error('invalid items_json: expected an array');
+  }
+  return parsed as AdvisoryProposalItem[];
 }
 
 function runFallbackDeliberation(
