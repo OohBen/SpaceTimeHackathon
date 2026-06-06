@@ -1,7 +1,14 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import type { ClientDiagnostics } from '../spacetime/config';
 import type { ReducerCallDescriptor } from '../spacetime/reducers';
 
-export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+export type ConnectionStatus =
+  | 'idle'
+  | 'loading'
+  | 'connected'
+  | 'reconnecting'
+  | 'disconnected'
+  | 'failed';
 export type SessionStatus = 'creating' | 'lobby' | 'active' | 'complete';
 export type VisibilityScope = 'public' | 'own' | 'ownFaction';
 
@@ -9,6 +16,7 @@ export interface ConnectionState {
   status: ConnectionStatus;
   identity: string | null;
   error: string | null;
+  diagnostics: ClientDiagnostics;
 }
 
 export interface SessionRow {
@@ -109,6 +117,11 @@ const initialConnection: ConnectionState = {
   status: 'idle',
   identity: null,
   error: null,
+  diagnostics: {
+    host: 'ws://localhost:3000',
+    dbName: 'solar-dominion',
+    issues: [],
+  },
 };
 
 export function createSessionStore(): SessionStore {
@@ -127,6 +140,7 @@ export function createSessionStore(): SessionStore {
             ...state.connection,
             ...connection,
             error: connection.error ?? null,
+            diagnostics: connection.diagnostics ?? state.connection.diagnostics,
           },
         }));
       },
