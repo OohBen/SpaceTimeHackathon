@@ -16,6 +16,8 @@
     "demo:smoke": "node scripts/local-demo-runner.mjs --smoke",
     "dev:client": "npm run dev --workspace=client",
     "dev:orchestrator": "npm run dev --workspace=orchestrator",
+    "test:browser:mock": "npm run test --workspace=client -- src/routes/expandedBrowserE2E.test.tsx --testNamePattern mock",
+    "test:browser:fixture": "npm run test --workspace=client -- src/routes/expandedBrowserE2E.test.tsx --testNamePattern fixture",
     "spacetime:build": "npm run spacetime:build --workspace=server",
     "spacetime:start": "npm run spacetime:start --workspace=server",
     "spacetime:publish": "npm run spacetime:publish --workspace=server",
