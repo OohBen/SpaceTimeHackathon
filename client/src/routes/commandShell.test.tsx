@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, act, within } from '@testing-library/react';
+import { fireEvent, render, screen, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRouter } from './AppRouter';
 import type { SessionBackend } from '../session/spacetime';
@@ -51,139 +51,220 @@ function resetSessionStore() {
     publicEventsById: {},
     proposalsById: {},
     proposalsSubscription: { status: 'idle' },
+    factionsById: {},
+    personnelById: {},
+    intelligenceRecordsById: {},
+    eventsById: {},
+    turnSummariesById: {},
     reducerCalls: {},
   });
 }
 
-function hydrateSeededWorldMap() {
+function hydrateOperationalPanelState() {
   act(() => {
     sessionStore.getState().actions.hydrateSubscription({
-      sessions: [{ id: '42', code: 'SOL-42', status: 'active', currentTurn: 8, phase: 'orders' }],
+      sessions: [{ id: '42', code: 'GAME1', status: 'active', currentTurn: 5, phase: 'orders' }],
       publicGameStates: [
         {
           sessionId: '42',
-          turn: 8,
-          year: 2360,
+          turn: 5,
+          year: 2351,
           phase: 'orders',
-          controlScores: { '202': 46, '303': 44 },
+          controlScores: { '202': 47, '303': 41 },
           visibleFactionIds: ['202', '303'],
         },
       ],
-      worldBodies: [
+      privateFactionStates: [
         {
-          id: 10,
-          sessionId: 42,
-          name: 'Earth',
-          systemTier: 'inner',
-          commsLagTurns: 0,
-          travelTimeTurns: 1,
-          resourceDeposits: '{"energy":"moderate"}',
-          position: '{"x":0,"y":0}',
-          visibility: 'public',
-        },
-        {
-          id: 20,
-          sessionId: 42,
-          name: 'Mars',
-          systemTier: 'inner',
-          commsLagTurns: 1,
-          travelTimeTurns: 2,
-          resourceDeposits: '{"metals":"rich"}',
-          position: '{"x":4,"y":1}',
-          visibility: 'public',
-        },
-        {
-          id: 30,
-          sessionId: 42,
-          name: 'Callisto',
-          systemTier: 'outer',
-          commsLagTurns: 3,
-          travelTimeTurns: 5,
-          resourceDeposits: '{"volatiles":"rich"}',
-          position: '{"x":8,"y":4}',
-          visibility: 'public',
+          sessionId: '42',
+          factionId: '202',
+          resources: { credits: 150, minerals: 30, science: 12 },
+          morale: 80,
+          doctrine: 'expansion',
+          visibility: 'ownFaction',
         },
       ],
-      publicFactions: [
+      personnel: [
         {
-          id: 202,
-          sessionId: 42,
-          name: 'Earth Directorate',
-          controlScore: 46,
+          id: '1',
+          factionId: '202',
+          name: 'Ada Watanabe',
+          role: 'Chief Scientist',
+          department: 'Research',
+          postingCityId: '7',
+          competence: 88,
+          creativity: 91,
+          reliability: 76,
+          ambition: 45,
+          politicalSkill: 50,
+          communication: 72,
+          loyalty: 84,
+          autonomyTolerance: 68,
+          morale: 73,
+          burnout: 12,
+          salary: 18,
+        },
+      ],
+      intelligenceRecords: [
+        {
+          id: '10',
+          observerFactionId: '202',
+          targetFactionId: '303',
+          intelType: 'scouting',
+          value: '{"visible_bodies":["Mars","Luna"],"known_cities":["Pavonis"]}',
+          accuracy: 82,
+          acquiredTurn: 5,
+        },
+      ],
+    });
+  });
+}
+
+function hydrateStrategicPanelState() {
+  act(() => {
+    const hydrate = sessionStore.getState().actions
+      .hydrateSubscription as (snapshot: Record<string, unknown>) => void;
+
+    hydrate({
+      sessions: [{ id: '42', code: 'GAME1', status: 'active', currentTurn: 5, phase: 'summary' }],
+      publicGameStates: [
+        {
+          sessionId: '42',
+          turn: 5,
+          year: 2351,
+          phase: 'summary',
+          controlScores: { '202': 52, '303': 38 },
+          visibleFactionIds: ['202', '303'],
+        },
+      ],
+      privateFactionStates: [
+        {
+          sessionId: '42',
+          factionId: '202',
+          resources: { credits: 150, minerals: 30, science: 12 },
+          morale: 80,
+          doctrine: 'expansion',
+          visibility: 'ownFaction',
+        },
+      ],
+      factions: [
+        {
+          id: '202',
+          sessionId: '42',
+          name: 'Solar Republic',
+          credits: 150,
+          politicalCapital: 18,
+          doctrineVector:
+            '{"strategy":72,"approach":36,"command":64,"focus":58,"style":44}',
+          controlScore: 52,
           readyForTurn: true,
-          visibility: 'public',
         },
         {
-          id: 303,
-          sessionId: 42,
-          name: 'Mars Compact',
-          controlScore: 44,
+          id: '303',
+          sessionId: '42',
+          name: 'Martian League',
+          credits: 90,
+          politicalCapital: 11,
+          doctrineVector:
+            '{"strategy":44,"approach":68,"command":47,"focus":42,"style":61}',
+          controlScore: 38,
           readyForTurn: false,
-          visibility: 'public',
         },
       ],
-      publicCities: [
+      intelligenceRecords: [
         {
-          id: 1001,
-          sessionId: 42,
-          bodyId: 10,
-          factionId: 202,
-          name: 'Geneva Command',
-          developmentStage: 'capital',
-          visibility: 'public',
-        },
-        {
-          id: 2001,
-          sessionId: 42,
-          bodyId: 20,
-          factionId: 202,
-          name: 'Ares Shipyards',
-          developmentStage: 'industrial',
-          visibility: 'public',
-        },
-        {
-          id: 2002,
-          sessionId: 42,
-          bodyId: 20,
-          factionId: 303,
-          name: 'Valles Holdfast',
-          developmentStage: 'fortified',
-          visibility: 'public',
+          id: '10',
+          observerFactionId: '202',
+          targetFactionId: '303',
+          intelType: 'signals',
+          value: '{"diplomatic_posture":"probing Callisto access","known_cities":["Pavonis"]}',
+          accuracy: 82,
+          acquiredTurn: 5,
         },
       ],
-      publicFleets: [
+      turnSummaries: [
         {
-          id: 7001,
-          factionId: 202,
-          postingCityId: 2001,
-          strength: 24,
-          visibility: 'public',
-        },
-        {
-          id: 7002,
-          factionId: 303,
-          postingCityId: 2002,
-          strength: 19,
-          visibility: 'public',
+          id: 'turn-summary-5',
+          sessionId: '42',
+          factionId: '202',
+          turn: 5,
+          summaryJson:
+            '{"headline":"Turn 5 outcome summary","events":["Olympus City infrastructure complete","Opponent colony ship detected inbound to Ganymede"],"controlScores":{"202":52,"303":38},"resourceDeltas":{"credits":-40,"science":6}}',
+          acknowledged: false,
         },
       ],
-      publicColonyShips: [
+    });
+  });
+}
+
+function hydrateCompletedGameState() {
+  act(() => {
+    const hydrate = sessionStore.getState().actions
+      .hydrateSubscription as (snapshot: Record<string, unknown>) => void;
+
+    hydrate({
+      sessions: [
         {
-          id: 8001,
-          factionId: 202,
-          destinationBodyId: 20,
-          arrivesTurn: 9,
-          status: 'in_transit',
-          visibility: 'public',
+          id: '42',
+          code: 'GAME1',
+          status: 'complete',
+          currentTurn: 10,
+          phase: 'complete',
+          winnerFactionId: '202',
         },
       ],
-      publicEvents: [
+      publicGameStates: [
         {
-          id: 9001,
-          sessionId: 42,
-          turn: 8,
-          eventType: 'mars_contested',
-          visibility: 'public',
+          sessionId: '42',
+          turn: 10,
+          year: 2356,
+          phase: 'complete',
+          controlScores: { '202': 82, '303': 45 },
+          visibleFactionIds: ['202', '303'],
+        },
+      ],
+      factions: [
+        {
+          id: '202',
+          sessionId: '42',
+          name: 'Solar Republic',
+          credits: 280,
+          politicalCapital: 42,
+          doctrineVector: '{"strategy":80,"approach":40,"command":70,"focus":60,"style":50}',
+          controlScore: 82,
+          readyForTurn: true,
+        },
+        {
+          id: '303',
+          sessionId: '42',
+          name: 'Martian League',
+          credits: 110,
+          politicalCapital: 14,
+          doctrineVector: '{"strategy":45,"approach":65,"command":50,"focus":40,"style":60}',
+          controlScore: 45,
+          readyForTurn: true,
+        },
+      ],
+      turnSummaries: [
+        {
+          id: 'turn-summary-10',
+          sessionId: '42',
+          factionId: '202',
+          turn: 10,
+          summaryJson:
+            '{"headline":"Solar Republic secures Callisto corridor","events":["Callisto shipyard secured","Martian League command accepts ceasefire"],"controlScores":{"202":82,"303":45},"resourceDeltas":{"credits":120,"science":18}}',
+          acknowledged: true,
+        },
+      ],
+      events: [
+        {
+          id: 'victory-10',
+          sessionId: '42',
+          factionId: '202',
+          turn: 10,
+          eventType: 'victory_checked',
+          payload:
+            '{"result":"winner","winner_faction_id":202,"reason":"turn_limit","control_delta":37}',
         },
       ],
     });
@@ -285,7 +366,7 @@ describe('Command Center shell', () => {
 
     it('shows placeholder content for panels not yet implemented', () => {
       enterStoredGameContext();
-      usePanelStore.getState().setPanel('inbox');
+      usePanelStore.getState().setPanel('strategic');
 
       render(<AppRouter backend={backend()} />);
 
@@ -298,6 +379,179 @@ describe('Command Center shell', () => {
       expect(CORE_PANELS.map((p) => p.id)).toEqual(
         expect.arrayContaining(['overview', 'session-brief', 'map', 'inbox', 'strategic']),
       );
+    });
+
+    it('exposes the strategic demo panels in the shell registry', () => {
+      expect(CORE_PANELS.map((p) => p.id)).toEqual(
+        expect.arrayContaining([
+          'personnel',
+          'resources',
+          'intelligence',
+          'diplomacy',
+          'doctrine',
+          'resolution',
+          'end-game',
+        ]),
+      );
+    });
+
+    it('can switch through strategic demo panels without route churn', () => {
+      enterStoredGameContext();
+      render(<AppRouter backend={backend()} />);
+      const path = window.location.pathname;
+
+      for (const panel of [
+        'Personnel',
+        'Resources',
+        'Intelligence',
+        'Diplomacy',
+        'Doctrine',
+        'Turn Resolution',
+        'End Game',
+      ]) {
+        fireEvent.click(screen.getByRole('button', { name: panel }));
+        expect(window.location.pathname).toBe(path);
+        expect(screen.getByRole('region', { name: /command content panel/i })).toHaveTextContent(
+          panel,
+        );
+      }
+    });
+
+    it('degrades unavailable strategic panel data into clear placeholder content', () => {
+      enterStoredGameContext();
+      usePanelStore.getState().setPanel('diplomacy');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/Diplomacy/i);
+      expect(panel).toHaveTextContent(/not yet available/i);
+      expect(panel).toHaveTextContent(/Session 42/i);
+    });
+
+    it('renders personnel panel from faction roster data', () => {
+      enterStoredGameContext();
+      hydrateOperationalPanelState();
+      usePanelStore.getState().setPanel('personnel');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/Ada Watanabe/i);
+      expect(panel).toHaveTextContent(/Chief Scientist/i);
+      expect(panel).toHaveTextContent(/Research/i);
+      expect(panel).toHaveTextContent(/Morale 73/i);
+      expect(panel).toHaveTextContent(/Burnout 12/i);
+      expect(panel).toHaveTextContent(/Competence 88/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders resources panel from private economy and public session state', () => {
+      enterStoredGameContext();
+      hydrateOperationalPanelState();
+      usePanelStore.getState().setPanel('resources');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/credits/i);
+      expect(panel).toHaveTextContent(/150/i);
+      expect(panel).toHaveTextContent(/minerals/i);
+      expect(panel).toHaveTextContent(/30/i);
+      expect(panel).toHaveTextContent(/Morale 80/i);
+      expect(panel).toHaveTextContent(/Doctrine expansion/i);
+      expect(panel).toHaveTextContent(/Control 47/i);
+      expect(panel).toHaveTextContent(/Turn 5/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders intelligence panel from scouting records visible to the faction', () => {
+      enterStoredGameContext();
+      hydrateOperationalPanelState();
+      usePanelStore.getState().setPanel('intelligence');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/scouting/i);
+      expect(panel).toHaveTextContent(/Target 303/i);
+      expect(panel).toHaveTextContent(/Accuracy 82%/i);
+      expect(panel).toHaveTextContent(/Turn 5/i);
+      expect(panel).toHaveTextContent(/visible_bodies: Mars, Luna/i);
+      expect(panel).toHaveTextContent(/known_cities: Pavonis/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders diplomacy panel from visible faction posture and recent intelligence', () => {
+      enterStoredGameContext();
+      hydrateStrategicPanelState();
+      usePanelStore.getState().setPanel('diplomacy');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(screen.getByLabelText(/diplomacy posture/i)).toBeDefined();
+      expect(panel).toHaveTextContent(/Solar Republic/i);
+      expect(panel).toHaveTextContent(/Martian League/i);
+      expect(panel).toHaveTextContent(/Control 52/i);
+      expect(panel).toHaveTextContent(/Control 38/i);
+      expect(panel).toHaveTextContent(/probing Callisto access/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders doctrine panel from the current faction doctrine vector', () => {
+      enterStoredGameContext();
+      hydrateStrategicPanelState();
+      usePanelStore.getState().setPanel('doctrine');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(screen.getByLabelText(/faction doctrine posture/i)).toBeDefined();
+      expect(panel).toHaveTextContent(/Expansionist/i);
+      expect(panel).toHaveTextContent(/Consolidationist/i);
+      expect(panel).toHaveTextContent(/Militarist/i);
+      expect(panel).toHaveTextContent(/Diplomatic/i);
+      expect(panel).toHaveTextContent(/Rapid expansion proposals/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders resolution panel from latest faction turn summary data', () => {
+      enterStoredGameContext();
+      hydrateStrategicPanelState();
+      usePanelStore.getState().setPanel('resolution');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(screen.getByLabelText(/turn resolution summary/i)).toBeDefined();
+      expect(panel).toHaveTextContent(/Turn 5 outcome summary/i);
+      expect(panel).toHaveTextContent(/Olympus City infrastructure complete/i);
+      expect(panel).toHaveTextContent(/Opponent colony ship detected inbound to Ganymede/i);
+      expect(panel).toHaveTextContent(/Control 52/i);
+      expect(panel).toHaveTextContent(/credits -40/i);
+      expect(panel).toHaveTextContent(/Acknowledgement pending/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders end-game review inside the command shell when the session is complete', () => {
+      enterStoredGameContext();
+      hydrateCompletedGameState();
+      usePanelStore.getState().setPanel('end-game');
+      const gamePath = window.location.pathname;
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(screen.getByLabelText(/end game review/i)).toBeDefined();
+      expect(panel).toHaveTextContent(/Session complete/i);
+      expect(panel).toHaveTextContent(/Solar Republic victory/i);
+      expect(panel).toHaveTextContent(/Turn 10/i);
+      expect(panel).toHaveTextContent(/Control 82/i);
+      expect(panel).toHaveTextContent(/Solar Republic secures Callisto corridor/i);
+      expect(panel).toHaveTextContent(/Callisto shipyard secured/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+      expect(window.location.pathname).toBe(gamePath);
     });
 
     it('active panel persists across remount via local storage', () => {
@@ -320,61 +574,6 @@ describe('Command Center shell', () => {
       render(<AppRouter backend={backend()} />);
       const sidebar = screen.getByRole('complementary', { name: /command sidebar/i });
       expect(sidebar.classList.contains('command-shell__sidebar')).toBe(true);
-    });
-  });
-
-  describe('Solar system map panel', () => {
-    it('renders seeded bodies, cities, fleets, and travel indicators inside the shell panel', () => {
-      enterStoredGameContext();
-      usePanelStore.getState().setPanel('map');
-      hydrateSeededWorldMap();
-
-      render(<AppRouter backend={backend()} />);
-
-      const panel = screen.getByRole('region', { name: /command content panel/i });
-      expect(panel).toHaveTextContent(/Star Map/i);
-      expect(screen.getByRole('img', { name: /solar system schematic map/i })).toBeDefined();
-      expect(screen.getByLabelText(/open detail for earth.*controlled by earth directorate/i)).toBeDefined();
-      expect(screen.getByLabelText(/open detail for mars.*contested/i)).toBeDefined();
-      expect(screen.getByLabelText(/open detail for ares shipyards/i)).toBeDefined();
-      expect(screen.getByLabelText(/open detail for valles holdfast/i)).toBeDefined();
-      expect(screen.getByLabelText(/fleet marker earth directorate strength 24/i)).toBeDefined();
-      expect(screen.getByLabelText(/fleet marker mars compact strength 19/i)).toBeDefined();
-      expect(screen.getByLabelText(/travel route earth directorate to mars arrives turn 9/i)).toBeDefined();
-    });
-
-    it('keeps faction control, travel state, and seeded demo density readable', () => {
-      enterStoredGameContext();
-      usePanelStore.getState().setPanel('map');
-      hydrateSeededWorldMap();
-
-      render(<AppRouter backend={backend()} />);
-
-      expect(screen.getAllByText(/Earth Directorate/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/Mars Compact/i).length).toBeGreaterThan(0);
-      expect(screen.getByText('Controlled')).toBeDefined();
-      expect(screen.getByText('Contested')).toBeDefined();
-      expect(screen.getByText('Inbound travel')).toBeDefined();
-      expect(screen.getByText(/Arrives T9/i)).toBeDefined();
-      const summary = screen.getByLabelText(/map summary/i);
-      expect(within(summary).getByText(/3 bodies/i)).toBeDefined();
-      expect(within(summary).getByText(/3 cities/i)).toBeDefined();
-      expect(within(summary).getByText(/2 fleets/i)).toBeDefined();
-      expect(within(summary).getByText(/1 travel/i)).toBeDefined();
-    });
-
-    it('renders map rows for the routed game session when the shared map store points elsewhere', () => {
-      enterStoredGameContext();
-      usePanelStore.getState().setPanel('map');
-      hydrateSeededWorldMap();
-      act(() => {
-        sessionStore.setState({ activeSessionId: '999' });
-      });
-
-      render(<AppRouter backend={backend()} />);
-
-      expect(screen.getByRole('img', { name: /solar system schematic map/i })).toBeDefined();
-      expect(screen.getByLabelText(/open detail for earth.*controlled by earth directorate/i)).toBeDefined();
     });
   });
 

@@ -9,7 +9,7 @@ export type ConnectionStatus =
   | 'reconnecting'
   | 'disconnected'
   | 'failed';
-export type SessionStatus = 'creating' | 'lobby' | 'active' | 'complete';
+export type SessionStatus = 'creating' | 'lobby' | 'active' | 'complete' | 'completed';
 export type VisibilityScope = 'public' | 'own' | 'ownFaction';
 
 export interface ConnectionState {
@@ -25,6 +25,7 @@ export interface SessionRow {
   status: SessionStatus;
   currentTurn: number;
   phase: string;
+  winnerFactionId?: string | number | null;
 }
 
 export interface PlayerSlotRow {
@@ -54,6 +55,70 @@ export interface PrivateFactionStateRow {
   morale: number;
   doctrine: string;
   visibility: Extract<VisibilityScope, 'ownFaction'>;
+}
+
+export type OperationalRowId = string | number;
+
+export interface FactionRow {
+  id: OperationalRowId;
+  sessionId: OperationalRowId;
+  name: string;
+  credits: number;
+  politicalCapital: number;
+  doctrineVector: string;
+  controlScore: number;
+  readyForTurn: boolean;
+}
+
+export interface PersonnelRow {
+  id: OperationalRowId;
+  factionId: OperationalRowId;
+  name: string;
+  role: string;
+  department: string;
+  postingCityId: OperationalRowId | null | undefined;
+  competence: number;
+  creativity: number;
+  reliability: number;
+  ambition: number;
+  politicalSkill: number;
+  communication: number;
+  loyalty: number;
+  autonomyTolerance: number;
+  morale: number;
+  burnout: number;
+  salary: number;
+}
+
+export interface IntelligenceRecordRow {
+  id: OperationalRowId;
+  observerFactionId: OperationalRowId;
+  targetFactionId: OperationalRowId;
+  intelType: string;
+  value: string;
+  accuracy: number;
+  acquiredTurn: number;
+}
+
+export interface EventRow {
+  id: OperationalRowId;
+  sessionId: OperationalRowId;
+  factionId: OperationalRowId | null | undefined;
+  turn: number;
+  eventType: string;
+  payload?: string;
+}
+
+export interface TurnSummaryRow {
+  id: OperationalRowId;
+  sessionId: OperationalRowId;
+  factionId: OperationalRowId;
+  turn: number;
+  summaryJson: string;
+  acknowledged: boolean;
+  acknowledgedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PublicFactionRow {
@@ -158,6 +223,11 @@ export interface SubscriptionSnapshot {
   publicColonyShips?: PublicColonyShipProjectionRow[];
   publicEvents?: PublicEventProjectionRow[];
   proposals?: ProposalRow[];
+  factions?: FactionRow[];
+  personnel?: PersonnelRow[];
+  intelligenceRecords?: IntelligenceRecordRow[];
+  events?: EventRow[];
+  turnSummaries?: TurnSummaryRow[];
 }
 
 export type SubscriptionEvent =
@@ -182,7 +252,17 @@ export type SubscriptionEvent =
   | { table: 'publicEvents'; op: 'upsert'; row: PublicEventProjectionRow }
   | { table: 'publicEvents'; op: 'delete'; id: number }
   | { table: 'proposals'; op: 'upsert'; row: ProposalRow }
-  | { table: 'proposals'; op: 'delete'; id: string };
+  | { table: 'proposals'; op: 'delete'; id: string }
+  | { table: 'factions'; op: 'upsert'; row: FactionRow }
+  | { table: 'factions'; op: 'delete'; id: OperationalRowId }
+  | { table: 'personnel'; op: 'upsert'; row: PersonnelRow }
+  | { table: 'personnel'; op: 'delete'; id: OperationalRowId }
+  | { table: 'intelligenceRecords'; op: 'upsert'; row: IntelligenceRecordRow }
+  | { table: 'intelligenceRecords'; op: 'delete'; id: OperationalRowId }
+  | { table: 'events'; op: 'upsert'; row: EventRow }
+  | { table: 'events'; op: 'delete'; id: OperationalRowId }
+  | { table: 'turnSummaries'; op: 'upsert'; row: TurnSummaryRow }
+  | { table: 'turnSummaries'; op: 'delete'; id: OperationalRowId };
 
 export interface OptimisticSessionUpdate {
   kind: 'session';
@@ -214,6 +294,11 @@ export interface SessionState {
   publicEventsById: Record<string, PublicEventProjectionRow>;
   proposalsById: Record<string, ProposalRow>;
   proposalsSubscription: SubscriptionLoadStatus;
+  factionsById: Record<string, FactionRow>;
+  personnelById: Record<string, PersonnelRow>;
+  intelligenceRecordsById: Record<string, IntelligenceRecordRow>;
+  eventsById: Record<string, EventRow>;
+  turnSummariesById: Record<string, TurnSummaryRow>;
   reducerCalls: Record<string, ReducerCallState>;
   actions: SessionStoreActions;
 }
@@ -262,6 +347,11 @@ export function createSessionStore(): SessionStore {
     publicEventsById: {},
     proposalsById: {},
     proposalsSubscription: { status: 'idle' },
+    factionsById: {},
+    personnelById: {},
+    intelligenceRecordsById: {},
+    eventsById: {},
+    turnSummariesById: {},
     reducerCalls: {},
     actions: {
       setConnection(connection) {
@@ -293,6 +383,11 @@ export function createSessionStore(): SessionStore {
           const publicColonyShipsById = { ...state.publicColonyShipsById };
           const publicEventsById = { ...state.publicEventsById };
           const proposalsById = { ...state.proposalsById };
+          const factionsById = { ...state.factionsById };
+          const personnelById = { ...state.personnelById };
+          const intelligenceRecordsById = { ...state.intelligenceRecordsById };
+          const eventsById = { ...state.eventsById };
+          const turnSummariesById = { ...state.turnSummariesById };
 
           for (const session of snapshot.sessions ?? []) {
             sessionsById[session.id] = session;
@@ -318,6 +413,11 @@ export function createSessionStore(): SessionStore {
           for (const proposal of snapshot.proposals ?? []) {
             proposalsById[proposal.id] = proposal;
           }
+          indexOperationalRows(factionsById, snapshot.factions);
+          indexOperationalRows(personnelById, snapshot.personnel);
+          indexOperationalRows(intelligenceRecordsById, snapshot.intelligenceRecords);
+          indexOperationalRows(eventsById, snapshot.events);
+          indexOperationalRows(turnSummariesById, snapshot.turnSummaries);
           indexById(worldBodiesById, snapshot.worldBodies);
           indexById(publicCitiesById, snapshot.publicCities);
           indexById(publicFleetsById, snapshot.publicFleets);
@@ -340,6 +440,11 @@ export function createSessionStore(): SessionStore {
             publicEventsById,
             proposalsById,
             proposalsSubscription,
+            factionsById,
+            personnelById,
+            intelligenceRecordsById,
+            eventsById,
+            turnSummariesById,
             activeSessionId: nextActiveSessionId(state.activeSessionId, sessionsById),
           };
         });
@@ -457,6 +562,13 @@ export function selectPublicGameState(state: SessionState): PublicGameStateRow |
   return state.publicGameStateBySessionId[state.activeSessionId] ?? null;
 }
 
+export function selectPublicGameStateForSession(
+  state: SessionState,
+  sessionId: OperationalRowId,
+): PublicGameStateRow | null {
+  return state.publicGameStateBySessionId[String(sessionId)] ?? null;
+}
+
 export function selectPrivateFactionState(
   state: SessionState,
   factionId: string,
@@ -465,8 +577,83 @@ export function selectPrivateFactionState(
   return state.privateFactionStateByKey[privateFactionKey(state.activeSessionId, factionId)] ?? null;
 }
 
+export function selectPrivateFactionStateForSession(
+  state: SessionState,
+  sessionId: OperationalRowId,
+  factionId: OperationalRowId,
+): PrivateFactionStateRow | null {
+  return state.privateFactionStateByKey[privateFactionKey(String(sessionId), String(factionId))] ?? null;
+}
+
 export function selectReducerCall(state: SessionState, key: string): ReducerCallState | null {
   return state.reducerCalls[key] ?? null;
+}
+
+export function selectFactionById(
+  state: SessionState,
+  factionId: OperationalRowId,
+): FactionRow | null {
+  return state.factionsById[String(factionId)] ?? null;
+}
+
+export function selectFactionsForSession(
+  state: SessionState,
+  sessionId: OperationalRowId,
+): FactionRow[] {
+  return Object.values(state.factionsById)
+    .filter((faction) => String(faction.sessionId) === String(sessionId))
+    .sort((left, right) => String(left.id).localeCompare(String(right.id)));
+}
+
+export function selectPersonnelRoster(
+  state: SessionState,
+  factionId: OperationalRowId,
+): PersonnelRow[] {
+  return Object.values(state.personnelById)
+    .filter((person) => String(person.factionId) === String(factionId))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function selectIntelligenceRecords(
+  state: SessionState,
+  observerFactionId: OperationalRowId,
+): IntelligenceRecordRow[] {
+  return Object.values(state.intelligenceRecordsById)
+    .filter((record) => String(record.observerFactionId) === String(observerFactionId))
+    .sort((left, right) => right.acquiredTurn - left.acquiredTurn);
+}
+
+export function selectEventsForSession(
+  state: SessionState,
+  sessionId: OperationalRowId,
+  factionId?: OperationalRowId,
+): EventRow[] {
+  return Object.values(state.eventsById)
+    .filter((event) => {
+      if (String(event.sessionId) !== String(sessionId)) return false;
+      return (
+        factionId === undefined ||
+        event.factionId == null ||
+        String(event.factionId) === String(factionId)
+      );
+    })
+    .sort((left, right) => right.turn - left.turn || String(left.id).localeCompare(String(right.id)));
+}
+
+export function selectLatestTurnSummaryForFaction(
+  state: SessionState,
+  sessionId: OperationalRowId,
+  factionId: OperationalRowId,
+): TurnSummaryRow | null {
+  return (
+    Object.values(state.turnSummariesById)
+      .filter(
+        (summary) =>
+          String(summary.sessionId) === String(sessionId) &&
+          String(summary.factionId) === String(factionId),
+      )
+      .sort((left, right) => right.turn - left.turn)[0] ?? null
+  );
 }
 
 export function selectProposalsSubscriptionStatus(state: SessionState): SubscriptionLoadStatus {
@@ -536,6 +723,24 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
     return { privateFactionStateByKey };
   }
 
+  if (event.table === 'factions') {
+    return { factionsById: updateOperationalById(state.factionsById, event) };
+  }
+  if (event.table === 'personnel') {
+    return { personnelById: updateOperationalById(state.personnelById, event) };
+  }
+  if (event.table === 'intelligenceRecords') {
+    return {
+      intelligenceRecordsById: updateOperationalById(state.intelligenceRecordsById, event),
+    };
+  }
+  if (event.table === 'events') {
+    return { eventsById: updateOperationalById(state.eventsById, event) };
+  }
+  if (event.table === 'turnSummaries') {
+    return { turnSummariesById: updateOperationalById(state.turnSummariesById, event) };
+  }
+
   if (event.table === 'worldBodies') {
     const worldBodiesById = updateById(state.worldBodiesById, event);
     return { worldBodiesById };
@@ -600,6 +805,15 @@ function isPublicFactionProjectionRow(
   return typeof row.id === 'number' && typeof row.sessionId === 'number';
 }
 
+function indexOperationalRows<T extends { id: OperationalRowId }>(
+  target: Record<string, T>,
+  rows: readonly T[] | undefined,
+): void {
+  for (const row of rows ?? []) {
+    target[String(row.id)] = row;
+  }
+}
+
 function indexById<T extends { id: number }>(
   target: Record<string, T>,
   rows: readonly T[] | undefined,
@@ -618,6 +832,19 @@ function updateById<T extends { id: number }>(
     delete next[entityKey(event.id)];
   } else {
     next[entityKey(event.row.id)] = event.row;
+  }
+  return next;
+}
+
+function updateOperationalById<T extends { id: OperationalRowId }>(
+  current: Record<string, T>,
+  event: { op: 'upsert'; row: T } | { op: 'delete'; id: OperationalRowId },
+): Record<string, T> {
+  const next = { ...current };
+  if (event.op === 'delete') {
+    delete next[String(event.id)];
+  } else {
+    next[String(event.row.id)] = event.row;
   }
   return next;
 }

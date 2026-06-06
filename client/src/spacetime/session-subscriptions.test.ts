@@ -69,6 +69,11 @@ describe('session subscription wiring', () => {
   it('subscribes to public world projections without private map tables', () => {
     expect(SESSION_SUBSCRIPTION_QUERIES).toEqual(
       expect.arrayContaining([
+        'SELECT * FROM factions',
+        'SELECT * FROM personnel',
+        'SELECT * FROM intelligence_records',
+        'SELECT * FROM events',
+        'SELECT * FROM turn_summaries',
         'SELECT * FROM celestial_bodies',
         'SELECT * FROM public_factions',
         'SELECT * FROM public_cities',
@@ -79,11 +84,9 @@ describe('session subscription wiring', () => {
     );
     expect(SESSION_SUBSCRIPTION_QUERIES).not.toEqual(
       expect.arrayContaining([
-        'SELECT * FROM factions',
         'SELECT * FROM cities',
         'SELECT * FROM fleets',
         'SELECT * FROM colony_ships',
-        'SELECT * FROM events',
       ]),
     );
   });
