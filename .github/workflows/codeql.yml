@@ -1,0 +1,56 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches:
+      - main
+      - "epic/**"
+  push:
+    branches:
+      - main
+      - "epic/**"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze JavaScript and TypeScript
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - javascript-typescript
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+          output: artifacts/codeql-results
+          upload: never
+
+      - name: Upload CodeQL SARIF artifact
+        if: always() && hashFiles('artifacts/codeql-results/**/*.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif
+          path: artifacts/codeql-results
+
+      - name: Remediation - CodeQL
+        if: failure()
+        run: |
+          echo "Remediation: inspect the CodeQL SARIF artifact and fix the source or data-flow issue."
+          echo "Fast diagnosis: enable code scanning in repository settings before switching upload to always."
