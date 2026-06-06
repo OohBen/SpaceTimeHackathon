@@ -1,3 +1,5 @@
+import { normalizeSpacetimeEndpoint, readHostedRuntime } from '../config/hostedRuntime';
+
 export interface ClientConfig {
   host: string;
   dbName: string;
@@ -10,9 +12,10 @@ export interface ClientDiagnostics {
 }
 
 export function defaultClientConfig(): ClientConfig {
+  const runtime = readHostedRuntime();
   return {
-    host: normalizeSpacetimeHost(import.meta.env?.VITE_SPACETIME_HOST ?? 'ws://localhost:3000'),
-    dbName: import.meta.env?.VITE_SPACETIME_DB_NAME ?? 'solar-dominion',
+    host: normalizeSpacetimeHost(runtime.spacetimeUri),
+    dbName: runtime.spacetimeDbName,
   };
 }
 
@@ -25,14 +28,7 @@ export function createClientConfig(overrides: Partial<ClientConfig> = {}): Clien
 }
 
 export function normalizeSpacetimeHost(host: string): string {
-  const trimmedHost = host.trim();
-  if (trimmedHost.startsWith('http://')) {
-    return `ws://${trimmedHost.slice('http://'.length)}`;
-  }
-  if (trimmedHost.startsWith('https://')) {
-    return `wss://${trimmedHost.slice('https://'.length)}`;
-  }
-  return trimmedHost;
+  return normalizeSpacetimeEndpoint(host);
 }
 
 export function buildClientDiagnostics(config: ClientConfig): ClientDiagnostics {

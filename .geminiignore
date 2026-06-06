@@ -10,6 +10,8 @@
 session_state.md
 success_check.sh
 success_check.py
+success_check.ps1
+.spacetimedb-local-data/
 
 # Git internals
 .git/

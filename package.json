@@ -30,7 +30,9 @@
     "scan:secrets": "node scripts/scan-secrets-local.mjs",
     "audit:dependencies": "npm audit --audit-level=moderate",
     "test:contracts": "node scripts/test-contracts.mjs",
-    "ci:quality": "npm run lint:actions && npm run lint:markdown && npm run scan:secrets && npm run audit:dependencies && npm run test:contracts"
+    "test:hosted-smoke": "node scripts/hosted-smoke.test.mjs",
+    "smoke:hosted": "node scripts/hosted-smoke.mjs",
+    "ci:quality": "npm run lint:actions && npm run lint:markdown && npm run scan:secrets && npm run audit:dependencies && npm run test:contracts && npm run test:hosted-smoke"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

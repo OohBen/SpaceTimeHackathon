@@ -24,14 +24,13 @@ describe("orchestrator HTTP server", () => {
     const payload = await buildHealthPayload(config);
 
     expect(payload).toMatchObject({
-      dbName: "solar-dominion",
       mode: "fixture",
-      provider: {
-        name: "fixture",
-        ready: true,
+      provider: "fixture",
+      spacetime: {
+        dbName: "solar-dominion",
+        host: "http://localhost:3000",
       },
-      spacetimeHost: "http://localhost:3000",
-      status: "ready",
+      status: "ok",
     });
   });
 
@@ -51,11 +50,13 @@ describe("orchestrator HTTP server", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(body).toMatchObject({
-      dbName: "solar-dominion",
       mode: "mock",
-      provider: { name: "mock", ready: true },
-      spacetimeHost: "http://localhost:3000",
-      status: "ready",
+      provider: "mock",
+      spacetime: {
+        dbName: "solar-dominion",
+        host: "http://localhost:3000",
+      },
+      status: "ok",
     });
   });
 });

@@ -1,0 +1,16 @@
+{
+  "buildCommand": "npm run build --workspace=client",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    {
+      "destination": "/api/health",
+      "source": "/health"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/(.*)"
+    }
+  ]
+}

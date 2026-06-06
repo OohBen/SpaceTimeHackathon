@@ -17,14 +17,13 @@ export type OrchestratorServerConfig = {
 };
 
 export type OrchestratorHealthPayload = {
-  dbName: string;
   mode: LlmProviderConfig["mode"];
-  provider: {
-    name: string;
-    ready: boolean;
+  provider: LlmProviderConfig["provider"];
+  spacetime: {
+    dbName: string;
+    host: string;
   };
-  spacetimeHost: string;
-  status: "ready";
+  status: "ok";
   version: string;
 };
 
@@ -56,14 +55,13 @@ export async function buildHealthPayload(
   }
 
   return {
-    dbName: config.llm.spacetime.dbName,
     mode: config.llm.mode,
-    provider: {
-      name: config.llm.provider,
-      ready: true,
+    provider: config.llm.provider,
+    spacetime: {
+      dbName: config.llm.spacetime.dbName,
+      host: config.llm.spacetime.host,
     },
-    spacetimeHost: config.llm.spacetime.host,
-    status: "ready",
+    status: "ok",
     version: ORCHESTRATOR_VERSION,
   };
 }
