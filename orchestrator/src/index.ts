@@ -1,6 +1,33 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { pathToFileURL } from "node:url";
+import {
+  DEFAULT_SPACETIME_DB_NAME,
+  DEFAULT_SPACETIME_HOST,
+  readLlmProviderConfig,
+  type LlmProviderConfig,
+} from "./openrouter_client.js";
+
 // LLM orchestrator entry point.
-// HTTP endpoints for processing LLM requests are added in subsequent tasks.
 export const ORCHESTRATOR_VERSION = "0.0.0";
+
+export interface OrchestratorHealthPayload {
+  error?: string;
+  frontendOrigin: string;
+  mode: LlmProviderConfig["mode"] | null;
+  provider: LlmProviderConfig["provider"] | null;
+  spacetime: {
+    dbName: string;
+    host: string;
+  };
+  status: "error" | "ok";
+  version: string;
+}
+
+export interface OrchestratorServerOptions {
+  env?: NodeJS.ProcessEnv;
+  host?: string;
+  port?: number;
+}
 
 export {
   DEFAULT_OPENROUTER_MODEL,
@@ -137,6 +164,108 @@ export {
   PROPOSAL_PROMPT_LIMITS,
   buildProposalPrompt,
 } from "./proposal_prompt.js";
+
+export function buildOrchestratorHealthPayload(
+  env: NodeJS.ProcessEnv = process.env
+): OrchestratorHealthPayload {
+  try {
+    const config = readLlmProviderConfig(env);
+    return {
+      frontendOrigin: env.FRONTEND_ORIGIN ?? "*",
+      mode: config.mode,
+      provider: config.provider,
+      spacetime: config.spacetime,
+      status: "ok",
+      version: ORCHESTRATOR_VERSION,
+    };
+  } catch (error) {
+    return {
+      error: errorMessage(error),
+      frontendOrigin: env.FRONTEND_ORIGIN ?? "*",
+      mode: null,
+      provider: null,
+      spacetime: {
+        dbName: env.SPACETIME_DB_NAME ?? DEFAULT_SPACETIME_DB_NAME,
+        host: env.SPACETIME_HOST ?? DEFAULT_SPACETIME_HOST,
+      },
+      status: "error",
+      version: ORCHESTRATOR_VERSION,
+    };
+  }
+}
+
+export function startOrchestratorServer(
+  options: OrchestratorServerOptions = {}
+): Server {
+  const env = options.env ?? process.env;
+  const port = options.port ?? readPort(env.PORT);
+  const host = options.host ?? env.HOST ?? "0.0.0.0";
+  const server = createServer((req, res) => handleRequest(req, res, env));
+
+  server.listen(port, host, () => {
+    console.log(`orchestrator listening on http://${host}:${port}`);
+  });
+
+  return server;
+}
+
+function handleRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  env: NodeJS.ProcessEnv
+): void {
+  applyCors(res, env.FRONTEND_ORIGIN);
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/health") {
+    const payload = buildOrchestratorHealthPayload(env);
+    writeJson(res, payload.status === "ok" ? 200 : 500, payload);
+    return;
+  }
+
+  writeJson(res, 404, {
+    error: "not_found",
+    message: "Supported endpoints: GET /health",
+  });
+}
+
+function applyCors(res: ServerResponse, frontendOrigin: string | undefined): void {
+  res.setHeader("access-control-allow-origin", frontendOrigin ?? "*");
+  res.setHeader("access-control-allow-methods", "GET, OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type");
+  res.setHeader("vary", "origin");
+}
+
+function writeJson(res: ServerResponse, statusCode: number, payload: unknown): void {
+  res.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(payload));
+}
+
+function readPort(value: string | undefined): number {
+  const parsed = Number(value ?? "4000");
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error("PORT must be an integer from 1 to 65535");
+  }
+  return parsed;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isDirectRun(argv = process.argv, moduleUrl = import.meta.url): boolean {
+  const entrypoint = argv[1];
+  return Boolean(entrypoint && pathToFileURL(entrypoint).href === moduleUrl);
+}
+
+if (isDirectRun()) {
+  startOrchestratorServer();
+}
 export type {
   BodyState,
   CityState,

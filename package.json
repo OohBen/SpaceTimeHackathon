@@ -22,6 +22,7 @@
     "scan:secrets": "node scripts/scan-secrets-local.mjs",
     "audit:dependencies": "npm audit --audit-level=moderate",
     "test:contracts": "node scripts/test-contracts.mjs",
+    "smoke:hosted": "node scripts/hosted-smoke.mjs",
     "ci:quality": "npm run lint:actions && npm run lint:markdown && npm run scan:secrets && npm run audit:dependencies && npm run test:contracts"
   },
   "engines": {

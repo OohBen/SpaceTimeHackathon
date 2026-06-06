@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { DbConnection, tables } from '../module_bindings';
+import { readHostedRuntime } from '../config/hostedRuntime';
 import type {
   CelestialBodies,
   Factions,
@@ -35,8 +36,6 @@ import {
 } from '../state/session-store';
 
 const AUTH_TOKEN_KEY = 'solar-dominion-auth-token';
-const DEFAULT_SPACETIMEDB_URI = 'http://localhost:3000';
-const DEFAULT_MODULE_NAME = 'solar-dominion';
 
 export interface SessionBackendResult {
   sessionId: number;
@@ -98,10 +97,10 @@ interface SlotMetadata {
 }
 
 export function createConnectionBuilder() {
-  const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  const runtime = readHostedRuntime();
   return DbConnection.builder()
-    .withUri(env?.VITE_SPACETIMEDB_URI ?? DEFAULT_SPACETIMEDB_URI)
-    .withDatabaseName(env?.VITE_SPACETIMEDB_MODULE ?? DEFAULT_MODULE_NAME)
+    .withUri(runtime.spacetimeUri)
+    .withDatabaseName(runtime.spacetimeDbName)
     .withToken(readAuthToken());
 }
 
