@@ -36,8 +36,10 @@ import {
 // Import all reducer arg schemas
 import AdvanceTurnPhaseReducer from "./advance_turn_phase_reducer";
 import AdvanceWorldReducer from "./advance_world_reducer";
+import CommanderDecisionReducer from "./commander_decision_reducer";
 import CreateSessionReducer from "./create_session_reducer";
 import JoinOrResumeSessionReducer from "./join_or_resume_session_reducer";
+import RunDeliberationReducer from "./run_deliberation_reducer";
 
 // Import all procedure arg schemas
 
@@ -259,8 +261,10 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("advance_turn_phase", AdvanceTurnPhaseReducer),
   __reducerSchema("advance_world", AdvanceWorldReducer),
+  __reducerSchema("commander_decision", CommanderDecisionReducer),
   __reducerSchema("create_session", CreateSessionReducer),
   __reducerSchema("join_or_resume_session", JoinOrResumeSessionReducer),
+  __reducerSchema("run_deliberation", RunDeliberationReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

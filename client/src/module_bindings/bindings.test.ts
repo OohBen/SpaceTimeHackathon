@@ -21,6 +21,15 @@ const REQUIRED_TABLES = [
   'llm_requests',
 ];
 
+const REQUIRED_REDUCERS = [
+  'advance_turn_phase',
+  'advance_world',
+  'commander_decision',
+  'create_session',
+  'join_or_resume_session',
+  'run_deliberation',
+];
+
 describe('module bindings scaffold', () => {
   it('exports tables object', () => {
     expect(tables).toBeDefined();
@@ -38,6 +47,15 @@ describe('module bindings scaffold', () => {
     expect(src).not.toMatch(/const tablesSchema = __schema\(\{\s*\}\);/);
     for (const tableName of REQUIRED_TABLES) {
       expect(src).toContain(tableName);
+    }
+  });
+
+  it('generates non-empty bindings for authoritative reducers', () => {
+    const src = readFileSync(resolve(import.meta.dirname, 'index.ts'), 'utf8');
+
+    expect(src).not.toMatch(/const reducersSchema = __reducers\(\s*\);/);
+    for (const reducerName of REQUIRED_REDUCERS) {
+      expect(src).toContain(reducerName);
     }
   });
 

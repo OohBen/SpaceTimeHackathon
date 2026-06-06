@@ -8,10 +8,14 @@ import { type Infer as __Infer } from "spacetimedb";
 // Import all reducer arg schemas
 import AdvanceTurnPhaseReducer from "../advance_turn_phase_reducer";
 import AdvanceWorldReducer from "../advance_world_reducer";
+import CommanderDecisionReducer from "../commander_decision_reducer";
 import CreateSessionReducer from "../create_session_reducer";
 import JoinOrResumeSessionReducer from "../join_or_resume_session_reducer";
+import RunDeliberationReducer from "../run_deliberation_reducer";
 
 export type AdvanceTurnPhaseParams = __Infer<typeof AdvanceTurnPhaseReducer>;
 export type AdvanceWorldParams = __Infer<typeof AdvanceWorldReducer>;
+export type CommanderDecisionParams = __Infer<typeof CommanderDecisionReducer>;
 export type CreateSessionParams = __Infer<typeof CreateSessionReducer>;
 export type JoinOrResumeSessionParams = __Infer<typeof JoinOrResumeSessionReducer>;
+export type RunDeliberationParams = __Infer<typeof RunDeliberationReducer>;
