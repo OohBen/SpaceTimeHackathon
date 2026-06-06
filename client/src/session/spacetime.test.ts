@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { deriveSessionChoices, deriveSlotChoices, findOwnedSlot } from './spacetime';
+import { createSessionBackend, deriveSessionChoices, deriveSlotChoices, findOwnedSlot } from './spacetime';
+import type { DbConnection } from '../module_bindings';
 import type { Factions, GameSessions } from '../module_bindings/types';
+import { reducerRegistry } from '../spacetime/reducers';
 
 const identityA = {
   toHexString: () => 'aaaaaaaa',
@@ -96,5 +98,62 @@ describe('slot derivation', () => {
     expect(deriveSessionChoices([session])).toEqual([
       { id: 7, label: 'Session #7 - setup', state: 'setup' },
     ]);
+  });
+});
+
+describe('createSessionBackend wiring', () => {
+  it('exposes a SpacetimeClient backed by the live DbConnection when conn is present', () => {
+    const calls: Array<{ method: string; args: unknown }> = [];
+    const reducers = new Proxy({}, {
+      get(_target, prop: string) {
+        return (args: unknown) => {
+          calls.push({ method: prop, args });
+        };
+      },
+    }) as Record<string, (args: unknown) => unknown>;
+    const conn = {
+      reducers,
+      subscriptionBuilder: () => ({ subscribe: () => undefined }),
+    } as unknown as DbConnection;
+
+    const backend = createSessionBackend({
+      conn,
+      isConnected: true,
+      identity: 'identity-a',
+      sessions: [],
+      factions: [],
+    });
+
+    expect(backend.client).not.toBeNull();
+    backend.client?.connect();
+    backend.client?.callReducer(reducerRegistry.submitTurn({ factionId: 7 }));
+    backend.client?.callReducer(
+      reducerRegistry.commanderDecision({
+        factionId: 7,
+        proposalId: 11,
+        decision: 'approved',
+        allocation: 50,
+      }),
+    );
+
+    expect(calls).toEqual([
+      { method: 'submitTurn', args: { factionId: 7 } },
+      {
+        method: 'commanderDecision',
+        args: { factionId: 7, proposalId: 11, decision: 'approved', allocation: 50 },
+      },
+    ]);
+  });
+
+  it('returns client=null when conn is not yet connected', () => {
+    const backend = createSessionBackend({
+      conn: null,
+      isConnected: false,
+      identity: null,
+      sessions: [],
+      factions: [],
+    });
+
+    expect(backend.client).toBeNull();
   });
 });
