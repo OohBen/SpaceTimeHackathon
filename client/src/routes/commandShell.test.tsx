@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, act } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppRouter } from './AppRouter';
 import type { SessionBackend } from '../session/spacetime';
 import { useSessionStore } from '../session/store';
-import { usePanelStore, CORE_PANELS } from './panels';
+import { usePanelStore, CORE_PANELS, PANEL_STORE_KEY } from './panels';
 import { sessionStore } from '../state/session-store';
 
 function backend(): SessionBackend {
@@ -52,6 +52,11 @@ describe('Command Center shell', () => {
     usePanelStore.getState().reset();
     resetSessionStore();
     window.history.replaceState(null, '', '/');
+    window.localStorage.removeItem(PANEL_STORE_KEY);
+  });
+
+  afterEach(() => {
+    window.localStorage.removeItem(PANEL_STORE_KEY);
   });
 
   it('renders persistent header, sidebar, and content panel regions from route context', () => {
@@ -150,6 +155,28 @@ describe('Command Center shell', () => {
         expect.arrayContaining(['overview', 'session-brief', 'map', 'inbox', 'strategic']),
       );
     });
+
+    it('active panel persists across remount via local storage', () => {
+      enterStoredGameContext();
+      const { unmount } = render(<AppRouter backend={backend()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Inbox' }));
+      expect(usePanelStore.getState().activePanel).toBe('inbox');
+
+      const stored = window.localStorage.getItem(PANEL_STORE_KEY);
+      expect(stored).not.toBeNull();
+      const parsed = JSON.parse(stored!) as { state?: { activePanel?: string } };
+      expect(parsed.state?.activePanel).toBe('inbox');
+
+      unmount();
+    });
+
+    it('sidebar scrolls when nav content overflows', () => {
+      enterStoredGameContext();
+      render(<AppRouter backend={backend()} />);
+      const sidebar = screen.getByRole('complementary', { name: /command sidebar/i });
+      expect(sidebar.classList.contains('command-shell__sidebar')).toBe(true);
+    });
   });
 
   describe('Global HUD', () => {
@@ -244,6 +271,56 @@ describe('Command Center shell', () => {
       expect(screen.getByLabelText(/resources/i)).toHaveTextContent(/minerals: 30/i);
     });
 
+    it('preserves shared HUD context across panel changes', () => {
+      enterStoredGameContext();
+
+      act(() => {
+        sessionStore.getState().actions.hydrateSubscription({
+          sessions: [{ id: '42', code: 'G', status: 'active', currentTurn: 4, phase: 'orders' }],
+          publicGameStates: [
+            {
+              sessionId: '42',
+              turn: 4,
+              year: 2360,
+              phase: 'orders',
+              controlScores: { '202': 55 },
+              visibleFactionIds: ['202'],
+            },
+          ],
+          privateFactionStates: [
+            {
+              sessionId: '42',
+              factionId: '202',
+              resources: { credits: 99 },
+              morale: 70,
+              doctrine: 'expansion',
+              visibility: 'ownFaction',
+            },
+          ],
+        });
+      });
+
+      render(<AppRouter backend={backend()} />);
+
+      const banner = screen.getByRole('banner', { name: /command center header/i });
+      expect(banner).toHaveTextContent(/Turn 4/);
+      expect(banner).toHaveTextContent(/Control: 55/);
+      expect(banner).toHaveTextContent(/credits: 99/);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Inbox' }));
+      const bannerAfter = screen.getByRole('banner', { name: /command center header/i });
+      expect(bannerAfter).toHaveTextContent(/Turn 4/);
+      expect(bannerAfter).toHaveTextContent(/Control: 55/);
+      expect(bannerAfter).toHaveTextContent(/credits: 99/);
+      expect(bannerAfter).toHaveTextContent(/Rex/);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Strategic View' }));
+      const bannerFinal = screen.getByRole('banner', { name: /command center header/i });
+      expect(bannerFinal).toHaveTextContent(/Turn 4/);
+      expect(bannerFinal).toHaveTextContent(/Control: 55/);
+      expect(bannerFinal).toHaveTextContent(/credits: 99/);
+    });
+
     it('updates HUD when store state changes after mount', () => {
       enterStoredGameContext();
       render(<AppRouter backend={backend()} />);
@@ -268,6 +345,22 @@ describe('Command Center shell', () => {
 
       expect(screen.getByLabelText(/turn and year/i)).toHaveTextContent(/Turn 5/i);
       expect(screen.getByLabelText(/phase/i)).toHaveTextContent(/combat/i);
+    });
+  });
+
+  describe('Two-browser narrow layout', () => {
+    it('header remains usable at narrow two-browser viewport width', () => {
+      enterStoredGameContext();
+      render(<AppRouter backend={backend()} />);
+
+      const header = screen.getByRole('banner', { name: /command center header/i });
+      expect(header).toBeDefined();
+      expect(header.querySelector('.command-shell__title-block')).not.toBeNull();
+      expect(header.querySelector('.command-shell__context')).not.toBeNull();
+      expect(header.querySelector('.command-shell__back')).not.toBeNull();
+      expect(
+        screen.getByRole('button', { name: /back to menu/i }),
+      ).toBeDefined();
     });
   });
 });

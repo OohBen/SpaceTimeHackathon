@@ -22,6 +22,8 @@ interface PanelStoreState {
   reset: () => void;
 }
 
+export const PANEL_STORE_KEY = 'solar-dominion-panel';
+
 export const usePanelStore = create<PanelStoreState>()(
   persist(
     (set) => ({
@@ -29,6 +31,6 @@ export const usePanelStore = create<PanelStoreState>()(
       setPanel: (panel) => set({ activePanel: panel }),
       reset: () => set({ activePanel: 'overview' }),
     }),
-    { name: 'solar-dominion-panel' },
+    { name: PANEL_STORE_KEY },
   ),
 );
