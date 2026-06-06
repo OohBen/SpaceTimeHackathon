@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest --configLoader runner --environment jsdom run"
   },
   "dependencies": {
     "react": "^18.3.0",
