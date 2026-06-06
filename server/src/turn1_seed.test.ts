@@ -109,7 +109,7 @@ describe('Turn 1 deterministic seed', () => {
       'deferred',
       'auto_deferred',
     ]);
-    const llmStatuses = new Set(['queued', 'processing', 'complete', 'failed']);
+    const llmStatuses = new Set(['queued', 'processing', 'completed', 'failed', 'cancelled']);
 
     expect(seed.celestial_bodies.every((body) => systemTiers.has(body.system_tier))).toBe(true);
     expect(seed.cities.every((city) => developmentStages.has(city.development_stage))).toBe(true);

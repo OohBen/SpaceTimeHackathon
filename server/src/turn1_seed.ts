@@ -1,5 +1,9 @@
 import { Identity, Timestamp } from 'spacetimedb';
 
+import type { LlmRequestRow } from './llm_queue_contract.js';
+
+export type { LlmRequestRow };
+
 export type GameSessionRow = {
   id: number;
   state: string;
@@ -176,18 +180,6 @@ export type TradeAgreementRow = {
   terms: string;
   signed_turn: number;
   expires_turn: number | undefined;
-};
-
-export type LlmRequestRow = {
-  id: number;
-  session_id: number;
-  faction_id: number;
-  request_type: string;
-  context_json: string;
-  status: string;
-  response_json: string | undefined;
-  error: string | undefined;
-  created_turn: number;
 };
 
 export type Turn1SeedRows = {
@@ -746,10 +738,13 @@ export function buildTurn1Seed(input: Turn1SeedInput = {}): Turn1SeedRows {
         proposal_ids: [1, 2],
         turn: TURN1_TURN,
       }),
-      status: 'complete',
+      status: 'completed',
       response_json: stableJson({ proposal_ids: [1, 2], source: 'deterministic_fixture' }),
       error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
       created_turn: TURN1_TURN,
+      updated_turn: TURN1_TURN,
     },
     {
       id: 2,
@@ -764,10 +759,13 @@ export function buildTurn1Seed(input: Turn1SeedInput = {}): Turn1SeedRows {
         proposal_ids: [3, 4],
         turn: TURN1_TURN,
       }),
-      status: 'complete',
+      status: 'completed',
       response_json: stableJson({ proposal_ids: [3, 4], source: 'deterministic_fixture' }),
       error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
       created_turn: TURN1_TURN,
+      updated_turn: TURN1_TURN,
     },
   ];
 

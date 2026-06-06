@@ -130,7 +130,10 @@ export const LlmRequests = __t.object("LlmRequests", {
   status: __t.string(),
   responseJson: __t.option(__t.string()),
   error: __t.option(__t.string()),
+  errorCode: __t.option(__t.string()),
+  attemptCount: __t.u32(),
   createdTurn: __t.u32(),
+  updatedTurn: __t.u32(),
 });
 export type LlmRequests = __Infer<typeof LlmRequests>;
 
