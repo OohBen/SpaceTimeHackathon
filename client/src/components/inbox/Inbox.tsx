@@ -1,10 +1,20 @@
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import type { SpacetimeClient } from '../../spacetime/client';
+import {
+  commanderDecisionAction,
+  commanderDecisionKey,
+} from '../../spacetime/session-actions';
+import type { CommanderDecision, CommanderDecisionArgs } from '../../spacetime/reducers';
 import {
   sessionStore,
   selectCurrentPlayerSlot,
+  selectPrivateFactionState,
+  selectReducerCall,
   selectProposalsSubscriptionStatus,
   type PlayerSlotRow,
+  type PrivateFactionStateRow,
   type ProposalRow,
+  type ReducerCallState,
   type SessionState,
   type SessionStore,
   type SubscriptionLoadStatus,
@@ -12,6 +22,7 @@ import {
 
 export interface InboxProps {
   store?: SessionStore;
+  client?: SpacetimeClient;
   selectedProposalId?: string | null;
   onSelectProposal?: (proposalId: string | null) => void;
 }
@@ -20,10 +31,14 @@ interface InboxView {
   proposals: ProposalRow[];
   subscription: SubscriptionLoadStatus;
   selected: ProposalRow | null;
+  currentSlot: PlayerSlotRow | null;
+  factionState: PrivateFactionStateRow | null;
+  decisionCall: ReducerCallState | null;
 }
 
 export function Inbox({
   store = sessionStore,
+  client,
   selectedProposalId,
   onSelectProposal,
 }: InboxProps) {
@@ -35,12 +50,26 @@ export function Inbox({
   const subscription = useStoreSlice(store, selectProposalsSubscriptionStatus);
   const activeSessionId = useStoreSlice(store, (state) => state.activeSessionId);
   const currentSlot = useStoreSlice(store, selectCurrentPlayerSlot);
+  const factionState = useStoreSlice(store, (state) =>
+    currentSlot ? selectPrivateFactionState(state, currentSlot.factionId) : null,
+  );
+  const decisionCall = useStoreSlice(store, (state) =>
+    activeSelectedId ? selectReducerCall(state, commanderDecisionKey(activeSelectedId)) : null,
+  );
 
   const view = useMemo<InboxView>(() => {
     const proposals = computeInboxProposals(proposalsById, activeSessionId, currentSlot);
     const selected = activeSelectedId ? proposalsById[activeSelectedId] ?? null : null;
-    return { proposals, subscription, selected };
-  }, [proposalsById, subscription, activeSessionId, currentSlot, activeSelectedId]);
+    return { proposals, subscription, selected, currentSlot, factionState, decisionCall };
+  }, [
+    proposalsById,
+    subscription,
+    activeSessionId,
+    currentSlot,
+    activeSelectedId,
+    factionState,
+    decisionCall,
+  ]);
 
   const handleSelect = (id: string | null) => {
     if (!controlled) setInternalSelectedId(id);
@@ -65,7 +94,7 @@ export function Inbox({
         selectedId={activeSelectedId}
         onSelect={handleSelect}
       />
-      <ProposalReader view={view} />
+      <ProposalReader view={view} store={store} client={client} />
     </section>
   );
 }
@@ -148,7 +177,15 @@ function ProposalList({ view, selectedId, onSelect }: ProposalListProps) {
   );
 }
 
-function ProposalReader({ view }: { view: InboxView }) {
+function ProposalReader({
+  view,
+  store,
+  client,
+}: {
+  view: InboxView;
+  store: SessionStore;
+  client?: SpacetimeClient;
+}) {
   if (view.subscription.status === 'error' || view.subscription.status === 'loading') {
     return (
       <article
@@ -209,8 +246,217 @@ function ProposalReader({ view }: { view: InboxView }) {
         <dd>{proposal.decision ?? 'pending'}</dd>
       </dl>
       <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.body}</p>
+      <ProposalDecisionControls
+        proposal={proposal}
+        currentSlot={view.currentSlot}
+        factionState={view.factionState}
+        decisionCall={view.decisionCall}
+        store={store}
+        client={client}
+      />
     </article>
   );
+}
+
+interface ProposalDecisionControlsProps {
+  proposal: ProposalRow;
+  currentSlot: PlayerSlotRow | null;
+  factionState: PrivateFactionStateRow | null;
+  decisionCall: ReducerCallState | null;
+  store: SessionStore;
+  client?: SpacetimeClient;
+}
+
+function ProposalDecisionControls({
+  proposal,
+  currentSlot,
+  factionState,
+  decisionCall,
+  store,
+  client,
+}: ProposalDecisionControlsProps) {
+  const [allocationInput, setAllocationInput] = useState(() => String(proposal.resourceCost));
+  const resources = factionState?.resources ?? {};
+  const creditBalance = resources.credits;
+  const availableCredits =
+    typeof creditBalance === 'number' && Number.isFinite(creditBalance) ? creditBalance : 0;
+  const resourceEntries = Object.entries(resources).sort(([a], [b]) => a.localeCompare(b));
+  const reducerIds = toReducerIds(proposal, currentSlot);
+  const allocation = parseAllocation(allocationInput);
+  const allocationValidation = validateApprovalAllocation(
+    allocation,
+    proposal.resourceCost,
+    availableCredits,
+  );
+  const terminal = hasTerminalDecision(proposal);
+  const openForDecision = isOpenForDecision(proposal);
+  const loading = decisionCall?.status === 'loading';
+  const canSubmitBase = Boolean(client && reducerIds && openForDecision && !terminal && !loading);
+  const disableApprove = !canSubmitBase || allocationValidation !== null;
+  const disableNonSpendDecision = !canSubmitBase;
+  const inputId = `proposal-${proposal.id}-allocation`;
+
+  useEffect(() => {
+    setAllocationInput(String(proposal.resourceCost));
+  }, [proposal.id, proposal.resourceCost]);
+
+  const submitDecision = (decision: CommanderDecision) => {
+    if (!client || !reducerIds || !openForDecision || terminal || loading) return;
+    if (decision === 'approved' && (allocation === null || allocationValidation)) return;
+
+    commanderDecisionAction(store, client, {
+      ...reducerIds,
+      decision,
+      allocation: decision === 'approved' ? allocation ?? 0 : 0,
+    });
+  };
+
+  return (
+    <section
+      aria-label="Proposal decision controls"
+      style={{
+        borderTop: '1px solid #e2e4ea',
+        display: 'grid',
+        gap: 12,
+        marginTop: 16,
+        paddingTop: 16,
+      }}
+    >
+      <div data-testid="available-resources">
+        <p style={{ fontWeight: 600, margin: 0 }}>Available credits: {availableCredits}</p>
+        {resourceEntries.length > 0 ? (
+          <ul
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8,
+              listStyle: 'none',
+              margin: '8px 0 0',
+              padding: 0,
+            }}
+          >
+            {resourceEntries.map(([name, value]) => (
+              <li
+                key={name}
+                style={{
+                  border: '1px solid #e2e4ea',
+                  borderRadius: 6,
+                  padding: '4px 8px',
+                }}
+              >
+                {name}: {value}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p style={{ color: '#666', margin: '4px 0 0' }}>No resource data available.</p>
+        )}
+      </div>
+
+      <label htmlFor={inputId} style={{ display: 'grid', gap: 4, maxWidth: 220 }}>
+        Credits allocation
+        <input
+          id={inputId}
+          type="number"
+          min={0}
+          max={availableCredits}
+          step={1}
+          value={allocationInput}
+          disabled={loading || terminal}
+          aria-invalid={allocationValidation ? true : undefined}
+          aria-describedby={allocationValidation ? `${inputId}-validation` : undefined}
+          onChange={(event) => setAllocationInput(event.currentTarget.value)}
+        />
+      </label>
+
+      {allocationValidation ? (
+        <p
+          id={`${inputId}-validation`}
+          role="alert"
+          style={{ color: '#a00', margin: 0 }}
+        >
+          {allocationValidation}
+        </p>
+      ) : null}
+
+      <DecisionStatus
+        clientReady={Boolean(client)}
+        idsReady={Boolean(reducerIds)}
+        openForDecision={openForDecision}
+        terminal={terminal}
+        decisionCall={decisionCall}
+      />
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <button
+          type="button"
+          disabled={disableApprove}
+          onClick={() => submitDecision('approved')}
+        >
+          Approve
+        </button>
+        <button
+          type="button"
+          disabled={disableNonSpendDecision}
+          onClick={() => submitDecision('rejected')}
+        >
+          Reject
+        </button>
+        <button
+          type="button"
+          disabled={disableNonSpendDecision}
+          onClick={() => submitDecision('deferred')}
+        >
+          Defer
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function DecisionStatus({
+  clientReady,
+  idsReady,
+  openForDecision,
+  terminal,
+  decisionCall,
+}: {
+  clientReady: boolean;
+  idsReady: boolean;
+  openForDecision: boolean;
+  terminal: boolean;
+  decisionCall: ReducerCallState | null;
+}) {
+  if (decisionCall?.status === 'loading') {
+    return <p role="status" style={{ margin: 0 }}>Submitting decision...</p>;
+  }
+  if (decisionCall?.status === 'success') {
+    return <p role="status" style={{ margin: 0 }}>Decision submitted.</p>;
+  }
+  if (decisionCall?.status === 'error') {
+    return (
+      <p role="alert" style={{ color: '#a00', margin: 0 }}>
+        Backend rejected decision: {decisionCall.error}
+      </p>
+    );
+  }
+  if (terminal) {
+    return <p role="status" style={{ margin: 0 }}>Decision already recorded.</p>;
+  }
+  if (!openForDecision) {
+    return <p role="status" style={{ margin: 0 }}>Proposal is not open for decision.</p>;
+  }
+  if (!idsReady) {
+    return (
+      <p role="alert" style={{ color: '#a00', margin: 0 }}>
+        Live numeric proposal and faction IDs are required before decisions can be submitted.
+      </p>
+    );
+  }
+  if (!clientReady) {
+    return <p role="status" style={{ margin: 0 }}>Backend connection unavailable.</p>;
+  }
+  return null;
 }
 
 function useStoreSlice<T>(store: SessionStore, selector: (state: SessionState) => T): T {
@@ -219,6 +465,50 @@ function useStoreSlice<T>(store: SessionStore, selector: (state: SessionState) =
     () => selector(store.getState()),
     () => selector(store.getState()),
   );
+}
+
+const openProposalStatuses = new Set(['unread', 'read']);
+const terminalProposalStatuses = new Set(['approved', 'rejected', 'deferred', 'auto_deferred']);
+
+function isOpenForDecision(proposal: ProposalRow): boolean {
+  return proposal.decision === null && openProposalStatuses.has(proposal.status);
+}
+
+function hasTerminalDecision(proposal: ProposalRow): boolean {
+  return proposal.decision !== null || terminalProposalStatuses.has(proposal.status);
+}
+
+function parseAllocation(value: string): number | null {
+  if (!/^\d+$/.test(value.trim())) return null;
+  const allocation = Number(value);
+  return Number.isSafeInteger(allocation) ? allocation : null;
+}
+
+function validateApprovalAllocation(
+  allocation: number | null,
+  resourceCost: number,
+  availableCredits: number,
+): string | null {
+  if (allocation === null) return 'Enter a whole number of credits.';
+  if (allocation < resourceCost) return `Approve requires at least ${resourceCost} credits.`;
+  if (allocation > availableCredits) return `Only ${availableCredits} credits available.`;
+  return null;
+}
+
+function toReducerIds(
+  proposal: ProposalRow,
+  currentSlot: PlayerSlotRow | null,
+): Pick<CommanderDecisionArgs, 'factionId' | 'proposalId'> | null {
+  const factionId = currentSlot ? toNonNegativeInteger(currentSlot.factionId) : null;
+  const proposalId = toNonNegativeInteger(proposal.id);
+  if (factionId === null || proposalId === null) return null;
+  return { factionId, proposalId };
+}
+
+function toNonNegativeInteger(value: string | number): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) return null;
+  return parsed;
 }
 
 function computeInboxProposals(
