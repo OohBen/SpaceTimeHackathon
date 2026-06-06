@@ -63,9 +63,9 @@ const stableJson = (value: unknown): string => JSON.stringify(stableValue(value)
 function buildSlotDoctrineVector(
   sessionId: number,
   slotKey: 'player_a' | 'player_b',
-  slotName: string
+  slotName: string,
+  placeholderPlayerId: Identity = buildSlotIdentity(sessionId, slotKey)
 ): string {
-  const placeholder = buildSlotIdentity(sessionId, slotKey);
   return stableJson({
     expansion: slotKey === 'player_a' ? 0.7 : 0.5,
     security: slotKey === 'player_a' ? 0.4 : 0.6,
@@ -78,7 +78,7 @@ function buildSlotDoctrineVector(
       claim_status: 'claimable',
       join_reducer: 'join_or_resume_session',
       resume_key: 'session_id+player_slot',
-      placeholder_player_id: placeholder.toHexString(),
+      placeholder_player_id: placeholderPlayerId.toHexString(),
     },
   });
 }
@@ -115,7 +115,12 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       name: playerAName,
       credits: 2_400,
       political_capital: 72,
-      doctrine_vector: buildSlotDoctrineVector(sessionId, 'player_a', playerAName),
+      doctrine_vector: buildSlotDoctrineVector(
+        sessionId,
+        'player_a',
+        playerAName,
+        playerAIdentity
+      ),
       control_score: 140,
       ready_for_turn: false,
     },
@@ -126,7 +131,12 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
       name: playerBName,
       credits: 1_950,
       political_capital: 61,
-      doctrine_vector: buildSlotDoctrineVector(sessionId, 'player_b', playerBName),
+      doctrine_vector: buildSlotDoctrineVector(
+        sessionId,
+        'player_b',
+        playerBName,
+        playerBIdentity
+      ),
       control_score: 118,
       ready_for_turn: false,
     },
