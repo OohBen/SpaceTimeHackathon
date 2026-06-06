@@ -113,3 +113,17 @@ export type {
   FixtureProviderOptions,
   FixtureScenario,
 } from "./fixture_llm_provider.js";
+export {
+  PROPOSAL_PROMPT_LIMITS,
+  buildProposalPrompt,
+} from "./proposal_prompt.js";
+export type {
+  BodyState,
+  CityState,
+  FactionDoctrine,
+  IntelSummary,
+  OfficerTraits,
+  OutstandingRequest,
+  ProposalPromptInput,
+  RecentEvent,
+} from "./proposal_prompt.js";
