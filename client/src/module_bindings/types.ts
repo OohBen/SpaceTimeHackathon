@@ -202,3 +202,4 @@ export const TradeAgreements = __t.object("TradeAgreements", {
   expiresTurn: __t.option(__t.u32()),
 });
 export type TradeAgreements = __Infer<typeof TradeAgreements>;
+
