@@ -16,6 +16,7 @@ export default __t.row({
   factionId: __t.u32().name("faction_id"),
   turn: __t.u32(),
   summaryJson: __t.string().name("summary_json"),
+  narrativeJson: __t.option(__t.string()).name("narrative_json"),
   acknowledged: __t.bool(),
   acknowledgedAt: __t.option(__t.timestamp()).name("acknowledged_at"),
   createdAt: __t.timestamp().name("created_at"),

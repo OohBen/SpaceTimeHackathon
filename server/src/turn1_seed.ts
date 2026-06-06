@@ -111,6 +111,7 @@ export type CommanderInboxRow = {
   from_personnel_id: number;
   subject: string;
   body: string;
+  narrative_json?: string | undefined;
   requires_decision: boolean;
   status: string;
 };
@@ -163,6 +164,7 @@ export type EventRow = {
   turn: number;
   event_type: string;
   payload: string;
+  narrative_json?: string | undefined;
 };
 
 export type TurnSummaryRow = {
@@ -171,6 +173,7 @@ export type TurnSummaryRow = {
   faction_id: number;
   turn: number;
   summary_json: string;
+  narrative_json?: string | undefined;
   acknowledged: boolean;
   acknowledged_at: Timestamp | undefined;
   created_at: Timestamp;
