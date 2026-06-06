@@ -44,3 +44,24 @@ export type {
   OpenRouterErrorCategory,
   ReliabilityOptions,
 } from "./llm_reliability.js";
+export {
+  PROPOSAL_ADVISORY_CONFIDENCE_VALUES,
+  PROPOSAL_ADVISORY_LIMITS,
+  PROPOSAL_ADVISORY_POLICY,
+  PROPOSAL_ADVISORY_SCHEMA_VERSION,
+  createProposalAdvisoryClient,
+  validateProposalAdvisory,
+} from "./proposal_advisory.js";
+export type {
+  ProposalAdvisoryClient,
+  ProposalAdvisoryConfidence,
+  ProposalAdvisoryFailure,
+  ProposalAdvisoryFailureCategory,
+  ProposalAdvisoryFallback,
+  ProposalAdvisoryItem,
+  ProposalAdvisoryOutcome,
+  ProposalAdvisoryPayload,
+  ProposalAdvisoryRepairStep,
+  ProposalAdvisoryResult,
+  ProposalAdvisorySuccess,
+} from "./proposal_advisory.js";
