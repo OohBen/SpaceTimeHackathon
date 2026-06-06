@@ -1,0 +1,60 @@
+{
+  "hash": "32e3976d",
+  "configHash": "73352d99",
+  "lockfileHash": "4c7259e4",
+  "browserHash": "8e09b81d",
+  "optimized": {
+    "react-dom/client": {
+      "src": "../../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "4a29eca4",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "98761698",
+      "needsInterop": true
+    },
+    "react/jsx-dev-runtime": {
+      "src": "../../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "7fe8d2ca",
+      "needsInterop": true
+    },
+    "spacetimedb": {
+      "src": "../../../node_modules/spacetimedb/dist/index.browser.mjs",
+      "file": "spacetimedb.js",
+      "fileHash": "4f50e379",
+      "needsInterop": false
+    },
+    "spacetimedb/react": {
+      "src": "../../../node_modules/spacetimedb/dist/react/index.mjs",
+      "file": "spacetimedb_react.js",
+      "fileHash": "ac902707",
+      "needsInterop": false
+    },
+    "zustand": {
+      "src": "../../../node_modules/zustand/esm/index.mjs",
+      "file": "zustand.js",
+      "fileHash": "d491f923",
+      "needsInterop": false
+    },
+    "zustand/middleware": {
+      "src": "../../../node_modules/zustand/esm/middleware.mjs",
+      "file": "zustand_middleware.js",
+      "fileHash": "0df155c1",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "base64-js-C39t9xMi": {
+      "file": "base64-js-C39t9xMi.js",
+      "isDynamicEntry": false
+    },
+    "chunk-FDOR9p9I": {
+      "file": "chunk-FDOR9p9I.js",
+      "isDynamicEntry": false
+    }
+  }
+}
