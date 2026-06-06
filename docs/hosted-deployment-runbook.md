@@ -74,7 +74,9 @@ Hosted smoke:
 ```bash
 HOSTED_FRONTEND_URL=https://solar-dominion.vercel.app \
 SPACETIME_URI=wss://db.example.test \
+SPACETIME_DB_NAME=solar-dominion \
 ORCHESTRATOR_BASE_URL=https://solar-dominion-orchestrator.fly.dev \
+VITE_DEMO_MODE=mock \
 npm run smoke:hosted
 ```
 
@@ -83,6 +85,8 @@ The smoke script checks:
 - Hosted frontend returns HTTP 2xx/3xx.
 - SpacetimeDB endpoint is reachable by HTTP fetch or TCP for `ws://` and `wss://`.
 - Orchestrator `/health` returns HTTP 200 JSON with `status: "ok"`.
+- Orchestrator mode/provider matches `VITE_DEMO_MODE` or `DEMO_MODE` when set.
+- Orchestrator SpacetimeDB name matches `SPACETIME_DB_NAME` when set.
 
 ## Mock/live expectations
 
