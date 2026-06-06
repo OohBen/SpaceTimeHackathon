@@ -36,6 +36,20 @@ Then visit `http://localhost:5173` in **two separate browser profiles** (see
 joins as `player_a`. Player B opens the second profile, picks the same session
 from the dropdown, and joins as `player_b`.
 
+Once both slots are claimed, overlay the Turn-1 world snapshot onto the live
+session so the deterministic fallback proposal generator has eligible cities
+and personnel to draw from:
+
+```bash
+spacetime call solar-dominion --server http://localhost:3000 seed_demo_world <session_id>
+spacetime call solar-dominion --server http://localhost:3000 set_deliberation_mode '"fallback"'
+```
+
+Without `seed_demo_world`, `run_deliberation` will write `fallback_unavailable`
+audit rows to `llm_requests` because `create_session` only seeds the session
+row plus two factions. The reducer is idempotent — re-calling it for a session
+that already has cities is a safe no-op.
+
 ## Identity pinning (audit M5)
 
 `buildSlotIdentity(sessionId, slotKey)` writes a deterministic placeholder

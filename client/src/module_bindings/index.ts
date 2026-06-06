@@ -43,6 +43,7 @@ import CreateSessionReducer from "./create_session_reducer";
 import ExpireTurnReducer from "./expire_turn_reducer";
 import JoinOrResumeSessionReducer from "./join_or_resume_session_reducer";
 import RunDeliberationReducer from "./run_deliberation_reducer";
+import SeedDemoWorldReducer from "./seed_demo_world_reducer";
 import SetDeliberationModeReducer from "./set_deliberation_mode_reducer";
 import SimulateTurnReducer from "./simulate_turn_reducer";
 import SubmitTurnReducer from "./submit_turn_reducer";
@@ -351,6 +352,7 @@ const reducersSchema = __reducers(
   __reducerSchema("expire_turn", ExpireTurnReducer),
   __reducerSchema("join_or_resume_session", JoinOrResumeSessionReducer),
   __reducerSchema("run_deliberation", RunDeliberationReducer),
+  __reducerSchema("seed_demo_world", SeedDemoWorldReducer),
   __reducerSchema("set_deliberation_mode", SetDeliberationModeReducer),
   __reducerSchema("simulate_turn", SimulateTurnReducer),
   __reducerSchema("submit_turn", SubmitTurnReducer),
