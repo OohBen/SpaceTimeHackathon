@@ -26,8 +26,10 @@ const REQUIRED_REDUCERS = [
   'advance_world',
   'commander_decision',
   'create_session',
+  'expire_turn',
   'join_or_resume_session',
   'run_deliberation',
+  'submit_turn',
 ];
 
 describe('module bindings scaffold', () => {

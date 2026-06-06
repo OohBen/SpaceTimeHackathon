@@ -10,12 +10,16 @@ import AdvanceTurnPhaseReducer from "../advance_turn_phase_reducer";
 import AdvanceWorldReducer from "../advance_world_reducer";
 import CommanderDecisionReducer from "../commander_decision_reducer";
 import CreateSessionReducer from "../create_session_reducer";
+import ExpireTurnReducer from "../expire_turn_reducer";
 import JoinOrResumeSessionReducer from "../join_or_resume_session_reducer";
 import RunDeliberationReducer from "../run_deliberation_reducer";
+import SubmitTurnReducer from "../submit_turn_reducer";
 
 export type AdvanceTurnPhaseParams = __Infer<typeof AdvanceTurnPhaseReducer>;
 export type AdvanceWorldParams = __Infer<typeof AdvanceWorldReducer>;
 export type CommanderDecisionParams = __Infer<typeof CommanderDecisionReducer>;
 export type CreateSessionParams = __Infer<typeof CreateSessionReducer>;
+export type ExpireTurnParams = __Infer<typeof ExpireTurnReducer>;
 export type JoinOrResumeSessionParams = __Infer<typeof JoinOrResumeSessionReducer>;
 export type RunDeliberationParams = __Infer<typeof RunDeliberationReducer>;
+export type SubmitTurnParams = __Infer<typeof SubmitTurnReducer>;
