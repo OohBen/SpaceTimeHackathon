@@ -359,6 +359,20 @@ describe('Command Center shell', () => {
       expect(within(summary).getByText(/2 fleets/i)).toBeDefined();
       expect(within(summary).getByText(/1 travel/i)).toBeDefined();
     });
+
+    it('renders map rows for the routed game session when the shared map store points elsewhere', () => {
+      enterStoredGameContext();
+      usePanelStore.getState().setPanel('map');
+      hydrateSeededWorldMap();
+      act(() => {
+        sessionStore.setState({ activeSessionId: '999' });
+      });
+
+      render(<AppRouter backend={backend()} />);
+
+      expect(screen.getByRole('img', { name: /solar system schematic map/i })).toBeDefined();
+      expect(screen.getByLabelText(/body earth controlled by earth directorate/i)).toBeDefined();
+    });
   });
 
   describe('Global HUD', () => {

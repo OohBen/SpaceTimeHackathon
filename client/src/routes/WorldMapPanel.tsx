@@ -21,9 +21,13 @@ const PADDING_X = 96;
 const PADDING_Y = 72;
 const FACTION_COLORS = ['#0f766e', '#b45309', '#2563eb', '#7c3aed', '#be123c'];
 
-export function WorldMapPanel() {
+export function WorldMapPanel({ sessionId }: { sessionId?: number | string }) {
   const state = useStore(sessionStore);
-  const viewModel = useMemo(() => selectWorldMapViewModel(state), [state]);
+  const viewModel = useMemo(() => {
+    const scopedState =
+      sessionId === undefined ? state : { ...state, activeSessionId: String(sessionId) };
+    return selectWorldMapViewModel(scopedState);
+  }, [sessionId, state]);
 
   if (!viewModel.sessionId || viewModel.bodies.length === 0) {
     return (

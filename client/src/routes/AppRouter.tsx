@@ -301,7 +301,7 @@ function PanelContent({
   }
 
   if (panel === 'map') {
-    return <WorldMapPanel />;
+    return <WorldMapPanel sessionId={session.sessionId} />;
   }
 
   return (
