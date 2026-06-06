@@ -1,10 +1,23 @@
 {
-  "name": "spacetime-hackathon",
+  "name": "solar-dominion",
+  "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@10.0.0",
+  "workspaces": [
+    "server",
+    "client",
+    "orchestrator"
+  ],
   "scripts": {
-    "frontend:dev": "corepack pnpm --dir frontend dev",
-    "frontend:build": "corepack pnpm --dir frontend build",
-    "frontend:test": "corepack pnpm --dir frontend test"
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "dev:client": "npm run dev --workspace=client",
+    "dev:orchestrator": "npm run dev --workspace=orchestrator",
+    "spacetime:build": "npm run spacetime:build --workspace=server",
+    "spacetime:start": "npm run spacetime:start --workspace=server",
+    "spacetime:publish": "npm run spacetime:publish --workspace=server",
+    "generate": "npm run generate --workspace=server"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
