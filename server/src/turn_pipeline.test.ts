@@ -23,7 +23,7 @@ import {
   simulateTurnReducer,
   type TurnResolutionContext,
 } from './turn_resolution.js';
-import type { WorldUpdateContext } from './simulation_kernel.js';
+import { runWorldUpdate, type WorldUpdateContext } from './simulation_kernel.js';
 import { buildTurn1Seed, type EventRow, type Turn1SeedRows } from './turn1_seed.js';
 
 const timestamp = new Timestamp(20n);
@@ -64,6 +64,7 @@ function makeRows(
     turn_summaries: clone(seed.turn_summaries),
     trade_agreements: clone(seed.trade_agreements),
     llm_requests: [],
+    module_settings: [],
   } satisfies Turn1SeedRows;
 }
 
@@ -110,6 +111,7 @@ function makeDb(rows: PipelineRows) {
     turn_summaries: makeTable(rows.turn_summaries),
     trade_agreements: makeTable(rows.trade_agreements),
     llm_requests: makeTable(rows.llm_requests),
+    module_settings: makeTable(rows.module_settings),
   };
 }
 
@@ -214,6 +216,7 @@ function runSeededWorldUpdateToSummary() {
   const rows = makeRows('world_update');
   const [factionA, factionB] = rows.factions;
 
+  runWorldUpdate(makeWorldCtx(rows), rows.game_sessions[0]);
   advanceWorldReducer(makeWorldCtx(rows), {
     session_id: rows.game_sessions[0].id,
   });

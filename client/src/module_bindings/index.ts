@@ -43,6 +43,7 @@ import CreateSessionReducer from "./create_session_reducer";
 import ExpireTurnReducer from "./expire_turn_reducer";
 import JoinOrResumeSessionReducer from "./join_or_resume_session_reducer";
 import RunDeliberationReducer from "./run_deliberation_reducer";
+import SetDeliberationModeReducer from "./set_deliberation_mode_reducer";
 import SimulateTurnReducer from "./simulate_turn_reducer";
 import SubmitTurnReducer from "./submit_turn_reducer";
 
@@ -59,10 +60,16 @@ import FleetsRow from "./fleets_table";
 import GameSessionsRow from "./game_sessions_table";
 import IntelligenceRecordsRow from "./intelligence_records_table";
 import LlmRequestsRow from "./llm_requests_table";
+import ModuleSettingsRow from "./module_settings_table";
 import PersonnelRow from "./personnel_table";
 import PersonnelRelationshipsRow from "./personnel_relationships_table";
 import ProjectsRow from "./projects_table";
 import ProposalsRow from "./proposals_table";
+import PublicCitiesRow from "./public_cities_table";
+import PublicColonyShipsRow from "./public_colony_ships_table";
+import PublicEventsRow from "./public_events_table";
+import PublicFactionsRow from "./public_factions_table";
+import PublicFleetsRow from "./public_fleets_table";
 import TradeAgreementsRow from "./trade_agreements_table";
 import TurnSummariesRow from "./turn_summaries_table";
 
@@ -191,6 +198,11 @@ const tablesSchema = __schema({
       { accessor: 'id', name: 'llm_requests_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
+      { accessor: 'llm_session_turn_idx', name: 'llm_requests_session_id_faction_id_created_turn_idx_btree', algorithm: 'btree', columns: [
+        'sessionId',
+        'factionId',
+        'createdTurn',
+      ] },
       { accessor: 'llm_status_idx', name: 'llm_requests_status_idx_btree', algorithm: 'btree', columns: [
         'status',
       ] },
@@ -199,6 +211,17 @@ const tablesSchema = __schema({
       { name: 'llm_requests_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, LlmRequestsRow),
+  module_settings: __table({
+    name: 'module_settings',
+    indexes: [
+      { accessor: 'id', name: 'module_settings_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'module_settings_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ModuleSettingsRow),
   personnel: __table({
     name: 'personnel',
     indexes: [
@@ -280,6 +303,41 @@ const tablesSchema = __schema({
       { name: 'turn_summaries_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, TurnSummariesRow),
+  public_cities: __table({
+    name: 'public_cities',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, PublicCitiesRow),
+  public_colony_ships: __table({
+    name: 'public_colony_ships',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, PublicColonyShipsRow),
+  public_events: __table({
+    name: 'public_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, PublicEventsRow),
+  public_factions: __table({
+    name: 'public_factions',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, PublicFactionsRow),
+  public_fleets: __table({
+    name: 'public_fleets',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, PublicFleetsRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -293,6 +351,7 @@ const reducersSchema = __reducers(
   __reducerSchema("expire_turn", ExpireTurnReducer),
   __reducerSchema("join_or_resume_session", JoinOrResumeSessionReducer),
   __reducerSchema("run_deliberation", RunDeliberationReducer),
+  __reducerSchema("set_deliberation_mode", SetDeliberationModeReducer),
   __reducerSchema("simulate_turn", SimulateTurnReducer),
   __reducerSchema("submit_turn", SubmitTurnReducer),
 );
@@ -353,3 +412,4 @@ export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
     return new SubscriptionBuilder(this);
   };
 }
+
