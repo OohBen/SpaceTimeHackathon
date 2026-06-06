@@ -168,6 +168,46 @@ describe("buildProposalPrompt", () => {
     expect(request.prompt).toContain("- Mars");
   });
 
+  it("keeps total prompt size within the configured character budget at the slot limits", () => {
+    // Drive every bounded slot to its cap and confirm the total assembled
+    // request stays under PROPOSAL_PROMPT_LIMITS.maxPromptChars.
+    const events = Array.from({ length: PROPOSAL_PROMPT_LIMITS.maxEvents * 3 }, (_, i) => ({
+      description: `Long event description number ${i} with realistic narrative content`,
+      turn: i,
+    }));
+    const intel = Array.from({ length: PROPOSAL_PROMPT_LIMITS.maxIntel * 3 }, (_, i) => ({
+      faction: `Faction ${String(i).padStart(2, "0")}`,
+      report: `Detailed intelligence report ${i} covering enemy movements and assets`,
+    }));
+    const requests = Array.from({ length: PROPOSAL_PROMPT_LIMITS.maxRequests * 3 }, (_, i) => ({
+      department: `Department ${String(i).padStart(2, "0")}`,
+      request: `Outstanding request ${i} requiring command attention and resources`,
+    }));
+
+    const request = buildProposalPrompt({
+      doctrine: { diplomacy: 0.5, expansion: 0.5, science: 0.5, security: 0.5 },
+      events,
+      intel,
+      officer: {
+        department: "Operations",
+        name: "Cmdr. Long-Name McTest",
+        traits: ["Decisive", "Analytical", "Cautious", "Aggressive", "Patient"],
+      },
+      requests,
+      world: {
+        bodies: Array.from({ length: 12 }, (_, i) => ({ name: `Body ${i}` })),
+        cities: Array.from({ length: 20 }, (_, i) => ({
+          control_level: 0.5,
+          name: `City ${String(i).padStart(2, "0")}`,
+          population: 1000 + i * 100,
+        })),
+      },
+    });
+
+    const total = request.prompt.length + request.system.length;
+    expect(total).toBeLessThan(PROPOSAL_PROMPT_LIMITS.maxPromptChars);
+  });
+
   it("never emits private data beyond the supplied input (privacy boundary)", () => {
     // The orchestrator must not invent or smuggle context the server did not pass in.
     const input = {

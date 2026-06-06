@@ -63,7 +63,10 @@ export const PROPOSAL_PROMPT_LIMITS = {
   maxEvents: 10,
   maxIntel: 5,
   maxRequests: 5,
+  maxPromptChars: 12_000,
 } as const;
+
+const COMPARE_LOCALE = "en";
 
 function formatDoctrine(doctrine: FactionDoctrine): string {
   return [
@@ -75,18 +78,20 @@ function formatDoctrine(doctrine: FactionDoctrine): string {
 }
 
 function formatOfficer(officer: OfficerTraits): string {
-  const traits = [...officer.traits].sort().join(", ");
+  const traits = [...officer.traits]
+    .sort((a, b) => a.localeCompare(b, COMPARE_LOCALE))
+    .join(", ");
   return `Name: ${officer.name}\nDepartment: ${officer.department}\nTraits: ${traits}`;
 }
 
 function formatWorld(world: ProposalPromptInput["world"]): string {
   const cities = [...world.cities]
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => a.name.localeCompare(b.name, COMPARE_LOCALE))
     .map(c => `- ${c.name} (Pop: ${c.population}, Control: ${c.control_level.toFixed(2)})`)
     .join("\n");
-  
+
   const bodies = [...world.bodies]
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => a.name.localeCompare(b.name, COMPARE_LOCALE))
     .map(b => `- ${b.name}`)
     .join("\n");
 
@@ -96,7 +101,10 @@ function formatWorld(world: ProposalPromptInput["world"]): string {
 function formatEvents(events?: RecentEvent[]): string {
   if (!events || events.length === 0) return "None";
   return [...events]
-    .sort((a, b) => b.turn - a.turn || a.description.localeCompare(b.description))
+    .sort(
+      (a, b) =>
+        b.turn - a.turn || a.description.localeCompare(b.description, COMPARE_LOCALE)
+    )
     .slice(0, PROPOSAL_PROMPT_LIMITS.maxEvents)
     .map(e => `Turn ${e.turn}: ${e.description}`)
     .join("\n");
@@ -105,7 +113,7 @@ function formatEvents(events?: RecentEvent[]): string {
 function formatIntel(intel?: IntelSummary[]): string {
   if (!intel || intel.length === 0) return "None";
   return [...intel]
-    .sort((a, b) => a.faction.localeCompare(b.faction))
+    .sort((a, b) => a.faction.localeCompare(b.faction, COMPARE_LOCALE))
     .slice(0, PROPOSAL_PROMPT_LIMITS.maxIntel)
     .map(i => `[${i.faction}] ${i.report}`)
     .join("\n");
@@ -114,7 +122,11 @@ function formatIntel(intel?: IntelSummary[]): string {
 function formatRequests(requests?: OutstandingRequest[]): string {
   if (!requests || requests.length === 0) return "None";
   return [...requests]
-    .sort((a, b) => a.department.localeCompare(b.department) || a.request.localeCompare(b.request))
+    .sort(
+      (a, b) =>
+        a.department.localeCompare(b.department, COMPARE_LOCALE) ||
+        a.request.localeCompare(b.request, COMPARE_LOCALE)
+    )
     .slice(0, PROPOSAL_PROMPT_LIMITS.maxRequests)
     .map(r => `From ${r.department}: ${r.request}`)
     .join("\n");
