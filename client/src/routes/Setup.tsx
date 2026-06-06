@@ -26,7 +26,6 @@ export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
   const selectedSessionId = sessionId.trim() === '' ? undefined : Number(sessionId);
   const slotChoices = mode === 'resume' ? backend?.getSlotChoices(selectedSessionId) ?? [] : [];
   const selectedSlot = slotChoices.find(slot => slot.key === playerSlot);
-  const backendReady = backend?.isConnected ?? true;
 
   async function handleConfirm() {
     setLoading(true);
@@ -50,8 +49,8 @@ export function Setup({ mode, backend, onBack, onSubmit }: SetupProps) {
   }
 
   const canConfirm =
-    backendReady &&
     !loading &&
+    (backend?.isConnected ?? true) &&
     playerName.trim() !== '' &&
     (mode !== 'resume' ||
       (sessionId.trim() !== '' && selectedSlot?.status !== 'occupied'));

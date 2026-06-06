@@ -123,6 +123,49 @@ function simulationTriggeredEvent(session: GameSessionRow): EventRow {
   };
 }
 
+function worldAdvancedEvent(
+  session: GameSessionRow,
+  payload: Record<string, unknown> = simulationOutputPayload(session)
+): EventRow {
+  return {
+    id: 101,
+    session_id: session.id,
+    faction_id: undefined,
+    turn: session.current_turn,
+    event_type: 'world_advanced',
+    payload: JSON.stringify(payload),
+  };
+}
+
+function simulationOutputPayload(session: GameSessionRow): Record<string, unknown> {
+  return {
+    arrived_ship_count: 1,
+    completed_project_count: 0,
+    contested_body_ids: [2],
+    control_scores: {
+      1: { after: 108, before: 105, delta: 3 },
+      2: { after: 92, before: 95, delta: -3 },
+    },
+    credit_income: { 1: 120, 2: 90 },
+    fleet_strength_changes: {
+      1: { after: 480, before: 500, delta: -20 },
+    },
+    session_id: session.id,
+    travel_progress: {
+      1: {
+        destination_body_id: 3,
+        distance: 2.5,
+        elapsed_turns: 1,
+        origin_body_id: 1,
+        progress_pct: 50,
+        status: 'in_transit',
+        total_turns: 2,
+      },
+    },
+    turn: session.current_turn,
+  };
+}
+
 const eventsOfType = (rows: ReturnType<typeof makeRows>, eventType: string) =>
   rows.events.filter(event => event.event_type === eventType);
 
@@ -155,6 +198,56 @@ describe('simulate_turn reducer', () => {
     });
     expect(eventsOfType(rows, 'victory_checked')).toHaveLength(1);
     expect(eventsOfType(rows, 'turn_summary_ready')).toHaveLength(1);
+  });
+
+  it('embeds world update outputs in every summary without translating the payload', () => {
+    const rows = makeRows();
+    const session = rows.sessions[0];
+    const output = simulationOutputPayload(session);
+    rows.events.push(worldAdvancedEvent(session, output));
+
+    simulateTurnReducer(makeCtx(rows.factions[0].player_id, rows), {
+      session_id: session.id,
+    });
+
+    const payloads = rows.turnSummaries.map(summary => JSON.parse(summary.summary_json));
+    expect(payloads).toHaveLength(2);
+    expect(payloads.every(payload => payload.simulation_outputs !== undefined)).toBe(true);
+    expect(payloads.map(payload => payload.simulation_outputs)).toEqual([output, output]);
+  });
+
+  it('keeps summary JSON identical across repeated seeded runs with the same simulation outputs', () => {
+    const run = () => {
+      const rows = makeRows();
+      const session = rows.sessions[0];
+      rows.events.push(worldAdvancedEvent(session));
+
+      simulateTurnReducer(makeCtx(rows.factions[0].player_id, rows), {
+        session_id: session.id,
+      });
+
+      return rows.turnSummaries.map(summary => summary.summary_json);
+    };
+
+    expect(run()).toEqual(run());
+  });
+
+  it('rejects out-of-bounds simulation output before summaries are inserted', () => {
+    const rows = makeRows();
+    const session = rows.sessions[0];
+    rows.events.push(worldAdvancedEvent(session, {
+      ...simulationOutputPayload(session),
+      control_scores: {
+        1: { after: 250, before: 105, delta: 145 },
+      },
+    }));
+
+    expect(() =>
+      simulateTurnReducer(makeCtx(rows.factions[0].player_id, rows), {
+        session_id: session.id,
+      })
+    ).toThrow(/control score.*out of bounds/);
+    expect(rows.turnSummaries).toHaveLength(0);
   });
 
   it('rejects missing triggers, wrong phases, and duplicate summary creation', () => {

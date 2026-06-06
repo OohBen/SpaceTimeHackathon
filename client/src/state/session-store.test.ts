@@ -4,7 +4,10 @@ import {
   selectActiveSession,
   selectConnectionStatus,
   selectCurrentPlayerSlot,
+  selectInboxProposalsForCurrentPlayer,
   selectPrivateFactionState,
+  selectProposalById,
+  selectProposalsSubscriptionStatus,
   selectPublicGameState,
   selectReducerCall,
 } from './session-store';
@@ -178,5 +181,148 @@ describe('session store', () => {
 
     expect(selectReducerCall(store.getState(), 'joinSession')?.status).toBe('error');
     expect(selectReducerCall(store.getState(), 'joinSession')?.error).toBe('session not found');
+  });
+
+  it('exposes proposals for the current player faction and ignores other factions', () => {
+    const store = createSessionStore();
+    store.getState().actions.setConnection({
+      status: 'connected',
+      identity: 'identity-player-1',
+    });
+    store.getState().actions.hydrateSubscription({
+      sessions: [
+        {
+          id: 'session-prop',
+          code: 'SOL-prop',
+          status: 'active',
+          currentTurn: 5,
+          phase: 'planning',
+        },
+      ],
+      playerSlots: [
+        {
+          sessionId: 'session-prop',
+          slot: 1,
+          identity: 'identity-player-1',
+          factionId: 'earth',
+          factionName: 'Earth Directorate',
+          playerName: 'Atlas',
+          occupied: true,
+          visibility: 'own',
+        },
+      ],
+      proposals: [
+        {
+          id: 'prop-1',
+          sessionId: 'session-prop',
+          factionId: 'earth',
+          turn: 5,
+          proposingPersonnelId: 'officer-1',
+          department: 'Industry',
+          title: 'Refit Ceres',
+          body: 'Refit details',
+          resourceCost: 10,
+          confidence: 'high',
+          status: 'pending',
+          decision: null,
+        },
+        {
+          id: 'prop-2',
+          sessionId: 'session-prop',
+          factionId: 'mars',
+          turn: 5,
+          proposingPersonnelId: 'officer-9',
+          department: 'Espionage',
+          title: 'Sabotage convoy',
+          body: 'Mars internal proposal',
+          resourceCost: 4,
+          confidence: 'medium',
+          status: 'pending',
+          decision: null,
+        },
+      ],
+    });
+
+    const proposals = selectInboxProposalsForCurrentPlayer(store.getState());
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]!.id).toBe('prop-1');
+    expect(selectProposalById(store.getState(), 'prop-1')?.title).toBe('Refit Ceres');
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({ status: 'ready' });
+  });
+
+  it('tracks proposal subscription loading and error states', () => {
+    const store = createSessionStore();
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({ status: 'idle' });
+
+    store.getState().actions.setProposalsSubscription({ status: 'loading' });
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({ status: 'loading' });
+
+    store.getState().actions.setProposalsSubscription({
+      status: 'error',
+      error: 'subscription closed',
+    });
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({
+      status: 'error',
+      error: 'subscription closed',
+    });
+  });
+
+  it('applies proposal upsert and delete events through the subscription bridge', () => {
+    const store = createSessionStore();
+    store.getState().actions.setConnection({
+      status: 'connected',
+      identity: 'identity-player-1',
+    });
+    store.getState().actions.hydrateSubscription({
+      sessions: [
+        {
+          id: 'session-evt',
+          code: 'SOL-evt',
+          status: 'active',
+          currentTurn: 6,
+          phase: 'planning',
+        },
+      ],
+      playerSlots: [
+        {
+          sessionId: 'session-evt',
+          slot: 1,
+          identity: 'identity-player-1',
+          factionId: 'earth',
+          factionName: 'Earth Directorate',
+          playerName: 'Atlas',
+          occupied: true,
+          visibility: 'own',
+        },
+      ],
+    });
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'proposals',
+      op: 'upsert',
+      row: {
+        id: 'prop-evt',
+        sessionId: 'session-evt',
+        factionId: 'earth',
+        turn: 6,
+        proposingPersonnelId: 'officer-3',
+        department: 'Diplomacy',
+        title: 'Open trade with Callisto',
+        body: 'Send envoys to Callisto',
+        resourceCost: 8,
+        confidence: 'medium',
+        status: 'pending',
+        decision: null,
+      },
+    });
+
+    expect(selectInboxProposalsForCurrentPlayer(store.getState())).toHaveLength(1);
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'proposals',
+      op: 'delete',
+      id: 'prop-evt',
+    });
+    expect(selectInboxProposalsForCurrentPlayer(store.getState())).toHaveLength(0);
   });
 });

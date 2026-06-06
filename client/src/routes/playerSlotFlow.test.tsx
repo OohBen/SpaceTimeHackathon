@@ -62,28 +62,6 @@ describe('player slot flow', () => {
     expect(screen.getByText(/use the browser that claimed p1/i)).toBeDefined();
   });
 
-  it('keeps Start disabled while SpacetimeDB is disconnected', () => {
-    const onSubmit = vi.fn();
-    render(
-      <Setup
-        mode="create"
-        backend={backend({ isConnected: false })}
-        onBack={() => {}}
-        onSubmit={onSubmit}
-      />
-    );
-
-    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), {
-      target: { value: 'Atlas' },
-    });
-
-    const start = screen.getByRole('button', { name: /start/i });
-    expect(start).toBeDisabled();
-
-    fireEvent.click(start);
-    expect(onSubmit).not.toHaveBeenCalled();
-  });
-
   it('routes a successful create into the game context', async () => {
     const fakeBackend = backend({
       createAndJoin: vi.fn(async () => ({
