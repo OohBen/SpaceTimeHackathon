@@ -1,0 +1,8 @@
+# Dependency review policy notes.
+# The workflow keeps enforcement inputs in security-quality-gates.yml so CI
+# annotations stay visible at the job step. This file is the repo-local policy
+# anchor for future allowlist/denylist changes.
+
+comment: >
+  Fail pull requests on moderate or higher vulnerable dependency changes.
+  Remediation: upgrade, replace, or document accepted risk before review.

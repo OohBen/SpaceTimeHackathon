@@ -1,0 +1,21 @@
+{
+  "name": "@solar-dominion/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc --noEmit",
+    "spacetime:build": "spacetime build",
+    "spacetime:start": "spacetime start --listen-addr 0.0.0.0:3000 --non-interactive",
+    "spacetime:publish": "spacetime publish solar-dominion --server http://localhost:3000 --anonymous --yes",
+    "generate": "spacetime generate --lang typescript --module-path . --out-dir ../client/src/module_bindings --yes"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.8"
+  },
+  "dependencies": {
+    "spacetimedb": "^2.4.1"
+  }
+}

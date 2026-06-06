@@ -1,0 +1,16 @@
+default: true
+MD009: false   # trailing spaces exist in imported planning docs
+MD012: false   # imported planning docs use multi-line visual spacing
+MD013: false   # line length: user prose should not be wrapped
+MD018: false   # issue refs like #114 can start continuation lines
+MD022: false   # skills use compact generated sections
+MD024: false   # duplicate headings: skills repeat ## Rules etc.
+MD027: false   # generated quoted menus use indentation
+MD031: false   # imported docs have compact fences
+MD032: false   # imported docs have compact lists
+MD033: false   # inline HTML used in issue templates
+MD034: false   # localhost URLs are useful in dev docs
+MD036: false   # demo scripts use emphasized callouts
+MD040: false   # imported docs have unlabeled fences
+MD041: false   # PLAN.md starts with a comment block
+MD060: false   # compact/aligned table styles vary across generated docs
