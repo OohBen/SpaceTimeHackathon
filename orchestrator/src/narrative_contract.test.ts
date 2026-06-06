@@ -97,6 +97,46 @@ describe("narrative request contract", () => {
     }
   });
 
+  it("covers inbox, briefing, resume, and resolution fallback surfaces", () => {
+    const cases = [
+      { requestType: "inbox" as const, surface: "inbox" },
+      { requestType: "inbox" as const, surface: "briefing" },
+      { requestType: "resume_briefing" as const, surface: "resume" },
+      { requestType: "event_narrative" as const, surface: "resolution" },
+    ];
+
+    for (const entry of cases) {
+      const payload = buildFallbackNarrativePayload(
+        baseRequest(entry.requestType, { surface: entry.surface })
+      );
+
+      expect(payload).toMatchObject({
+        authoritative: false,
+        display_only: true,
+        request_type: entry.requestType,
+        source: "fallback",
+        surface: entry.surface,
+      });
+      expect(payload.prose.length).toBeGreaterThan(0);
+      expect(
+        validateNarrativePayload(JSON.stringify(payload), entry.requestType).ok
+      ).toBe(true);
+    }
+  });
+
+  it("falls back to the contract surface when context names an incompatible surface", () => {
+    const inbox = buildFallbackNarrativePayload(
+      baseRequest("inbox", { surface: "resolution" })
+    );
+    expect(inbox.surface).toBe("inbox");
+
+    const prompt = buildNarrativePrompt(
+      baseRequest("resume_briefing", { surface: "turn_resolution" })
+    );
+    expect(prompt.prompt).toContain("Surface: resume");
+    expect(prompt.prompt).not.toContain("Surface: turn_resolution");
+  });
+
   it("rejects narrative payloads that try to alter authoritative state", () => {
     const fallback = buildFallbackNarrativePayload(baseRequest("event_narrative"));
     const validation = validateNarrativePayload(

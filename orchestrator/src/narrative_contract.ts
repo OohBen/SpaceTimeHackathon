@@ -130,7 +130,7 @@ export function buildNarrativePrompt(request: LlmModeRequest): LlmTextRequest {
   const requestType = assertNarrativeRequestType(request.request_type);
   const contract = NARRATIVE_REQUEST_CONTRACTS[requestType];
   const context = boundedContext(request.context);
-  const surface = readSurface(request.context, contract.surfaces[0]);
+  const surface = readSurface(request.context, contract.surfaces);
   const schema = {
     authoritative: false,
     display_only: true,
@@ -184,7 +184,7 @@ export function buildFallbackNarrativePayload(
   const contract = NARRATIVE_REQUEST_CONTRACTS[requestType];
   const factionName = readContextString(request.context, "faction_name")
     ?? `Faction ${request.faction_id}`;
-  const surface = readSurface(request.context, contract.surfaces[0]);
+  const surface = readSurface(request.context, contract.surfaces);
   const headline = fallbackHeadline(requestType, request.turn);
 
   return {
@@ -337,9 +337,22 @@ function boundedContext(value: unknown, depth = 0): unknown {
   );
 }
 
-function readSurface(value: unknown, fallback: NarrativeSurface): NarrativeSurface {
+function readSurface(
+  value: unknown,
+  allowedSurfaces: readonly NarrativeSurface[]
+): NarrativeSurface {
+  const fallback = allowedSurfaces[0];
   const surface = readContextString(value, "surface");
-  return surface && isNarrativeSurface(surface) ? surface : fallback;
+  return surface && isAllowedNarrativeSurface(surface, allowedSurfaces)
+    ? surface
+    : fallback;
+}
+
+function isAllowedNarrativeSurface(
+  value: string,
+  allowedSurfaces: readonly NarrativeSurface[]
+): value is NarrativeSurface {
+  return (allowedSurfaces as readonly string[]).includes(value);
 }
 
 function readContextString(value: unknown, key: string): string | null {
