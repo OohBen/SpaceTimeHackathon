@@ -70,7 +70,7 @@ export interface SessionLifecycleRows {
 
 export interface JoinOrResumeInput {
   session_id: number;
-  player_slot: FactionSlotKey;
+  player_slot: string;
 }
 
 export interface SessionBootstrap {
@@ -89,13 +89,13 @@ export interface JoinOrResumeContext {
   db: {
     game_sessions: {
       id: {
-        find(id: number): GameSessionRow | undefined;
+        find(id: number): GameSessionRow | null;
         update(row: GameSessionRow): GameSessionRow;
       };
     };
     factions: {
       id: {
-        find(id: number): FactionRow | undefined;
+        find(id: number): FactionRow | null;
         update(row: FactionRow): FactionRow;
       };
     };
@@ -254,18 +254,32 @@ export function createSessionReducer(
 export function joinOrResumeSessionReducer(
   ctx: JoinOrResumeContext,
   input: JoinOrResumeInput
+): void {
+  joinOrResumeSession(ctx, input);
+}
+
+export function joinOrResumeSession(
+  ctx: JoinOrResumeContext,
+  input: JoinOrResumeInput
 ): SessionBootstrap {
+  const playerSlot = parseFactionSlotKey(input.player_slot);
   const session = ctx.db.game_sessions.id.find(input.session_id);
   if (!session) {
     throw new Error(`session ${input.session_id} not found`);
   }
 
+  if (session.state !== INITIAL_SESSION_STATE && session.state !== 'active') {
+    throw new Error(
+      `session ${input.session_id} cannot be joined or resumed from state ${session.state}`
+    );
+  }
+
   const factionId =
-    input.player_slot === 'player_a'
+    playerSlot === 'player_a'
       ? session.player_a_faction_id
       : session.player_b_faction_id;
   const opponentFactionId =
-    input.player_slot === 'player_a'
+    playerSlot === 'player_a'
       ? session.player_b_faction_id
       : session.player_a_faction_id;
 
@@ -280,21 +294,32 @@ export function joinOrResumeSessionReducer(
 
   const doctrineVector: FactionDoctrineVector = JSON.parse(faction.doctrine_vector);
   const slot = doctrineVector.slot;
-  const placeholder = buildSlotIdentity(input.session_id, input.player_slot);
+
+  if (slot.slot_key !== playerSlot) {
+    throw new Error(`faction ${factionId} is not bound to slot ${playerSlot}`);
+  }
 
   if (slot.claim_status === 'claimed') {
     if (faction.player_id.toHexString() !== ctx.sender.toHexString()) {
-      throw new Error(`slot ${input.player_slot} is already claimed by another player`);
+      throw new Error(`slot ${playerSlot} is already claimed by another player`);
     }
     return {
       session_id: session.id,
       faction_id: faction.id,
-      slot_key: input.player_slot,
+      slot_key: playerSlot,
       opponent_faction_id: opponentFactionId,
       current_turn: session.current_turn,
       turn_phase: session.turn_phase,
       is_resume: true,
     };
+  }
+
+  if (slot.claim_status !== 'claimable') {
+    throw new Error(`slot ${playerSlot} has unsupported claim status`);
+  }
+
+  if (faction.player_id.toHexString() !== slot.placeholder_player_id) {
+    throw new Error(`slot ${playerSlot} placeholder identity mismatch`);
   }
 
   const updatedSlot: FactionSlotMetadata = { ...slot, claim_status: 'claimed' };
@@ -308,8 +333,6 @@ export function joinOrResumeSessionReducer(
 
   const bothClaimed = checkBothSlotsClaimed(
     ctx,
-    session,
-    input.player_slot,
     opponentFactionId
   );
 
@@ -324,7 +347,7 @@ export function joinOrResumeSessionReducer(
   return {
     session_id: session.id,
     faction_id: faction.id,
-    slot_key: input.player_slot,
+    slot_key: playerSlot,
     opponent_faction_id: opponentFactionId,
     current_turn: session.current_turn,
     turn_phase: session.turn_phase,
@@ -334,14 +357,20 @@ export function joinOrResumeSessionReducer(
 
 function checkBothSlotsClaimed(
   ctx: JoinOrResumeContext,
-  session: GameSessionRow,
-  justClaimedSlot: FactionSlotKey,
   opponentFactionId: number
 ): boolean {
   const opponentFaction = ctx.db.factions.id.find(opponentFactionId);
   if (!opponentFaction) return false;
   const opponentDoctrine: FactionDoctrineVector = JSON.parse(opponentFaction.doctrine_vector);
   return opponentDoctrine.slot.claim_status === 'claimed';
+}
+
+function parseFactionSlotKey(playerSlot: string): FactionSlotKey {
+  if (playerSlot === 'player_a' || playerSlot === 'player_b') {
+    return playerSlot;
+  }
+
+  throw new Error('player_slot must be player_a or player_b');
 }
 
 export function buildSlotIdentity(

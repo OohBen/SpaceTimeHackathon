@@ -10,6 +10,7 @@ import {
   INITIAL_TURN,
   INITIAL_TURN_PHASE,
   INITIAL_YEAR,
+  joinOrResumeSession,
   joinOrResumeSessionReducer,
   normalizeCreateSessionInput,
   type CreateSessionInput,
@@ -211,7 +212,7 @@ function makeJoinResumeCtx(
     db: {
       game_sessions: {
         id: {
-          find: id => sessions.find(s => s.id === id),
+          find: id => sessions.find(s => s.id === id) ?? null,
           update: row => {
             const idx = sessions.findIndex(s => s.id === row.id);
             if (idx === -1) throw new Error(`session ${row.id} not found`);
@@ -222,7 +223,7 @@ function makeJoinResumeCtx(
       },
       factions: {
         id: {
-          find: id => factions.find(f => f.id === id),
+          find: id => factions.find(f => f.id === id) ?? null,
           update: row => {
             const idx = factions.findIndex(f => f.id === row.id);
             if (idx === -1) throw new Error(`faction ${row.id} not found`);
@@ -253,7 +254,7 @@ describe('join_or_resume_session reducer', () => {
     const { sessions, factions } = setupSession();
     const ctx = makeJoinResumeCtx(playerA, sessions, factions);
 
-    const result = joinOrResumeSessionReducer(ctx, { session_id: 1, player_slot: 'player_a' });
+    const result = joinOrResumeSession(ctx, { session_id: 1, player_slot: 'player_a' });
 
     expect(result.session_id).toBe(1);
     expect(result.slot_key).toBe('player_a');
@@ -267,13 +268,13 @@ describe('join_or_resume_session reducer', () => {
   it('resumes an already-claimed slot without mutation', () => {
     const { sessions, factions } = setupSession();
 
-    joinOrResumeSessionReducer(makeJoinResumeCtx(playerA, sessions, factions), {
+    joinOrResumeSession(makeJoinResumeCtx(playerA, sessions, factions), {
       session_id: 1,
       player_slot: 'player_a',
     });
     const hexBefore = factions.map(f => f.player_id.toHexString());
 
-    const result = joinOrResumeSessionReducer(makeJoinResumeCtx(playerA, sessions, factions), {
+    const result = joinOrResumeSession(makeJoinResumeCtx(playerA, sessions, factions), {
       session_id: 1,
       player_slot: 'player_a',
     });
@@ -285,13 +286,13 @@ describe('join_or_resume_session reducer', () => {
   it('rejects joining a slot already claimed by another player', () => {
     const { sessions, factions } = setupSession();
 
-    joinOrResumeSessionReducer(makeJoinResumeCtx(playerA, sessions, factions), {
+    joinOrResumeSession(makeJoinResumeCtx(playerA, sessions, factions), {
       session_id: 1,
       player_slot: 'player_a',
     });
 
     expect(() =>
-      joinOrResumeSessionReducer(makeJoinResumeCtx(playerC, sessions, factions), {
+      joinOrResumeSession(makeJoinResumeCtx(playerC, sessions, factions), {
         session_id: 1,
         player_slot: 'player_a',
       })
@@ -301,17 +302,67 @@ describe('join_or_resume_session reducer', () => {
   it('transitions session to active when both slots are claimed', () => {
     const { sessions, factions } = setupSession();
 
-    joinOrResumeSessionReducer(makeJoinResumeCtx(playerA, sessions, factions), {
+    joinOrResumeSession(makeJoinResumeCtx(playerA, sessions, factions), {
       session_id: 1,
       player_slot: 'player_a',
     });
     expect(sessions[0].state).toBe(INITIAL_SESSION_STATE);
 
-    joinOrResumeSessionReducer(makeJoinResumeCtx(playerB, sessions, factions), {
+    joinOrResumeSession(makeJoinResumeCtx(playerB, sessions, factions), {
       session_id: 1,
       player_slot: 'player_b',
     });
     expect(sessions[0].state).toBe('active');
+  });
+
+  it('rejects unknown player slots', () => {
+    const { sessions, factions } = setupSession();
+
+    expect(() =>
+      joinOrResumeSession(makeJoinResumeCtx(playerA, sessions, factions), {
+        session_id: 1,
+        player_slot: 'player_c',
+      })
+    ).toThrow(/player_slot/);
+  });
+
+  it('rejects sessions outside setup or active states', () => {
+    const { sessions, factions } = setupSession();
+    sessions[0] = { ...sessions[0], state: 'archived' };
+
+    expect(() =>
+      joinOrResumeSession(makeJoinResumeCtx(playerA, sessions, factions), {
+        session_id: 1,
+        player_slot: 'player_a',
+      })
+    ).toThrow(/cannot be joined or resumed/);
+  });
+
+  it('rejects claimable slots whose placeholder identity was already changed', () => {
+    const { sessions, factions } = setupSession();
+    factions[0] = { ...factions[0], player_id: playerC };
+
+    expect(() =>
+      joinOrResumeSession(makeJoinResumeCtx(playerA, sessions, factions), {
+        session_id: 1,
+        player_slot: 'player_a',
+      })
+    ).toThrow(/placeholder identity mismatch/);
+  });
+
+  it('registered reducer writes state without returning bootstrap payload', () => {
+    const { sessions, factions } = setupSession();
+    const ctx = makeJoinResumeCtx(playerA, sessions, factions);
+
+    const result = joinOrResumeSessionReducer(ctx, {
+      session_id: 1,
+      player_slot: 'player_a',
+    });
+
+    expect(result).toBeUndefined();
+    expect(JSON.parse(factions[0].doctrine_vector).slot.claim_status).toBe(
+      'claimed'
+    );
   });
 
   it('registers join_or_resume_session reducer in index.ts', () => {
