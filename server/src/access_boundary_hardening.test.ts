@@ -11,11 +11,14 @@ import { buildPublicWorldProjection } from './public_world_projection.js';
 import {
   commanderDecisionReducer,
   type DecisionReducerContext,
+  type ModuleSettingsRow,
 } from './turn_decisions.js';
 import {
   buildTurn1Seed,
   turn1Seed,
+  type CityRow,
   type LlmRequestRow,
+  type PersonnelRow,
   type ProposalRow,
 } from './turn1_seed.js';
 import type { FactionRow, GameSessionRow } from './session_lifecycle.js';
@@ -47,7 +50,10 @@ function makeDecisionRows() {
     })) as GameSessionRow[],
     factions: seed.factions.map((faction) => ({ ...faction })) as FactionRow[],
     proposals: seed.proposals.map((proposal) => ({ ...proposal })),
+    cities: seed.cities.map((city) => ({ ...city })) as CityRow[],
+    personnel: seed.personnel.map((person) => ({ ...person })) as PersonnelRow[],
     llmRequests: [] as LlmRequestRow[],
+    moduleSettings: seed.module_settings.map((setting) => ({ ...setting })) as ModuleSettingsRow[],
   };
 }
 
@@ -85,6 +91,17 @@ function makeDecisionCtx(
             return row;
           },
         },
+        iter: () => rows.proposals.values(),
+        insert: row => {
+          rows.proposals.push(row);
+          return row;
+        },
+      },
+      cities: {
+        iter: () => rows.cities.values(),
+      },
+      personnel: {
+        iter: () => rows.personnel.values(),
       },
       llm_requests: {
         iter: () => rows.llmRequests.values(),
@@ -92,6 +109,21 @@ function makeDecisionCtx(
           const inserted = { ...row, id: rows.llmRequests.length + 1 };
           rows.llmRequests.push(inserted);
           return inserted;
+        },
+      },
+      module_settings: {
+        id: {
+          find: id => rows.moduleSettings.find(setting => setting.id === id) ?? null,
+          update: row => {
+            const idx = rows.moduleSettings.findIndex(setting => setting.id === row.id);
+            if (idx === -1) throw new Error(`module_settings ${row.id} not found`);
+            rows.moduleSettings[idx] = row;
+            return row;
+          },
+        },
+        insert: row => {
+          rows.moduleSettings.push({ ...row });
+          return row;
         },
       },
     },
