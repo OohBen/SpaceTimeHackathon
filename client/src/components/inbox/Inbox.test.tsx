@@ -12,8 +12,18 @@ import {
 function seedStore(options: {
   factionId?: string;
   resources?: Record<string, number>;
+  sessionId?: string;
+  phase?: string;
+  publicFactions?: Array<{
+    id: string;
+    sessionId: string;
+    name: string;
+    controlScore: number;
+    readyForTurn: boolean;
+  }>;
 } = {}): SessionStore {
   const factionId = options.factionId ?? 'earth';
+  const sessionId = options.sessionId ?? 'session-1';
   const store = createSessionStore();
   store.getState().actions.setConnection({
     status: 'connected',
@@ -22,16 +32,16 @@ function seedStore(options: {
   store.getState().actions.hydrateSubscription({
     sessions: [
       {
-        id: 'session-1',
+        id: sessionId,
         code: 'SOL-001',
         status: 'active',
         currentTurn: 4,
-        phase: 'planning',
+        phase: options.phase ?? 'planning',
       },
     ],
     playerSlots: [
       {
-        sessionId: 'session-1',
+        sessionId,
         slot: 1,
         identity: 'identity-player-1',
         factionId,
@@ -44,7 +54,7 @@ function seedStore(options: {
     privateFactionStates: options.resources
       ? [
           {
-            sessionId: 'session-1',
+            sessionId,
             factionId,
             resources: options.resources,
             morale: 74,
@@ -53,7 +63,8 @@ function seedStore(options: {
           },
         ]
       : undefined,
-  });
+    publicFactions: options.publicFactions,
+  } as never);
   return store;
 }
 
@@ -78,12 +89,14 @@ function makeProposal(overrides: Partial<ProposalRow> = {}): ProposalRow {
 function seedDecisionStore(
   overrides: Partial<ProposalRow> = {},
   resources: Record<string, number> = { credits: 40, metals: 15 },
+  options: Parameters<typeof seedStore>[0] = {},
 ): SessionStore {
-  const store = seedStore({ factionId: '7', resources });
+  const store = seedStore({ ...options, factionId: '7', resources });
   store.getState().actions.hydrateSubscription({
     proposals: [
       makeProposal({
         id: '101',
+        sessionId: options.sessionId ?? 'session-1',
         factionId: '7',
         status: 'unread',
         resourceCost: 25,
@@ -354,5 +367,154 @@ describe('Inbox component', () => {
     expect(controls.getByRole('button', { name: /approve/i })).toBeDisabled();
     expect(controls.getByRole('button', { name: /reject/i })).toBeDisabled();
     expect(controls.getByRole('button', { name: /defer/i })).toBeDisabled();
+  });
+
+  it('enables turn submit only after current player decisions are resolved', () => {
+    const calls: ReducerCallDescriptor[] = [];
+    const store = seedDecisionStore(
+      { status: 'unread', decision: null },
+      { credits: 40, metals: 15 },
+      {
+        sessionId: '9001',
+        phase: 'decision',
+        publicFactions: [
+          {
+            id: '7',
+            sessionId: '9001',
+            name: 'Earth Directorate',
+            controlScore: 42,
+            readyForTurn: false,
+          },
+          {
+            id: '8',
+            sessionId: '9001',
+            name: 'Mars Compact',
+            controlScore: 39,
+            readyForTurn: true,
+          },
+        ],
+      },
+    );
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'proposals',
+      op: 'upsert',
+      row: makeProposal({
+        id: 'opponent-secret',
+        sessionId: '9001',
+        factionId: '8',
+        title: 'Hidden rival attack',
+        body: 'Opponent private order should never render.',
+        status: 'unread',
+      }),
+    });
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient((call) => calls.push(call))}
+        selectedProposalId="101"
+      />,
+    );
+
+    expect(screen.getByTestId('turn-submit-readiness')).toHaveTextContent(
+      /not ready: 1 decision pending/i,
+    );
+    expect(screen.getByTestId('turn-readiness')).toHaveTextContent(/you: not ready/i);
+    expect(screen.getByTestId('turn-readiness')).toHaveTextContent(/opponent: ready/i);
+    expect(screen.queryByText(/opponent private order/i)).toBeNull();
+    expect(screen.getByRole('button', { name: /submit turn/i })).toBeDisabled();
+
+    act(() => {
+      store.getState().actions.applySubscriptionEvent({
+        table: 'proposals',
+        op: 'upsert',
+        row: makeProposal({
+          id: '101',
+          sessionId: '9001',
+          factionId: '7',
+          status: 'approved',
+          decision: '{"decision":"approved","allocation":25}',
+        }),
+      });
+    });
+
+    expect(screen.getByTestId('turn-submit-readiness')).toHaveTextContent(
+      /ready to submit: all required decisions recorded/i,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /submit turn/i }));
+
+    expect(calls).toEqual([{ reducer: 'submit_turn', args: { factionId: 7 } }]);
+    expect(screen.getByTestId('turn-submit-status')).toHaveTextContent(/submitting turn/i);
+  });
+
+  it('surfaces backend submit errors without hiding decision status', () => {
+    const store = seedDecisionStore(
+      { status: 'approved', decision: '{"decision":"approved","allocation":25}' },
+      { credits: 40, metals: 15 },
+      { sessionId: '9001', phase: 'decision' },
+    );
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient(() => {
+          throw new Error('submit_turn must be in decision phase');
+        })}
+        selectedProposalId="101"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /submit turn/i }));
+
+    expect(screen.getByTestId('turn-submit-status')).toHaveTextContent(
+      /backend rejected turn submit: submit_turn must be in decision phase/i,
+    );
+    expect(screen.getByText(/decision already recorded/i)).toBeDefined();
+  });
+
+  it('calls timeout reducer and labels auto-deferred proposal outcomes', () => {
+    const calls: ReducerCallDescriptor[] = [];
+    const store = seedDecisionStore(
+      { status: 'unread', decision: null },
+      { credits: 40, metals: 15 },
+      { sessionId: '9001', phase: 'decision' },
+    );
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient((call) => calls.push(call))}
+        selectedProposalId="101"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /process timeout/i }));
+
+    expect(calls).toEqual([{ reducer: 'expire_turn', args: { sessionId: 9001 } }]);
+    expect(screen.getByTestId('turn-timeout-status')).toHaveTextContent(/processing timeout/i);
+
+    act(() => {
+      store.getState().actions.completeReducerCall('expireTurn:9001');
+      store.getState().actions.applySubscriptionEvent({
+        table: 'proposals',
+        op: 'upsert',
+        row: makeProposal({
+          id: '101',
+          sessionId: '9001',
+          factionId: '7',
+          status: 'auto_deferred',
+          decision: '{"decision":"deferred","allocation":0,"reason":"timeout"}',
+        }),
+      });
+    });
+
+    expect(screen.getByTestId('turn-timeout-status')).toHaveTextContent(
+      /timeout processed; unresolved proposals auto-deferred/i,
+    );
+    expect(screen.getByText(/auto-deferred by timeout/i)).toBeDefined();
+    const controls = within(screen.getByRole('region', { name: /proposal decision controls/i }));
+    expect(controls.getByRole('button', { name: /^defer$/i })).toBeDisabled();
   });
 });
