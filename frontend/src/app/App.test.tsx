@@ -2,9 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import App from './App';
-import LandingPage from '../pages/LandingPage';
-import SetupPage from '../pages/SetupPage';
-import GamePage from '../pages/GamePage';
+import { appRouteChildren } from './router';
 
 function renderRoute(path: string) {
   const router = createMemoryRouter(
@@ -12,11 +10,7 @@ function renderRoute(path: string) {
       {
         path: '/',
         element: <App />,
-        children: [
-          { index: true, element: <LandingPage /> },
-          { path: 'setup', element: <SetupPage /> },
-          { path: 'game', element: <GamePage /> },
-        ],
+        children: appRouteChildren,
       },
     ],
     { initialEntries: [path] },
@@ -39,6 +33,12 @@ describe('App routes', () => {
     expect(screen.getByText(/setup surface/i)).toBeInTheDocument();
 
     setupRoute.unmount();
+    renderRoute('/game/demo-session/p1');
+
+    expect(screen.getByText(/game surface/i)).toBeInTheDocument();
+  });
+
+  it('keeps a bootstrap game fallback route', () => {
     renderRoute('/game');
 
     expect(screen.getByText(/game surface/i)).toBeInTheDocument();

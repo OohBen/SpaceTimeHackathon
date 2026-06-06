@@ -10,7 +10,7 @@ export default function App() {
       <nav aria-label="Primary">
         <Link to="/">Landing</Link>
         <Link to="/setup">Setup</Link>
-        <Link to="/game">Game</Link>
+        <Link to="/game/demo-session/p1">Game</Link>
       </nav>
       <main>
         <Outlet />
