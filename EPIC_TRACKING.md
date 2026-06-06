@@ -32,7 +32,8 @@ No active epic has a missing branch plan. The branch column in `## Epic Inventor
 | Branch | Work starts from latest parent epic branch | Push task branch immediately after claim |
 | Baseline | Validation command selected before edits | Record failed/passing baseline when applicable |
 | Completion | Acceptance criteria met and tests pass | Push commits, open PR to parent epic branch, label task `review-ready` |
-| Review | `code_review.human_required=false` | AI review may comment PASS/changes; self-approval can be blocked by GitHub |
+| Review claim | `review-ready`, open task, non-verify | Replace state label with `in-review` before reviewing to prevent duplicate reviews |
+| Review decision | Acceptance criteria, tests, security, mergeability, and diff scope checked | Comment PASS or requested changes; self-approval can be blocked by GitHub |
 | Task merge | Clean review and checks | Squash merge task PR into epic branch |
 | Task close | Task PR merged | Manually close issue and repair labels before claiming next task |
 | Epic merge | Verify task complete, epic PR targets `main` | Human review required; regular merge commit only |
@@ -58,7 +59,8 @@ Use the report this way:
 - `claimableTasks`: candidates for `hackathon-session` after excluding projects, epics, verify tasks, assignees, and open dependencies.
 - `labelRepairs`: blocked-label drift. Apply manually with GitHub tools, or run `powershell -ExecutionPolicy Bypass -File scripts/audit-tracking.ps1 -ApplyLabelRepairs`.
 - `dependencyLinkGaps`: issues where `A ## Blocks B` exists but `B ## Blocked By A` is missing. Fix issue metadata before trusting `claimableTasks`.
-- `stateLabelViolations`: issues with more than one workflow-state label. Replace with exactly one of `needs-human-review`, `ai-approved`, `in-progress`, `review-ready`, or `in-review`.
+- `stateLabelViolations`: issues with zero or multiple workflow-state labels. Replace with exactly one of `needs-human-review`, `ai-approved`, `in-progress`, `review-ready`, or `in-review`.
+- `closedIssueHygiene`: closed issues that still carry workflow labels, `blocked`, or assignees. Clear them before handoff.
 - `projectAiApproved`: expected current project-container noise; claim logic must keep excluding `project`.
 
 Closeout maintenance sequence:
@@ -66,8 +68,12 @@ Closeout maintenance sequence:
 1. Fetch merged task PR and confirm target epic branch.
 2. Fetch the task issue; if still open, close it with `state_reason=completed` and clear workflow labels.
 3. Run `scripts/audit-tracking.ps1`.
-4. Fix `stateLabelViolations` and `dependencyLinkGaps`, then apply only dependency-derived `blocked` label repairs.
+4. Fix `closedIssueHygiene`, `stateLabelViolations`, and `dependencyLinkGaps`, then apply only dependency-derived `blocked` label repairs.
 5. Re-run the script and claim the next task from the refreshed `claimableTasks` list. A claimable task must have exactly one workflow-state label: `ai-approved`.
+
+## Handoff Notes
+
+Use `COORDINATION_HANDOFF.md` for the short operational handoff. It links the epic map, branch workflow, claim safety checks, closeout rules, and reviewer audit commands.
 
 ## Project Map
 
