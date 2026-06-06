@@ -11,6 +11,7 @@ function backend(overrides: Partial<SessionBackend> = {}): SessionBackend {
     identity: 'aaaaaaaa',
     sessions: [],
     factions: [],
+    client: null,
     getSessionChoices: () => [{ id: 7, label: 'Session #7 - setup', state: 'setup' }],
     getSlotChoices: () => [
       {

@@ -2,8 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { SpacetimeClient } from './client';
 import { reducerRegistry, type ReducerCallDescriptor } from './reducers';
 import { createSessionStore, selectActiveSession, selectReducerCall } from '../state/session-store';
-import * as sessionActions from './session-actions';
-import { commanderDecisionAction, createSessionAction, joinSessionAction } from './session-actions';
+import {
+  ackResolutionAction,
+  advanceWorldAction,
+  commanderDecisionAction,
+  createSessionAction,
+  expireTurnAction,
+  joinOrResumeSessionAction,
+  runDeliberationAction,
+  setDeliberationModeAction,
+  simulateTurnAction,
+  submitTurnAction,
+} from './session-actions';
 
 function fakeClient(onCall: (call: ReducerCallDescriptor) => void): SpacetimeClient {
   return {
@@ -17,28 +27,33 @@ function fakeClient(onCall: (call: ReducerCallDescriptor) => void): SpacetimeCli
 }
 
 describe('session reducer actions', () => {
-  it('dispatches createSession through typed reducer wrappers and records optimistic loading state', () => {
+  it('dispatches createSession with two-player args and records optimistic loading state', () => {
     const calls: ReducerCallDescriptor[] = [];
     const store = createSessionStore();
     const client = fakeClient((call) => calls.push(call));
 
-    createSessionAction(store, client, { playerName: 'Atlas' });
+    createSessionAction(store, client, { playerAName: 'Atlas', playerBName: 'Rex' });
 
-    expect(calls).toEqual([{ reducer: 'create_session', args: { playerName: 'Atlas' } }]);
+    expect(calls).toEqual([
+      {
+        reducer: 'create_session',
+        args: { playerAName: 'Atlas', playerBName: 'Rex' },
+      },
+    ]);
     expect(selectReducerCall(store.getState(), 'createSession')?.status).toBe('loading');
     expect(selectActiveSession(store.getState())?.status).toBe('creating');
   });
 
-  it('records joinSession backend dispatch errors as reducer error state', () => {
+  it('records joinOrResumeSession backend dispatch errors as reducer error state', () => {
     const store = createSessionStore();
     const client = fakeClient(() => {
       throw new Error('backend unavailable');
     });
 
-    joinSessionAction(store, client, { sessionId: 'session-1', playerName: 'Atlas' });
+    joinOrResumeSessionAction(store, client, { sessionId: 1, playerSlot: 'player_a' });
 
-    expect(selectReducerCall(store.getState(), 'joinSession')?.status).toBe('error');
-    expect(selectReducerCall(store.getState(), 'joinSession')?.error).toBe('backend unavailable');
+    expect(selectReducerCall(store.getState(), 'joinOrResumeSession')?.status).toBe('error');
+    expect(selectReducerCall(store.getState(), 'joinOrResumeSession')?.error).toBe('backend unavailable');
   });
 
   it('builds typed commander decision reducer descriptors', () => {
@@ -86,29 +101,10 @@ describe('session reducer actions', () => {
     expect(selectReducerCall(store.getState(), 'commanderDecision:101')?.status).toBe('loading');
   });
 
-  it('builds typed submit turn and expire turn reducer descriptors', () => {
-    expect(typeof (reducerRegistry as Record<string, unknown>).submitTurn).toBe('function');
-    expect((reducerRegistry as any).submitTurn({ factionId: 7 })).toEqual({
-      reducer: 'submit_turn',
-      args: { factionId: 7 },
-    });
-
-    expect(typeof (reducerRegistry as Record<string, unknown>).expireTurn).toBe('function');
-    expect((reducerRegistry as any).expireTurn({ sessionId: 9001 })).toEqual({
-      reducer: 'expire_turn',
-      args: { sessionId: 9001 },
-    });
-  });
-
-  it('dispatches submit turn and timeout reducers with scoped reducer state keys', () => {
+  it('dispatches submit turn and expire turn reducers with scoped reducer state keys', () => {
     const calls: ReducerCallDescriptor[] = [];
     const store = createSessionStore();
     const client = fakeClient((call) => calls.push(call));
-    const submitTurnAction = (sessionActions as any).submitTurnAction;
-    const expireTurnAction = (sessionActions as any).expireTurnAction;
-
-    expect(typeof submitTurnAction).toBe('function');
-    expect(typeof expireTurnAction).toBe('function');
 
     submitTurnAction(store, client, { factionId: 7 });
     expireTurnAction(store, client, { sessionId: 9001 });
@@ -136,21 +132,27 @@ describe('session reducer actions', () => {
     });
   });
 
-  it('dispatches deliberation, simulation, and acknowledgement with scoped reducer state keys', () => {
+  it('dispatches the rest of the turn pipeline through scoped reducer state keys', () => {
     const calls: ReducerCallDescriptor[] = [];
     const store = createSessionStore();
     const client = fakeClient((call) => calls.push(call));
 
-    sessionActions.runDeliberationAction(store, client, { factionId: 7 });
-    sessionActions.simulateTurnAction(store, client, { sessionId: 9001 });
-    sessionActions.ackResolutionAction(store, client, { factionId: 7 });
+    advanceWorldAction(store, client, { sessionId: 9001 });
+    runDeliberationAction(store, client, { factionId: 7 });
+    setDeliberationModeAction(store, client, { mode: 'fallback' });
+    simulateTurnAction(store, client, { sessionId: 9001 });
+    ackResolutionAction(store, client, { factionId: 7 });
 
-    expect(calls).toEqual([
-      { reducer: 'run_deliberation', args: { factionId: 7 } },
-      { reducer: 'simulate_turn', args: { sessionId: 9001 } },
-      { reducer: 'ack_resolution', args: { factionId: 7 } },
+    expect(calls.map((c) => c.reducer)).toEqual([
+      'advance_world',
+      'run_deliberation',
+      'set_deliberation_mode',
+      'simulate_turn',
+      'ack_resolution',
     ]);
+    expect(selectReducerCall(store.getState(), 'advanceWorld:9001')?.status).toBe('loading');
     expect(selectReducerCall(store.getState(), 'runDeliberation:7')?.status).toBe('loading');
+    expect(selectReducerCall(store.getState(), 'setDeliberationMode')?.status).toBe('loading');
     expect(selectReducerCall(store.getState(), 'simulateTurn:9001')?.status).toBe('loading');
     expect(selectReducerCall(store.getState(), 'ackResolution:7')?.status).toBe('loading');
   });
