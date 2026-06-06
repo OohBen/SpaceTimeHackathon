@@ -54,13 +54,36 @@ describe('Setup', () => {
     expect(onBack).toHaveBeenCalled();
   });
 
-  it('calls onConfirm with state when confirmed', () => {
-    const onConfirm = vi.fn();
-    render(<Setup mode="create" onBack={() => {}} onConfirm={onConfirm} />);
+  it('calls onSubmit with state when confirmed', async () => {
+    const onSubmit = vi.fn(() => Promise.resolve());
+    render(<Setup mode="create" onBack={() => {}} onSubmit={onSubmit} />);
     const input = screen.getByRole('textbox', { name: /player name/i });
     fireEvent.change(input, { target: { value: 'Admiral Rex' } });
     fireEvent.click(screen.getByRole('button', { name: /confirm|start|continue/i }));
-    expect(onConfirm).toHaveBeenCalledWith({ playerName: 'Admiral Rex', mode: 'create' });
+    expect(onSubmit).toHaveBeenCalledWith({ playerName: 'Admiral Rex', mode: 'create' });
+  });
+
+  it('shows loading state while mutation is pending', async () => {
+    let resolve!: () => void;
+    const pending = new Promise<void>((r) => { resolve = r; });
+    render(<Setup mode="create" onBack={() => {}} onSubmit={() => pending} />);
+    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), { target: { value: 'Atlas' } });
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    expect(screen.getByText(/loading/i)).toBeDefined();
+    resolve();
+  });
+
+  it('shows error message when mutation rejects', async () => {
+    const onSubmit = vi.fn(() => Promise.reject(new Error('duplicate session')));
+    render(<Setup mode="create" onBack={() => {}} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), { target: { value: 'Atlas' } });
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+    await screen.findByText(/duplicate session/i);
+  });
+
+  it('shows session ID input in resume mode', () => {
+    render(<Setup mode="resume" onBack={() => {}} onSubmit={() => Promise.resolve()} />);
+    expect(screen.getByRole('spinbutton', { name: /session id/i })).toBeDefined();
   });
 });
 
