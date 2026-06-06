@@ -5,13 +5,13 @@ export type RuntimeConfig = {
 
 type RuntimeEnv = {
   VITE_SPACETIME_HOST?: string;
-  VITE_SPACETIME_DB?: string;
+  VITE_SPACETIME_DB_NAME?: string;
 };
 
 export function getRuntimeConfig(env: RuntimeEnv): RuntimeConfig {
   return {
     spacetimeHost: env.VITE_SPACETIME_HOST ?? 'ws://localhost:3000',
-    spacetimeDb: env.VITE_SPACETIME_DB ?? 'solar_dominion',
+    spacetimeDb: env.VITE_SPACETIME_DB_NAME ?? 'solar_dominion',
   };
 }
 

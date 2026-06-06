@@ -5,10 +5,17 @@ describe('getRuntimeConfig', () => {
   it('reads Vite spacetime env values into a typed object', () => {
     const config = getRuntimeConfig({
       VITE_SPACETIME_HOST: 'ws://localhost:3000',
-      VITE_SPACETIME_DB: 'solar_dominion',
+      VITE_SPACETIME_DB_NAME: 'solar_dominion',
     });
 
     expect(config).toEqual({
+      spacetimeHost: 'ws://localhost:3000',
+      spacetimeDb: 'solar_dominion',
+    });
+  });
+
+  it('uses local bootstrap defaults when env values are absent', () => {
+    expect(getRuntimeConfig({})).toEqual({
       spacetimeHost: 'ws://localhost:3000',
       spacetimeDb: 'solar_dominion',
     });
