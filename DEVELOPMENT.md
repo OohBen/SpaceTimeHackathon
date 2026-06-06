@@ -6,8 +6,8 @@ Solar Dominion monorepo — three packages: `server` (SpacetimeDB module), `clie
 
 | Tool | Version | Notes |
 |---|---|---|
-| Node.js | ≥ 20 | `node --version` |
-| npm | ≥ 10 | bundled with Node 20 |
+| Node.js | >= 20.19 or >= 22.12 | `node --version` |
+| npm | >= 10 | bundled with supported Node releases |
 | spacetime CLI | latest | SpacetimeDB local dev (see below) |
 
 ### Install spacetime CLI
