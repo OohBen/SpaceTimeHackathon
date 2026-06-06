@@ -113,6 +113,32 @@ describe('player slot flow', () => {
     expect(screen.getByText('player_b')).toBeDefined();
   });
 
+  it('starts the local demo without requiring a live backend session', async () => {
+    const fakeBackend = backend({
+      isConnected: false,
+      joinOrResume: vi.fn(async () => {
+        throw new Error('valid session ID is required');
+      }),
+      createAndJoin: vi.fn(async () => {
+        throw new Error('SpacetimeDB connection is not ready');
+      }),
+    });
+    render(<AppRouter backend={fakeBackend} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /start local demo/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /player name/i }), {
+      target: { value: 'Atlas' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /start/i }));
+
+    await waitFor(() => expect(window.location.pathname).toBe('/game/9001/player_a'));
+    expect(fakeBackend.joinOrResume).not.toHaveBeenCalled();
+    expect(fakeBackend.createAndJoin).not.toHaveBeenCalled();
+    expect(screen.getByRole('region', { name: /command content panel/i })).toHaveTextContent(
+      /9001/i,
+    );
+  });
+
   it('renders a matching direct game route as a resumed context', () => {
     useSessionStore.getState().setReady({
       sessionId: 7,
