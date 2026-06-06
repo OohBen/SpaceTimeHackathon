@@ -15,6 +15,8 @@ export type FallbackProposalInput = {
   count?: number;
 };
 
+export type FallbackProposalDraft = Omit<ProposalRow, 'id'>;
+
 type ProposalCandidate = {
   city: CityRow;
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -27,7 +29,7 @@ type ProposalCandidate = {
   title: string;
 };
 
-export function generateFallbackProposals(input: FallbackProposalInput): ProposalRow[] {
+export function generateFallbackProposals(input: FallbackProposalInput): FallbackProposalDraft[] {
   const count = Math.max(0, input.count ?? 2);
   const cities = stableSort(
     input.cities.filter((city) => city.faction_id === input.faction.id),
@@ -171,9 +173,8 @@ function buildSecurityCandidate(
 function candidateToProposal(
   input: FallbackProposalInput,
   candidate: ProposalCandidate
-): ProposalRow {
+): FallbackProposalDraft {
   return {
-    id: 0,
     faction_id: input.faction.id,
     turn: input.session.current_turn,
     proposing_personnel_id: candidate.officer.id,
