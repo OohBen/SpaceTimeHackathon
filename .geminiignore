@@ -1,0 +1,24 @@
+# .geminiignore
+# Context hygiene for Gemini CLI
+
+# Agent-specific directories
+.claude/
+.gemini/
+
+# Session artifacts
+*.log
+session_state.md
+success_check.sh
+success_check.py
+
+# Git internals
+.git/
+
+# Node dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+.next/
+out/
