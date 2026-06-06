@@ -1,4 +1,8 @@
 import type { LlmTextRequest } from "./openrouter_client.js";
+import {
+  PROPOSAL_ADVISORY_CONFIDENCE_VALUES,
+  PROPOSAL_ADVISORY_LIMITS,
+} from "./proposal_advisory.js";
 
 export type FactionDoctrine = {
   diplomacy: number;
@@ -142,14 +146,20 @@ function formatRequests(requests?: OutstandingRequest[]): string {
  * - Array lengths are strictly bounded to prevent context window overflow.
  */
 export function buildProposalPrompt(input: ProposalPromptInput): LlmTextRequest {
+  // Keep these schema constraints in sync with validateProposalAdvisory so
+  // the LLM's output stays within the validator's accepted ranges and the
+  // deterministic fallback is reserved for genuine outages.
+  const confidenceUnion = PROPOSAL_ADVISORY_CONFIDENCE_VALUES.map(c => `"${c}"`).join(" | ");
   const system = `You are a commanding officer in a sci-fi strategy game. You must propose a course of action based on your faction's doctrine, your personal traits, and the current state of the solar system. You must return exactly ONE JSON object containing a "proposals" array with your suggested actions. Do not output any other text or markdown.
 
+Return between ${PROPOSAL_ADVISORY_LIMITS.minProposals} and ${PROPOSAL_ADVISORY_LIMITS.maxProposals} proposals.
+
 Each proposal must have:
-- title: string (short summary)
-- body: string (detailed justification)
-- department: string (your department)
-- confidence: "HIGH" | "MEDIUM" | "LOW"
-- resource_cost: number (estimated cost)`;
+- title: string, at most ${PROPOSAL_ADVISORY_LIMITS.maxTitleChars} characters (short summary)
+- body: string, at most ${PROPOSAL_ADVISORY_LIMITS.maxBodyChars} characters (detailed justification)
+- department: string, at most ${PROPOSAL_ADVISORY_LIMITS.maxDepartmentChars} characters (your department)
+- confidence: ${confidenceUnion}
+- resource_cost: number between ${PROPOSAL_ADVISORY_LIMITS.minResourceCost} and ${PROPOSAL_ADVISORY_LIMITS.maxResourceCost} (estimated cost)`;
 
   const prompt = `--- OFFICER PROFILE ---
 ${formatOfficer(input.officer)}

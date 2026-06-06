@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildProposalPrompt, PROPOSAL_PROMPT_LIMITS } from "./proposal_prompt.js";
+import {
+  PROPOSAL_ADVISORY_CONFIDENCE_VALUES,
+  PROPOSAL_ADVISORY_LIMITS,
+} from "./proposal_advisory.js";
 
 describe("buildProposalPrompt", () => {
   const baseInput = {
@@ -206,6 +210,25 @@ describe("buildProposalPrompt", () => {
 
     const total = request.prompt.length + request.system.length;
     expect(total).toBeLessThan(PROPOSAL_PROMPT_LIMITS.maxPromptChars);
+  });
+
+  it("encodes the advisory validator's limits in the system prompt", () => {
+    // Drift guard: if PROPOSAL_ADVISORY_LIMITS or the confidence union ever
+    // diverge from what the system prompt advertises to the model, the
+    // fallback rate will spike. Assert the prompt cites them by value so a
+    // future limits change forces a coordinated update here too.
+    const { system } = buildProposalPrompt(baseInput);
+
+    expect(system).toContain(String(PROPOSAL_ADVISORY_LIMITS.minProposals));
+    expect(system).toContain(String(PROPOSAL_ADVISORY_LIMITS.maxProposals));
+    expect(system).toContain(String(PROPOSAL_ADVISORY_LIMITS.maxTitleChars));
+    expect(system).toContain(String(PROPOSAL_ADVISORY_LIMITS.maxBodyChars));
+    expect(system).toContain(String(PROPOSAL_ADVISORY_LIMITS.maxDepartmentChars));
+    expect(system).toContain(String(PROPOSAL_ADVISORY_LIMITS.minResourceCost));
+    expect(system).toContain(String(PROPOSAL_ADVISORY_LIMITS.maxResourceCost));
+    for (const confidence of PROPOSAL_ADVISORY_CONFIDENCE_VALUES) {
+      expect(system).toContain(`"${confidence}"`);
+    }
   });
 
   it("never emits private data beyond the supplied input (privacy boundary)", () => {
