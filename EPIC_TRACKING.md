@@ -45,6 +45,30 @@ No active epic has a missing branch plan. The branch column in `## Epic Inventor
 - Treat `blocked` as additive only. Recompute it from `## Blocked By`; add it when any dependency is open, remove it when all dependencies are closed.
 - If a task PR merged into an epic branch, do not assume GitHub closed the issue. Fetch the issue, close it if still open, then unblock downstream issues.
 
+## Maintenance Runbook
+
+Run this before every claim sweep and after every task merge:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/audit-tracking.ps1
+```
+
+Use the report this way:
+
+- `claimableTasks`: candidates for `hackathon-session` after excluding projects, epics, verify tasks, assignees, and open dependencies.
+- `labelRepairs`: blocked-label drift. Apply manually with GitHub tools, or run `powershell -ExecutionPolicy Bypass -File scripts/audit-tracking.ps1 -ApplyLabelRepairs`.
+- `dependencyLinkGaps`: issues where `A ## Blocks B` exists but `B ## Blocked By A` is missing. Fix issue metadata before trusting `claimableTasks`.
+- `stateLabelViolations`: issues with more than one workflow-state label. Replace with exactly one of `needs-human-review`, `ai-approved`, `in-progress`, `review-ready`, or `in-review`.
+- `projectAiApproved`: expected current project-container noise; claim logic must keep excluding `project`.
+
+Closeout maintenance sequence:
+
+1. Fetch merged task PR and confirm target epic branch.
+2. Fetch the task issue; if still open, close it with `state_reason=completed` and clear workflow labels.
+3. Run `scripts/audit-tracking.ps1`.
+4. Fix `dependencyLinkGaps`, then apply only dependency-derived `blocked` label repairs.
+5. Re-run the script and claim the next task from the refreshed `claimableTasks` list.
+
 ## Project Map
 
 | Project | Issue | Blocks | Blocked by |
