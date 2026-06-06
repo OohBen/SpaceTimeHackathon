@@ -21,8 +21,39 @@ jobs:
         language: ['javascript-typescript', 'python']
     steps:
       - uses: actions/checkout@v4
+      - name: Skip private repositories without code scanning
+        if: ${{ github.event.repository.private }}
+        run: |
+          echo "CodeQL upload requires code scanning/GitHub Advanced Security on private repositories."
+          echo "Skipping until those repository security features are enabled."
+      - name: Detect source files
+        if: ${{ !github.event.repository.private }}
+        id: source-check
+        shell: bash
+        run: |
+          case "${{ matrix.language }}" in
+            javascript-typescript)
+              if git ls-files '*.js' '*.jsx' '*.ts' '*.tsx' | grep -q .; then
+                echo "has_source=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "has_source=false" >> "$GITHUB_OUTPUT"
+                echo "No JavaScript/TypeScript source files found."
+              fi
+              ;;
+            python)
+              if git ls-files '*.py' | grep -q .; then
+                echo "has_source=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "has_source=false" >> "$GITHUB_OUTPUT"
+                echo "No Python source files found."
+              fi
+              ;;
+          esac
       - uses: github/codeql-action/init@v3
+        if: ${{ !github.event.repository.private && steps.source-check.outputs.has_source == 'true' }}
         with:
           languages: ${{ matrix.language }}
       - uses: github/codeql-action/autobuild@v3
+        if: ${{ !github.event.repository.private && steps.source-check.outputs.has_source == 'true' }}
       - uses: github/codeql-action/analyze@v3
+        if: ${{ !github.event.repository.private && steps.source-check.outputs.has_source == 'true' }}
