@@ -62,7 +62,7 @@ tears down frontend, orchestrator, and SpacetimeDB in reverse order.
 ```sh
 npm run demo
 LLM_MODE=mock npm run demo
-LLM_MODE=live OPENROUTER_API_KEY=... npm run demo
+LLM_MODE=live OPENROUTER_API_KEY=<redacted> npm run demo
 ```
 
 - `fixture`: default, deterministic, no external network.
