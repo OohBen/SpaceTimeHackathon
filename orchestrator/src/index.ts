@@ -45,6 +45,18 @@ export type {
   ReliabilityOptions,
 } from "./llm_reliability.js";
 export {
+  noopTelemetryLogger,
+  redactPayloadShape,
+  redactSecret,
+  summarizeRequest,
+} from "./logging.js";
+export type {
+  TelemetryEvent,
+  TelemetryFields,
+  TelemetryLevel,
+  TelemetryLogger,
+} from "./logging.js";
+export {
   PROPOSAL_ADVISORY_CONFIDENCE_VALUES,
   PROPOSAL_ADVISORY_LIMITS,
   PROPOSAL_ADVISORY_POLICY,

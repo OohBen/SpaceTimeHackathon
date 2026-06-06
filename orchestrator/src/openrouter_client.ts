@@ -1,3 +1,11 @@
+import {
+  TelemetryLogger,
+  noopTelemetryLogger,
+  redactSecret,
+  summarizeErrorCause,
+  summarizeRequest,
+} from "./logging.js";
+
 export const DEFAULT_OPENROUTER_MODEL = "inception/mercury-2";
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_SPACETIME_HOST = "http://localhost:3000";
@@ -150,9 +158,10 @@ export function readLlmProviderConfig(
 
 export function createOpenRouterClient(
   config: OpenRouterConfig,
-  deps: { fetch?: FetchLike } = {}
+  deps: { fetch?: FetchLike; logger?: TelemetryLogger } = {}
 ): LlmTextClient {
   const fetchImpl = deps.fetch ?? fetch;
+  const logger = deps.logger ?? noopTelemetryLogger;
   const normalizedConfig = normalizeOpenRouterConfig(config);
 
   return {
@@ -160,6 +169,13 @@ export function createOpenRouterClient(
       const controller = new AbortController();
       const timeoutMs = normalizedConfig.timeoutMs ?? DEFAULT_OPENROUTER_TIMEOUT_MS;
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const baseFields = {
+        api_key_fingerprint: redactSecret(normalizedConfig.apiKey),
+        model: normalizedConfig.model,
+        provider: "openrouter",
+        request: summarizeRequest(request),
+        timeout_ms: timeoutMs,
+      };
 
       let response: Response;
       try {
@@ -179,18 +195,34 @@ export function createOpenRouterClient(
         );
       } catch (cause) {
         if (controller.signal.aborted) {
+          logger.log({
+            event: "openrouter.timeout",
+            fields: baseFields,
+            level: "warn",
+          });
           throw new OpenRouterTimeoutError(timeoutMs);
         }
+        logger.log({
+          event: "openrouter.network_error",
+          fields: {
+            ...baseFields,
+            cause: summarizeErrorCause(cause),
+          },
+          level: "warn",
+        });
         throw new OpenRouterNetworkError(cause);
       } finally {
         clearTimeout(timer);
       }
 
       if (!response.ok) {
-        throw new OpenRouterRequestError(
-          response.status,
-          await readProviderError(response)
-        );
+        const detail = await readProviderError(response);
+        logger.log({
+          event: "openrouter.http_error",
+          fields: { ...baseFields, status: response.status },
+          level: "warn",
+        });
+        throw new OpenRouterRequestError(response.status, detail);
       }
 
       const raw = await response.json();
