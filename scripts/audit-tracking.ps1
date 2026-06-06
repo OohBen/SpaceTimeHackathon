@@ -171,6 +171,7 @@ foreach ($issue in $openIssues) {
 
     if (
         ($labels -contains "ai-approved") -and
+        $labelStates.Count -eq 1 -and
         -not $hasBlockedLabel -and
         -not $isContainer -and
         -not $isVerify -and

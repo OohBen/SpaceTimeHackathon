@@ -66,8 +66,8 @@ Closeout maintenance sequence:
 1. Fetch merged task PR and confirm target epic branch.
 2. Fetch the task issue; if still open, close it with `state_reason=completed` and clear workflow labels.
 3. Run `scripts/audit-tracking.ps1`.
-4. Fix `dependencyLinkGaps`, then apply only dependency-derived `blocked` label repairs.
-5. Re-run the script and claim the next task from the refreshed `claimableTasks` list.
+4. Fix `stateLabelViolations` and `dependencyLinkGaps`, then apply only dependency-derived `blocked` label repairs.
+5. Re-run the script and claim the next task from the refreshed `claimableTasks` list. A claimable task must have exactly one workflow-state label: `ai-approved`.
 
 ## Project Map
 
