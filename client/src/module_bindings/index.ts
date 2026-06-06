@@ -34,6 +34,8 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import CreateSessionReducer from "./create_session_reducer";
+import JoinOrResumeSessionReducer from "./join_or_resume_session_reducer";
 
 // Import all procedure arg schemas
 
@@ -253,6 +255,8 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("create_session", CreateSessionReducer),
+  __reducerSchema("join_or_resume_session", JoinOrResumeSessionReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
@@ -311,3 +315,4 @@ export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
     return new SubscriptionBuilder(this);
   };
 }
+
