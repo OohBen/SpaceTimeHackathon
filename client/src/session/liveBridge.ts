@@ -232,7 +232,7 @@ function translatePrivateFactionState(faction: Factions): PrivateFactionStateRow
       political_capital: faction.politicalCapital,
     },
     morale: 0,
-    doctrine: faction.doctrineVector,
+    doctrine: displayDoctrine(faction.doctrineVector),
     visibility: 'ownFaction',
   };
 }
@@ -323,4 +323,39 @@ function parseSlotMetadata(faction: Factions): FactionSlotMetadata | undefined {
 function ownsFaction(faction: Factions, identityHex: string | null): boolean {
   if (!identityHex) return false;
   return faction.playerId.toHexString() === identityHex;
+}
+
+function displayDoctrine(value: string): string {
+  const parsed = parseJsonObject(value);
+  if (!parsed) return 'Balanced';
+
+  const axes = ['expansion', 'security', 'science', 'diplomacy']
+    .map((key) => [key, normalizeDoctrineAxis(parsed[key])] as const)
+    .filter((entry): entry is readonly [string, number] => entry[1] !== null);
+
+  if (axes.length === 0) return 'Balanced';
+  return axes
+    .map(([key, amount]) => `${titleCase(key)} ${Math.round(amount * 100)}%`)
+    .join(' / ');
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeDoctrineAxis(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value > 1) return Math.max(0, Math.min(100, value)) / 100;
+  return Math.max(0, Math.min(1, value));
+}
+
+function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
