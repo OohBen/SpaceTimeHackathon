@@ -60,6 +60,7 @@ function makeRows(phase: 'deliberation' | 'decision' = 'deliberation') {
     turn_summaries: clone(seed.turn_summaries),
     trade_agreements: clone(seed.trade_agreements),
     llm_requests: [],
+    module_settings: [],
   } satisfies Turn1SeedRows;
 }
 
@@ -106,6 +107,7 @@ function makeDb(rows: PipelineRows) {
     turn_summaries: makeTable(rows.turn_summaries),
     trade_agreements: makeTable(rows.trade_agreements),
     llm_requests: makeTable(rows.llm_requests),
+    module_settings: makeTable(rows.module_settings),
   };
 }
 

@@ -668,6 +668,7 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
     turn_summaries,
     trade_agreements,
     llm_requests,
+    module_settings: [],
   };
 }
 
