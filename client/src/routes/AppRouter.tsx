@@ -1430,7 +1430,7 @@ function seedLocalDemoSession(playerName: string, playerSlot: PlayerSlot): Sessi
         code: 'DEMO',
         status: 'active',
         currentTurn: 5,
-        phase: 'summary',
+        phase: 'decision',
       },
     ],
     playerSlots: [
@@ -1466,9 +1466,25 @@ function seedLocalDemoSession(playerName: string, playerSlot: PlayerSlot): Sessi
         sessionId: String(LOCAL_DEMO_SESSION_ID),
         turn: 5,
         year: 2351,
-        phase: 'summary',
+        phase: 'decision',
         controlScores: { '202': 52, '303': 38 },
         visibleFactionIds: ['202', '303'],
+      },
+    ],
+    publicFactions: [
+      {
+        id: String(LOCAL_DEMO_SLOTS.player_a.factionId),
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
+        name: LOCAL_DEMO_SLOTS.player_a.factionName,
+        controlScore: 52,
+        readyForTurn: false,
+      },
+      {
+        id: String(LOCAL_DEMO_SLOTS.player_b.factionId),
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
+        name: LOCAL_DEMO_SLOTS.player_b.factionName,
+        controlScore: 38,
+        readyForTurn: false,
       },
     ],
     privateFactionStates: [
@@ -1490,7 +1506,7 @@ function seedLocalDemoSession(playerName: string, playerSlot: PlayerSlot): Sessi
         politicalCapital: 18,
         doctrineVector: '{"strategy":72,"approach":36,"command":64,"focus":58,"style":44}',
         controlScore: 52,
-        readyForTurn: true,
+        readyForTurn: false,
       },
       {
         id: '303',
@@ -1503,6 +1519,52 @@ function seedLocalDemoSession(playerName: string, playerSlot: PlayerSlot): Sessi
         readyForTurn: false,
       },
     ],
+    proposals: [
+      playerSlot === 'player_a'
+        ? {
+            id: '9701',
+            sessionId: String(LOCAL_DEMO_SESSION_ID),
+            factionId: String(LOCAL_DEMO_SLOTS.player_a.factionId),
+            turn: 5,
+            proposingPersonnelId: '701',
+            department: 'Industry',
+            title: 'Solar orbital yard expansion',
+            body: 'Expand orbital yard capacity to accelerate Callisto convoy production.',
+            resourceCost: 45,
+            confidence: 'high',
+            status: 'unread',
+            decision: null,
+          }
+        : {
+            id: '9801',
+            sessionId: String(LOCAL_DEMO_SESSION_ID),
+            factionId: String(LOCAL_DEMO_SLOTS.player_b.factionId),
+            turn: 5,
+            proposingPersonnelId: '801',
+            department: 'Fleet',
+            title: 'Mars dust lane interdiction',
+            body: 'Deploy patrol craft along the Mars dust lane before Solar convoys arrive.',
+            resourceCost: 35,
+            confidence: 'medium',
+            status: 'unread',
+            decision: null,
+          },
+    ],
+    llmRequests: [
+      {
+        id: playerSlot === 'player_a' ? 'demo-llm-9701' : 'demo-llm-9801',
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
+        factionId: String(selected.factionId),
+        requestType: 'proposals',
+        status: 'completed',
+        responseJson: '{"source":"deterministic_fallback"}',
+        error: null,
+        errorCode: null,
+        attemptCount: 1,
+        createdTurn: 5,
+        updatedTurn: 5,
+      },
+    ],
     intelligenceRecords: [
       {
         id: 'demo-intel-1',
@@ -1512,17 +1574,6 @@ function seedLocalDemoSession(playerName: string, playerSlot: PlayerSlot): Sessi
         value: '{"diplomatic_posture":"probing Callisto access","known_cities":["Pavonis"]}',
         accuracy: 82,
         acquiredTurn: 5,
-      },
-    ],
-    turnSummaries: [
-      {
-        id: 'demo-summary-5',
-        sessionId: '9001',
-        factionId: '202',
-        turn: 5,
-        summaryJson:
-          '{"headline":"Turn 5 outcome summary","events":["Olympus City infrastructure complete","Opponent colony ship detected inbound to Ganymede"],"controlScores":{"202":52,"303":38},"resourceDeltas":{"credits":-40,"science":6}}',
-        acknowledged: false,
       },
     ],
   });

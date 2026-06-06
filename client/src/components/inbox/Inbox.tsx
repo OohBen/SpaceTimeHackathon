@@ -108,7 +108,9 @@ export function Inbox({
 
   const view = useMemo<InboxView>(() => {
     const proposals = computeInboxProposals(proposalsById, activeSessionId, currentSlot);
-    const selected = activeSelectedId ? proposalsById[activeSelectedId] ?? null : null;
+    const selected = activeSelectedId
+      ? proposals.find((proposal) => proposal.id === activeSelectedId) ?? null
+      : null;
     const llmRequests = computeLlmRequests(llmRequestsById, activeSessionId, currentSlot);
     const turnSummary = computeTurnSummary(turnSummariesById, activeSession, currentSlot);
     return {

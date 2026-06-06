@@ -189,6 +189,24 @@ describe('player slot flow', () => {
     expect(screen.getByLabelText(/faction identity/i)).toHaveTextContent('Martian League');
   });
 
+  it('seeds direct local demo Browser B with its decision-phase proposal only', () => {
+    window.history.replaceState(null, '', '/game/9001/player_b');
+
+    render(<AppRouter backend={backend()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inbox' }));
+
+    expect(screen.getByTestId('commander-inbox')).toHaveTextContent(
+      /Mars dust lane interdiction/i,
+    );
+    expect(screen.getByTestId('commander-inbox')).not.toHaveTextContent(
+      /Solar orbital yard expansion/i,
+    );
+    expect(screen.getByTestId('turn-submit-readiness')).toHaveTextContent(
+      /not ready: 1 decision pending/i,
+    );
+  });
+
   it('renders a matching direct game route as a resumed context', () => {
     useSessionStore.getState().setReady({
       sessionId: 7,
