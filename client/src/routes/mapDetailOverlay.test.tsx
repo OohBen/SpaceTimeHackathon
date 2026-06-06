@@ -42,12 +42,15 @@ function resetSessionStore() {
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
     privateFactionStateByKey: {},
+    publicFactionsByKey: {},
     worldBodiesById: {},
     publicFactionsById: {},
     publicCitiesById: {},
     publicFleetsById: {},
     publicColonyShipsById: {},
     publicEventsById: {},
+    proposalsById: {},
+    proposalsSubscription: { status: 'idle' },
     reducerCalls: {},
   });
 }

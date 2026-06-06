@@ -25,11 +25,80 @@ import {
   type GameSessionRow,
   type JoinOrResumeContext,
   type SessionLifecycleContext,
+  type AdvanceWorldContext,
   type TurnPhaseContext,
 } from './session_lifecycle.js';
+import { buildTurn1Seed, type Turn1SeedRows } from './turn1_seed.js';
 
 const timestamp = Timestamp.UNIX_EPOCH;
 const srcPath = (file: string) => resolve(import.meta.dirname, file);
+
+type RowWithId = { id: number };
+
+function makeSeedTable<T extends RowWithId>(rows: T[]) {
+  return {
+    iter: () => rows.values(),
+    insert: (row: T): T => {
+      const nextId = rows.reduce((max, existing) => Math.max(max, existing.id), 0) + 1;
+      const inserted = { ...row, id: row.id === 0 ? nextId : row.id };
+      rows.push(inserted);
+      return inserted;
+    },
+    id: {
+      find: (id: number) => rows.find(row => row.id === id) ?? null,
+      update: (row: T): T => {
+        const idx = rows.findIndex(existing => existing.id === row.id);
+        if (idx === -1) throw new Error(`row ${row.id} not found`);
+        rows[idx] = row;
+        return row;
+      },
+    },
+  };
+}
+
+function buildAdvanceWorldHarness(): { rows: Turn1SeedRows; ctx: AdvanceWorldContext } {
+  const seed = buildTurn1Seed();
+  const rows: Turn1SeedRows = {
+    game_sessions: seed.game_sessions.map(session => ({
+      ...session,
+      state: ACTIVE_SESSION_STATE,
+      turn_phase: 'world_update',
+    })),
+    factions: seed.factions.map(faction => ({ ...faction })),
+    celestial_bodies: seed.celestial_bodies.map(row => ({ ...row })),
+    cities: seed.cities.map(row => ({ ...row })),
+    personnel: seed.personnel.map(row => ({ ...row })),
+    personnel_relationships: seed.personnel_relationships.map(row => ({ ...row })),
+    proposals: seed.proposals.map(row => ({ ...row })),
+    commander_inbox: seed.commander_inbox.map(row => ({ ...row })),
+    fleets: seed.fleets.map(row => ({ ...row })),
+    colony_ships: seed.colony_ships.map(row => ({ ...row })),
+    projects: seed.projects.map(row => ({ ...row })),
+    intelligence_records: seed.intelligence_records.map(row => ({ ...row })),
+    events: seed.events.map(row => ({ ...row })),
+    turn_summaries: seed.turn_summaries.map(row => ({ ...row })),
+    trade_agreements: seed.trade_agreements.map(row => ({ ...row })),
+    llm_requests: [],
+    module_settings: [],
+  };
+
+  const ctx: AdvanceWorldContext = {
+    timestamp,
+    db: {
+      game_sessions: makeSeedTable(rows.game_sessions),
+      factions: makeSeedTable(rows.factions),
+      cities: makeSeedTable(rows.cities),
+      celestial_bodies: makeSeedTable(rows.celestial_bodies),
+      colony_ships: makeSeedTable(rows.colony_ships),
+      fleets: makeSeedTable(rows.fleets),
+      projects: makeSeedTable(rows.projects),
+      proposals: makeSeedTable(rows.proposals),
+      events: makeSeedTable(rows.events),
+    },
+  };
+
+  return { rows, ctx };
+}
 
 function makeFakeContext(): SessionLifecycleContext & {
   sessions: GameSessionRow[];
@@ -509,12 +578,12 @@ describe('turn phase state machine', () => {
   });
 
   it('advance_world moves world_update sessions into deliberation without changing identity links', () => {
-    const sessions = [activeSession('world_update')];
-    const before = sessions[0];
+    const { rows, ctx } = buildAdvanceWorldHarness();
+    const before = { ...rows.game_sessions[0] };
 
-    advanceWorldReducer(makeTurnPhaseCtx(sessions), { session_id: before.id });
+    advanceWorldReducer(ctx, { session_id: before.id });
 
-    expect(sessions[0]).toMatchObject({
+    expect(rows.game_sessions[0]).toMatchObject({
       id: before.id,
       state: before.state,
       current_year: before.current_year,
@@ -525,13 +594,24 @@ describe('turn phase state machine', () => {
       turn_phase: 'deliberation',
       turn_deadline: undefined,
     });
+    expect(
+      rows.events.some(
+        event =>
+          event.session_id === before.id &&
+          event.turn === before.current_turn &&
+          event.event_type === 'world_advanced'
+      )
+    ).toBe(true);
   });
 
   it('advance_world rejects non-world-update phases', () => {
     const sessions = [activeSession('decision')];
 
     expect(() =>
-      advanceWorldReducer(makeTurnPhaseCtx(sessions), { session_id: 7 })
+      advanceWorldReducer(
+        makeTurnPhaseCtx(sessions) as unknown as AdvanceWorldContext,
+        { session_id: 7 }
+      )
     ).toThrow(/invalid turn phase transition decision -> deliberation/);
   });
 
@@ -539,7 +619,10 @@ describe('turn phase state machine', () => {
     const sessions = [{ ...activeSession('world_update'), state: INITIAL_SESSION_STATE }];
 
     expect(() =>
-      advanceWorldReducer(makeTurnPhaseCtx(sessions), { session_id: 7 })
+      advanceWorldReducer(
+        makeTurnPhaseCtx(sessions) as unknown as AdvanceWorldContext,
+        { session_id: 7 }
+      )
     ).toThrow(/must be active/);
   });
 

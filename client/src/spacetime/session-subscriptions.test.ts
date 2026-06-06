@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { SpacetimeClient } from './client';
-import { createSessionStore, selectActiveSession } from '../state/session-store';
+import {
+  createSessionStore,
+  selectActiveSession,
+  selectProposalsSubscriptionStatus,
+} from '../state/session-store';
 import { SESSION_SUBSCRIPTION_QUERIES, wireSessionSubscriptions } from './session-subscriptions';
 
 describe('session subscription wiring', () => {
@@ -82,5 +86,31 @@ describe('session subscription wiring', () => {
         'SELECT * FROM events',
       ]),
     );
+  });
+
+  it('subscribes to proposals and tracks loading state', () => {
+    const subscribedQueries: string[][] = [];
+    const client: SpacetimeClient = {
+      connect: () => ({ disconnect: () => undefined }),
+      reconnect: () => ({ disconnect: () => undefined }),
+      disconnect: () => undefined,
+      subscribe: (queries) => subscribedQueries.push(queries),
+      callReducer: () => undefined,
+      diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
+    };
+    const store = createSessionStore();
+    const bridge = wireSessionSubscriptions(store, client);
+
+    expect(subscribedQueries[0]).toContain('SELECT * FROM proposals');
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({ status: 'loading' });
+
+    bridge.hydrate({ proposals: [] });
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({ status: 'ready' });
+
+    bridge.setProposalsSubscription({ status: 'error', error: 'feed dropped' });
+    expect(selectProposalsSubscriptionStatus(store.getState())).toEqual({
+      status: 'error',
+      error: 'feed dropped',
+    });
   });
 });

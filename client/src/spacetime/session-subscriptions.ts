@@ -1,6 +1,7 @@
 import type {
   SessionStore,
   SubscriptionEvent,
+  SubscriptionLoadStatus,
   SubscriptionSnapshot,
 } from '../state/session-store';
 import type { SpacetimeClient } from './client';
@@ -16,11 +17,13 @@ export const SESSION_SUBSCRIPTION_QUERIES = [
   'SELECT * FROM public_fleets',
   'SELECT * FROM public_colony_ships',
   'SELECT * FROM public_events',
+  'SELECT * FROM proposals',
 ] as const;
 
 export interface SessionSubscriptionBridge {
   hydrate: (snapshot: SubscriptionSnapshot) => void;
   apply: (event: SubscriptionEvent) => void;
+  setProposalsSubscription: (status: SubscriptionLoadStatus) => void;
 }
 
 export function wireSessionSubscriptions(
@@ -29,6 +32,7 @@ export function wireSessionSubscriptions(
   queries: readonly string[] = SESSION_SUBSCRIPTION_QUERIES,
 ): SessionSubscriptionBridge {
   client.subscribe([...queries]);
+  store.getState().actions.setProposalsSubscription({ status: 'loading' });
 
   return {
     hydrate(snapshot) {
@@ -36,6 +40,9 @@ export function wireSessionSubscriptions(
     },
     apply(event) {
       store.getState().actions.applySubscriptionEvent(event);
+    },
+    setProposalsSubscription(status) {
+      store.getState().actions.setProposalsSubscription(status);
     },
   };
 }
