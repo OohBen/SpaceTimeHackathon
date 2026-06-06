@@ -22,7 +22,7 @@ npm run test:contracts
 |---|---|---|
 | Secrets scan | `npm run scan:secrets` | File, line, and rule id in the console; SARIF in `artifacts/gitleaks.sarif`. |
 | Dependency review | Pull request check | Package name, advisory, severity, and changed lockfile in the check annotation. |
-| CodeQL | CodeQL check | SARIF alert path and query name in the GitHub Security annotation. |
+| CodeQL | CodeQL check | SARIF artifact path and query name. Enable code scanning before switching upload to GitHub Security alerts. |
 | Actionlint | `npm run lint:actions`, then `actionlint` | Workflow file and expression or YAML syntax location. |
 | Markdownlint | `npm run lint:markdown`, then `npx markdownlint-cli2 "**/*.md" "#**/node_modules/**"` | Markdown file and rule id. |
 | Contract check | `npm run test:contracts` | Missing reducer, route, env key, request type, or LLM field. |
