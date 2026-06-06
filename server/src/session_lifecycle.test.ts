@@ -266,7 +266,12 @@ function makeTurnPhaseCtx(sessions: GameSessionRow[]): WorldUpdateContext {
         },
       },
       cities: { iter: () => [].values() },
+      celestial_bodies: { iter: () => [].values() },
       colony_ships: {
+        iter: () => [].values(),
+        id: { update: row => row },
+      },
+      fleets: {
         iter: () => [].values(),
         id: { update: row => row },
       },
