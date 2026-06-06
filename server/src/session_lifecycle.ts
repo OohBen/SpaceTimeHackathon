@@ -7,11 +7,35 @@ export const INITIAL_TURN = 1;
 export const INITIAL_CREDITS = 1_000;
 export const INITIAL_POLITICAL_CAPITAL = 50;
 export const INITIAL_CONTROL_SCORE = 100;
+export const ACTIVE_SESSION_STATE = 'active';
+export const COMPLETED_SESSION_STATE = 'completed';
+export const TURN_PHASES = [
+  'setup',
+  'world_update',
+  'deliberation',
+  'decision',
+  'resolution',
+  'summary',
+  'complete',
+] as const;
+export const ALLOWED_TURN_PHASE_TRANSITIONS: Record<
+  TurnPhase,
+  readonly TurnPhase[]
+> = {
+  setup: ['world_update'],
+  world_update: ['deliberation'],
+  deliberation: ['decision'],
+  decision: ['resolution'],
+  resolution: ['summary'],
+  summary: ['world_update', 'complete'],
+  complete: [],
+};
 
 const SLOT_IDENTITY_NAMESPACE =
   0x534f4c4152444f4d494e494f4e00000000000000000000000000000000n;
 
 export type FactionSlotKey = 'player_a' | 'player_b';
+export type TurnPhase = (typeof TURN_PHASES)[number];
 
 export interface CreateSessionInput {
   player_a_name: string;
@@ -73,6 +97,15 @@ export interface JoinOrResumeInput {
   player_slot: string;
 }
 
+export interface AdvanceTurnPhaseInput {
+  session_id: number;
+  next_phase: string;
+}
+
+export interface AdvanceWorldInput {
+  session_id: number;
+}
+
 export interface SessionBootstrap {
   session_id: number;
   faction_id: number;
@@ -97,6 +130,18 @@ export interface JoinOrResumeContext {
       id: {
         find(id: number): FactionRow | null;
         update(row: FactionRow): FactionRow;
+      };
+    };
+  };
+}
+
+export interface TurnPhaseContext {
+  timestamp: Timestamp;
+  db: {
+    game_sessions: {
+      id: {
+        find(id: number): GameSessionRow | null;
+        update(row: GameSessionRow): GameSessionRow;
       };
     };
   };
@@ -258,6 +303,66 @@ export function joinOrResumeSessionReducer(
   joinOrResumeSession(ctx, input);
 }
 
+export function advanceTurnPhaseReducer(
+  ctx: TurnPhaseContext,
+  input: AdvanceTurnPhaseInput
+): void {
+  const session = findSessionForPhaseUpdate(ctx, input.session_id);
+  ctx.db.game_sessions.id.update(
+    transitionTurnPhase(session, input.next_phase, ctx.timestamp)
+  );
+}
+
+export function advanceWorldReducer(
+  ctx: TurnPhaseContext,
+  input: AdvanceWorldInput
+): void {
+  const session = findSessionForPhaseUpdate(ctx, input.session_id);
+  assertActiveSessionForWorldUpdate(session);
+  ctx.db.game_sessions.id.update(
+    transitionTurnPhase(session, 'deliberation', ctx.timestamp)
+  );
+}
+
+export function transitionTurnPhase(
+  session: GameSessionRow,
+  nextPhaseInput: string,
+  timestamp: Timestamp
+): GameSessionRow {
+  const currentPhase = parseTurnPhase(session.turn_phase);
+  const nextPhase = parseTurnPhase(nextPhaseInput);
+  assertSessionCanTransition(session);
+  assertInitializedForActivePhase(session, nextPhase);
+  assertAllowedTurnPhaseTransition(currentPhase, nextPhase);
+
+  return {
+    ...session,
+    state: stateForPhase(session.state, nextPhase),
+    turn_phase: nextPhase,
+    turn_deadline: nextPhase === 'decision' ? session.turn_deadline : undefined,
+    updated_at: timestamp,
+  };
+}
+
+export function parseTurnPhase(phase: string): TurnPhase {
+  if (isTurnPhase(phase)) {
+    return phase;
+  }
+
+  throw new Error(`unknown turn phase ${phase}`);
+}
+
+export function assertAllowedTurnPhaseTransition(
+  currentPhase: TurnPhase,
+  nextPhase: TurnPhase
+): void {
+  if (!ALLOWED_TURN_PHASE_TRANSITIONS[currentPhase].includes(nextPhase)) {
+    throw new Error(
+      `invalid turn phase transition ${currentPhase} -> ${nextPhase}`
+    );
+  }
+}
+
 export function joinOrResumeSession(
   ctx: JoinOrResumeContext,
   input: JoinOrResumeInput
@@ -268,7 +373,7 @@ export function joinOrResumeSession(
     throw new Error(`session ${input.session_id} not found`);
   }
 
-  if (session.state !== INITIAL_SESSION_STATE && session.state !== 'active') {
+  if (session.state !== INITIAL_SESSION_STATE && session.state !== ACTIVE_SESSION_STATE) {
     throw new Error(
       `session ${input.session_id} cannot be joined or resumed from state ${session.state}`
     );
@@ -338,8 +443,8 @@ export function joinOrResumeSession(
 
   if (bothClaimed) {
     ctx.db.game_sessions.id.update({
-      ...session,
-      state: 'active',
+      ...transitionTurnPhase(session, 'world_update', ctx.timestamp),
+      state: ACTIVE_SESSION_STATE,
       updated_at: ctx.timestamp,
     });
   }
@@ -363,6 +468,61 @@ function checkBothSlotsClaimed(
   if (!opponentFaction) return false;
   const opponentDoctrine: FactionDoctrineVector = JSON.parse(opponentFaction.doctrine_vector);
   return opponentDoctrine.slot.claim_status === 'claimed';
+}
+
+function findSessionForPhaseUpdate(
+  ctx: TurnPhaseContext,
+  sessionId: number
+): GameSessionRow {
+  const session = ctx.db.game_sessions.id.find(sessionId);
+  if (!session) {
+    throw new Error(`session ${sessionId} not found`);
+  }
+
+  return session;
+}
+
+function isTurnPhase(phase: string): phase is TurnPhase {
+  return (TURN_PHASES as readonly string[]).includes(phase);
+}
+
+function assertSessionCanTransition(session: GameSessionRow): void {
+  if (session.state === COMPLETED_SESSION_STATE || session.turn_phase === 'complete') {
+    throw new Error(`session ${session.id} is already complete`);
+  }
+}
+
+function assertActiveSessionForWorldUpdate(session: GameSessionRow): void {
+  if (session.state !== ACTIVE_SESSION_STATE) {
+    throw new Error(
+      `session ${session.id} must be active before world update can advance`
+    );
+  }
+}
+
+function assertInitializedForActivePhase(
+  session: GameSessionRow,
+  nextPhase: TurnPhase
+): void {
+  if (
+    nextPhase !== 'setup' &&
+    (session.player_a_faction_id === undefined ||
+      session.player_b_faction_id === undefined)
+  ) {
+    throw new Error(`session ${session.id} is not fully initialized`);
+  }
+}
+
+function stateForPhase(currentState: string, nextPhase: TurnPhase): string {
+  if (nextPhase === 'complete') {
+    return COMPLETED_SESSION_STATE;
+  }
+
+  if (nextPhase === 'world_update' && currentState === INITIAL_SESSION_STATE) {
+    return ACTIVE_SESSION_STATE;
+  }
+
+  return currentState;
 }
 
 function parseFactionSlotKey(playerSlot: string): FactionSlotKey {
