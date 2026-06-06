@@ -1,7 +1,14 @@
-export default function App() {
+import { AppRouter } from './routes/AppRouter';
+import type { SessionBackend } from './session/spacetime';
+
+interface AppProps {
+  backend?: SessionBackend;
+}
+
+export default function App({ backend }: AppProps) {
   return (
-    <div>
-      <h1>Solar Dominion</h1>
-    </div>
+    <main>
+      <AppRouter backend={backend} />
+    </main>
   );
 }
