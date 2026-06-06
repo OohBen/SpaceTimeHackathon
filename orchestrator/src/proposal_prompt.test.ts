@@ -95,4 +95,96 @@ describe("buildProposalPrompt", () => {
     const cityBIndex = user.indexOf("- City B");
     expect(cityAIndex).toBeLessThan(cityBIndex);
   });
+
+  it("produces byte-identical output for identical input (determinism)", () => {
+    const input = {
+      doctrine: { diplomacy: 0.42, expansion: 0.31, science: 0.18, security: 0.77 },
+      events: [
+        { description: "Skirmish at Phobos", turn: 7 },
+        { description: "Trade pact signed", turn: 9 },
+      ],
+      intel: [
+        { faction: "Vega Combine", report: "Fleet movement near Ceres" },
+        { faction: "Aurora Pact", report: "Embassy opened on Luna" },
+      ],
+      officer: {
+        department: "Operations",
+        name: "Cmdr. Mira",
+        traits: ["Decisive", "Aggressive"],
+      },
+      requests: [
+        { department: "Engineering", request: "Approve dry-dock expansion" },
+        { department: "Diplomacy", request: "Authorize summit on Titan" },
+      ],
+      world: {
+        bodies: [{ name: "Titan" }, { name: "Ceres" }],
+        cities: [
+          { control_level: 0.61, name: "New Geneva", population: 4200 },
+          { control_level: 0.83, name: "Aldrin Crater", population: 1800 },
+        ],
+      },
+    };
+
+    const first = buildProposalPrompt(input);
+    const second = buildProposalPrompt(input);
+    expect(first.prompt).toBe(second.prompt);
+    expect(first.system).toBe(second.system);
+
+    // Mutating order of arrays must not change the prompt — sorting is enforced.
+    const shuffled = {
+      ...input,
+      events: [...input.events].reverse(),
+      intel: [...input.intel].reverse(),
+      requests: [...input.requests].reverse(),
+      world: {
+        bodies: [...input.world.bodies].reverse(),
+        cities: [...input.world.cities].reverse(),
+      },
+      officer: { ...input.officer, traits: [...input.officer.traits].reverse() },
+    };
+    expect(buildProposalPrompt(shuffled).prompt).toBe(first.prompt);
+  });
+
+  it("populates every section when all sources are present", () => {
+    const request = buildProposalPrompt({
+      doctrine: { diplomacy: 0.2, expansion: 0.4, science: 0.6, security: 0.8 },
+      events: [{ description: "Anomaly detected", turn: 3 }],
+      intel: [{ faction: "Rival", report: "Probe sighted" }],
+      officer: { department: "Science", name: "Dr. Iris", traits: ["Curious"] },
+      requests: [{ department: "Logistics", request: "Reroute convoy" }],
+      world: {
+        bodies: [{ name: "Mars" }],
+        cities: [{ control_level: 0.5, name: "Olympus", population: 3000 }],
+      },
+    });
+
+    expect(request.prompt).toContain("--- OFFICER PROFILE ---");
+    expect(request.prompt).toContain("--- FACTION DOCTRINE ---");
+    expect(request.prompt).toContain("--- WORLD STATE ---");
+    expect(request.prompt).toContain("--- RECENT EVENTS ---\nTurn 3: Anomaly detected");
+    expect(request.prompt).toContain("--- INTELLIGENCE ---\n[Rival] Probe sighted");
+    expect(request.prompt).toContain("--- OUTSTANDING REQUESTS ---\nFrom Logistics: Reroute convoy");
+    expect(request.prompt).toContain("- Olympus (Pop: 3000, Control: 0.50)");
+    expect(request.prompt).toContain("- Mars");
+  });
+
+  it("never emits private data beyond the supplied input (privacy boundary)", () => {
+    // The orchestrator must not invent or smuggle context the server did not pass in.
+    const input = {
+      doctrine: { diplomacy: 0.5, expansion: 0.5, science: 0.5, security: 0.5 },
+      officer: { department: "Science", name: "Dr. Zeta", traits: ["Analytical"] },
+      world: { bodies: [], cities: [] },
+    };
+    const request = buildProposalPrompt(input);
+
+    // No rival/opposing-faction tokens should appear when intel is omitted.
+    expect(request.prompt).not.toMatch(/rival|opposing|enemy faction/i);
+    // Sections present but explicitly empty.
+    expect(request.prompt).toContain("--- INTELLIGENCE ---\nNone");
+    expect(request.prompt).toContain("--- RECENT EVENTS ---\nNone");
+    expect(request.prompt).toContain("--- OUTSTANDING REQUESTS ---\nNone");
+    // Only the supplied officer name appears.
+    const nameMatches = request.prompt.match(/Dr\. [A-Z][a-z]+/g) ?? [];
+    expect(nameMatches.every(n => n === "Dr. Zeta")).toBe(true);
+  });
 });
