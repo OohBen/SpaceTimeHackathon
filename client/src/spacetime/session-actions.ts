@@ -1,6 +1,6 @@
 import type { SessionStore } from '../state/session-store';
 import type { SpacetimeClient } from './client';
-import type { CreateSessionArgs, JoinSessionArgs } from './reducers';
+import type { CommanderDecisionArgs, CreateSessionArgs, JoinSessionArgs } from './reducers';
 import { reducerRegistry } from './reducers';
 
 export function createSessionAction(
@@ -41,5 +41,26 @@ export function joinSessionAction(
     client.callReducer(call);
   } catch (error) {
     store.getState().actions.failReducerCall('joinSession', error);
+  }
+}
+
+export function commanderDecisionKey(proposalId: number | string): string {
+  return `commanderDecision:${proposalId}`;
+}
+
+export function commanderDecisionAction(
+  store: SessionStore,
+  client: SpacetimeClient,
+  args: CommanderDecisionArgs,
+): void {
+  const call = reducerRegistry.commanderDecision(args);
+  const key = commanderDecisionKey(args.proposalId);
+
+  store.getState().actions.beginReducerCall(key, call);
+
+  try {
+    client.callReducer(call);
+  } catch (error) {
+    store.getState().actions.failReducerCall(key, error);
   }
 }

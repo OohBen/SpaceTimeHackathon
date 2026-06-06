@@ -1,13 +1,19 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Inbox } from './Inbox';
+import type { SpacetimeClient } from '../../spacetime/client';
+import type { ReducerCallDescriptor } from '../../spacetime/reducers';
 import {
   createSessionStore,
   type ProposalRow,
   type SessionStore,
 } from '../../state/session-store';
 
-function seedStore(): SessionStore {
+function seedStore(options: {
+  factionId?: string;
+  resources?: Record<string, number>;
+} = {}): SessionStore {
+  const factionId = options.factionId ?? 'earth';
   const store = createSessionStore();
   store.getState().actions.setConnection({
     status: 'connected',
@@ -28,13 +34,25 @@ function seedStore(): SessionStore {
         sessionId: 'session-1',
         slot: 1,
         identity: 'identity-player-1',
-        factionId: 'earth',
+        factionId,
         factionName: 'Earth Directorate',
         playerName: 'Atlas',
         occupied: true,
         visibility: 'own',
       },
     ],
+    privateFactionStates: options.resources
+      ? [
+          {
+            sessionId: 'session-1',
+            factionId,
+            resources: options.resources,
+            morale: 74,
+            doctrine: 'industrial',
+            visibility: 'ownFaction',
+          },
+        ]
+      : undefined,
   });
   return store;
 }
@@ -54,6 +72,40 @@ function makeProposal(overrides: Partial<ProposalRow> = {}): ProposalRow {
     status: 'pending',
     decision: null,
     ...overrides,
+  };
+}
+
+function seedDecisionStore(
+  overrides: Partial<ProposalRow> = {},
+  resources: Record<string, number> = { credits: 40, metals: 15 },
+): SessionStore {
+  const store = seedStore({ factionId: '7', resources });
+  store.getState().actions.hydrateSubscription({
+    proposals: [
+      makeProposal({
+        id: '101',
+        factionId: '7',
+        status: 'unread',
+        resourceCost: 25,
+        ...overrides,
+      }),
+    ],
+  });
+  return store;
+}
+
+function fakeClient(onCall: (call: ReducerCallDescriptor) => void): SpacetimeClient {
+  return {
+    connect: () => ({ disconnect: () => undefined }),
+    reconnect: () => ({ disconnect: () => undefined }),
+    disconnect: () => undefined,
+    subscribe: () => undefined,
+    callReducer: onCall,
+    diagnostics: () => ({
+      host: 'ws://localhost:3000',
+      dbName: 'solar-dominion',
+      issues: [],
+    }),
   };
 }
 
@@ -162,5 +214,145 @@ describe('Inbox component', () => {
     const pendingDds = within(meta).getAllByText('pending', { selector: 'dd' });
     expect(pendingDds.length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/accelerate colony ship throughput/i)).toBeDefined();
+  });
+
+  it('submits approved proposals through the typed commander decision reducer', () => {
+    const calls: ReducerCallDescriptor[] = [];
+    const store = seedDecisionStore();
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient((call) => calls.push(call))}
+        selectedProposalId="101"
+      />,
+    );
+
+    expect(screen.getByText(/available credits: 40/i)).toBeDefined();
+    expect(screen.getByLabelText(/credits allocation/i)).toHaveValue(25);
+
+    fireEvent.click(screen.getByRole('button', { name: /approve/i }));
+
+    expect(calls).toEqual([
+      {
+        reducer: 'commander_decision',
+        args: {
+          factionId: 7,
+          proposalId: 101,
+          decision: 'approved',
+          allocation: 25,
+        },
+      },
+    ]);
+    expect(screen.getByRole('status')).toHaveTextContent(/submitting decision/i);
+  });
+
+  it('submits reject and defer decisions with zero allocation', () => {
+    const rejectCalls: ReducerCallDescriptor[] = [];
+    const { unmount } = render(
+      <Inbox
+        store={seedDecisionStore()}
+        client={fakeClient((call) => rejectCalls.push(call))}
+        selectedProposalId="101"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/credits allocation/i), {
+      target: { value: '35' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /reject/i }));
+
+    expect(rejectCalls[0]).toMatchObject({
+      reducer: 'commander_decision',
+      args: { factionId: 7, proposalId: 101, decision: 'rejected', allocation: 0 },
+    });
+
+    unmount();
+
+    const deferCalls: ReducerCallDescriptor[] = [];
+    render(
+      <Inbox
+        store={seedDecisionStore({ id: '102' })}
+        client={fakeClient((call) => deferCalls.push(call))}
+        selectedProposalId="102"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /defer/i }));
+
+    expect(deferCalls[0]).toMatchObject({
+      reducer: 'commander_decision',
+      args: { factionId: 7, proposalId: 102, decision: 'deferred', allocation: 0 },
+    });
+  });
+
+  it('blocks impossible approved allocations with clear validation messaging', () => {
+    const calls: ReducerCallDescriptor[] = [];
+    const store = seedDecisionStore({}, { credits: 20, metals: 15 });
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient((call) => calls.push(call))}
+        selectedProposalId="101"
+      />,
+    );
+
+    expect(screen.getByText(/only 20 credits available/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/credits allocation/i), {
+      target: { value: '10' },
+    });
+
+    expect(screen.getByText(/requires at least 25 credits/i)).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /approve/i }));
+    expect(calls).toHaveLength(0);
+  });
+
+  it('shows backend validation errors and success state for decision calls', () => {
+    const store = seedDecisionStore();
+
+    render(
+      <Inbox
+        store={store}
+        client={fakeClient(() => {
+          throw new Error('approved proposal 101 requires at least 25 credits');
+        })}
+        selectedProposalId="101"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /approve/i }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /backend rejected decision: approved proposal 101 requires at least 25 credits/i,
+    );
+
+    act(() => {
+      store.getState().actions.beginReducerCall('commanderDecision:101', {
+        reducer: 'commander_decision',
+        args: { factionId: 7, proposalId: 101, decision: 'approved', allocation: 25 },
+      });
+      store.getState().actions.completeReducerCall('commanderDecision:101');
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent(/decision submitted/i);
+  });
+
+  it('disables decision controls for proposals that already have a terminal decision', () => {
+    const store = seedDecisionStore({
+      status: 'approved',
+      decision: '{"decision":"approved"}',
+    });
+
+    render(<Inbox store={store} client={fakeClient(() => undefined)} selectedProposalId="101" />);
+
+    const controls = within(screen.getByRole('region', { name: /proposal decision controls/i }));
+
+    expect(screen.getByText(/decision already recorded/i)).toBeDefined();
+    expect(controls.getByRole('button', { name: /approve/i })).toBeDisabled();
+    expect(controls.getByRole('button', { name: /reject/i })).toBeDisabled();
+    expect(controls.getByRole('button', { name: /defer/i })).toBeDisabled();
   });
 });
