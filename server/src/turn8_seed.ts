@@ -18,6 +18,7 @@ import {
   type ProjectRow,
   type IntelligenceRecordRow,
   type EventRow,
+  type TurnSummaryRow,
   type TradeAgreementRow,
   type LlmRequestRow,
 } from './turn1_seed.js';
@@ -603,6 +604,8 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
     },
   ];
 
+  const turn_summaries: TurnSummaryRow[] = [];
+
   const llm_requests: LlmRequestRow[] = [
     {
       id: 1,
@@ -656,6 +659,7 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
     projects,
     intelligence_records,
     events,
+    turn_summaries,
     trade_agreements,
     llm_requests,
   };

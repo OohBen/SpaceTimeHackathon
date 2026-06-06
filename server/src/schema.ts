@@ -226,6 +226,27 @@ export const tables = {
     }
   ),
 
+  turn_summaries: table(
+    {
+      public: true,
+      indexes: [
+        { accessor: 'turn_summaries_session_idx', algorithm: 'btree', columns: ['session_id', 'turn'] as const },
+        { accessor: 'turn_summaries_faction_idx', algorithm: 'btree', columns: ['faction_id', 'turn'] as const },
+      ],
+    },
+    {
+      id: t.u32().primaryKey().autoInc(),
+      session_id: t.u32(),
+      faction_id: t.u32(),
+      turn: t.u32(),
+      summary_json: t.string(),
+      acknowledged: t.bool(),
+      acknowledged_at: t.option(t.timestamp()),
+      created_at: t.timestamp(),
+      updated_at: t.timestamp(),
+    }
+  ),
+
   trade_agreements: table(
     { public: true },
     {

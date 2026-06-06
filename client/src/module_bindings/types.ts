@@ -202,3 +202,16 @@ export const TradeAgreements = __t.object("TradeAgreements", {
   expiresTurn: __t.option(__t.u32()),
 });
 export type TradeAgreements = __Infer<typeof TradeAgreements>;
+
+export const TurnSummaries = __t.object("TurnSummaries", {
+  id: __t.u32(),
+  sessionId: __t.u32(),
+  factionId: __t.u32(),
+  turn: __t.u32(),
+  summaryJson: __t.string(),
+  acknowledged: __t.bool(),
+  acknowledgedAt: __t.option(__t.timestamp()),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type TurnSummaries = __Infer<typeof TurnSummaries>;

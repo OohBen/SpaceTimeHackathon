@@ -14,6 +14,11 @@ import {
   expireTurnReducer,
   submitTurnReducer,
 } from './turn_advancement.js';
+import {
+  ackResolutionReducer,
+  checkVictoryReducer,
+  simulateTurnReducer,
+} from './turn_resolution.js';
 
 // SpacetimeDB CLI entry point for the Solar Dominion module.
 const spacetimedb = schema(tables);
@@ -78,6 +83,27 @@ export const expire_turn = spacetimedb.reducer(
     session_id: t.u32(),
   },
   expireTurnReducer
+);
+
+export const simulate_turn = spacetimedb.reducer(
+  {
+    session_id: t.u32(),
+  },
+  simulateTurnReducer
+);
+
+export const ack_resolution = spacetimedb.reducer(
+  {
+    faction_id: t.u32(),
+  },
+  ackResolutionReducer
+);
+
+export const check_victory = spacetimedb.reducer(
+  {
+    session_id: t.u32(),
+  },
+  checkVictoryReducer
 );
 
 export default spacetimedb;
