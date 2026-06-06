@@ -8,6 +8,7 @@ import {
   type SessionBackend,
   type SessionBackendResult,
 } from '../session/spacetime';
+import { useLiveSessionBridge } from '../session/liveBridge';
 import { useHudData, type HudData } from './hud';
 import type { PlayerSlot, SetupParams, SetupState } from './types';
 import { usePanelStore, CORE_PANELS, type PanelId } from './panels';
@@ -43,6 +44,9 @@ export function AppRouter(props: AppRouterProps) {
 
 function LiveAppRouter(props: Omit<AppRouterProps, 'backend'>) {
   const backend = useSpacetimeSessionBackend();
+  // Mirror generated table rows into `sessionStore` so the Inbox and HUD see
+  // the same live state the rest of the route flow consumes.
+  useLiveSessionBridge();
   return <AppRouterView {...props} backend={backend} />;
 }
 
@@ -51,6 +55,7 @@ function AppRouterView({
   onSessionReady,
   onSubmit,
 }: AppRouterProps & { backend: SessionBackend }) {
+  const sessionClient = backend.client;
   const [router, setRouter] = useState<RouterState>(() => routeFromPath(readPathname()));
   const session = useSessionStore();
 
@@ -129,6 +134,7 @@ function AppRouterView({
       <GameRoute
         route={router.gameRoute}
         session={session}
+        sessionClient={sessionClient}
         onBack={resetToLanding}
       />
     );
@@ -158,10 +164,12 @@ type HistoryMode = 'push' | 'replace';
 function GameRoute({
   route,
   session,
+  sessionClient,
   onBack,
 }: {
   route: GameRouteParams;
   session: SessionStoreState;
+  sessionClient: SessionBackend['client'];
   onBack: () => void;
 }) {
   const { activePanel, setPanel } = usePanelStore();
@@ -187,6 +195,7 @@ function GameRoute({
   return (
     <CommandCenterShell
       session={session}
+      sessionClient={sessionClient}
       activePanel={activePanel}
       onPanelChange={setPanel}
       onBack={onBack}
@@ -196,6 +205,7 @@ function GameRoute({
 
 function CommandCenterShell({
   session,
+  sessionClient,
   activePanel,
   onPanelChange,
   onBack,
@@ -206,6 +216,7 @@ function CommandCenterShell({
     playerSlot: PlayerSlot;
     playerName: string;
   };
+  sessionClient: SessionBackend['client'];
   activePanel: PanelId;
   onPanelChange: (panel: PanelId) => void;
   onBack: () => void;
@@ -249,7 +260,11 @@ function CommandCenterShell({
             <p className="command-shell__eyebrow">Active panel</p>
             <h3>{activeDef.label}</h3>
           </div>
-          <PanelContent panel={activePanel} session={session} />
+          <PanelContent
+            panel={activePanel}
+            session={session}
+            sessionClient={sessionClient}
+          />
         </section>
       </div>
     </div>
@@ -266,9 +281,11 @@ type SessionRouteState = SessionStoreState & {
 function PanelContent({
   panel,
   session,
+  sessionClient,
 }: {
   panel: PanelId;
   session: SessionRouteState;
+  sessionClient: SessionBackend['client'];
 }) {
   if (panel === 'overview') {
     return (
@@ -301,7 +318,7 @@ function PanelContent({
   }
 
   if (panel === 'inbox') {
-    return <Inbox />;
+    return <Inbox client={sessionClient ?? undefined} />;
   }
 
   return (
