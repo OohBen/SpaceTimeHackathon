@@ -77,7 +77,10 @@ export function createOrchestratorHttpServer(
     async listen() {
       await new Promise<void>((resolve, reject) => {
         server.once("error", reject);
-        server.listen(config.port, "127.0.0.1", resolve);
+        // Bind 0.0.0.0 so the server is reachable inside containers / behind a
+        // reverse proxy (Coolify, Fly). 127.0.0.1 would be unreachable there.
+        const host = process.env.HOST ?? "0.0.0.0";
+        server.listen(config.port, host, resolve);
       });
 
       const address = server.address() as AddressInfo;

@@ -132,6 +132,14 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
   useEffect(() => {
     if (!conn || !isActive) return;
     conn.subscriptionBuilder().subscribe([
+      // game_sessions + factions are REQUIRED here: the operational store reads
+      // them via useTable() above, and selectActiveSession()/all panels key off
+      // the hydrated session. Without these the store has no sessions and the
+      // whole game view shows "No active session".
+      tables.game_sessions,
+      tables.factions,
+      tables.cities,
+      tables.celestial_bodies,
       tables.proposals,
       tables.commander_inbox,
       tables.turn_summaries,
