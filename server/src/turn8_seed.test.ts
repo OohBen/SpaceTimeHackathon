@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   TURN8_SEED_INSERT_ORDER,
+  TURN8_JUDGE_SCENARIO_DELTAS,
   buildTurn8Seed,
   getTurn8SeedInsertPlan,
   turn8Seed,
   type Turn8SeedRows,
 } from './turn8_seed.js';
+import { buildTurn1Seed } from './turn1_seed.js';
 import { joinOrResumeSession } from './session_lifecycle.js';
 
 const canonicalValue = (value: unknown): unknown => {
@@ -26,6 +28,16 @@ const canonicalValue = (value: unknown): unknown => {
 };
 
 const canonicalSeed = (seed: Turn8SeedRows): unknown => canonicalValue(seed);
+
+const parseJson = <T>(value: string): T => JSON.parse(value) as T;
+
+const expectNumberDelta = (
+  delta: Readonly<{ from: number; to: number; delta: number }>,
+  from: number,
+  to: number
+) => {
+  expect(delta).toEqual({ from, to, delta: to - from });
+};
 
 describe('Turn 8 deterministic seed', () => {
   it('builds Turn 8 session state (turn 8, year 2157, active deliberation)', () => {
@@ -53,32 +65,302 @@ describe('Turn 8 deterministic seed', () => {
     expect(seed.factions.every((f) => f.player_id instanceof Identity)).toBe(true);
   });
 
-  it('Mars city shows contested state (strained supply, high garrison)', () => {
+  it('Mars city shows contested pressure (strained supply, low morale, high garrison)', () => {
     const seed = buildTurn8Seed();
     const marsBody = seed.celestial_bodies.find((b) => b.name === 'Mars');
     expect(marsBody).toBeDefined();
 
     const marsCity = seed.cities.find((c) => c.body_id === marsBody!.id);
     expect(marsCity).toBeDefined();
-    expect(marsCity!.supply_status).toBe('strained');
-    expect(marsCity!.garrison_strength).toBeGreaterThan(50);
+    expect(marsCity).toMatchObject({
+      name: 'Pavonis Hub',
+      morale: 44,
+      garrison_strength: 680,
+      supply_status: 'strained',
+    });
+
+    const contestedIntel = seed.intelligence_records.find(
+      (record) => record.intel_type === 'contested_territory'
+    );
+    expect(contestedIntel).toBeDefined();
+    expect(parseJson(contestedIntel!.value)).toEqual({
+      body: 'Mars',
+      city: 'Pavonis Hub',
+      fleet_strength: 580,
+      garrison_strength: 680,
+      morale: 44,
+      pressure: 'supply_relief_required',
+      supply_status: 'strained',
+    });
   });
 
-  it('Callisto or Jupiter shows opportunity (establishment stage or opportunity intel)', () => {
+  it('Callisto shows attractive expansion opportunity with explicit resource upside', () => {
     const seed = buildTurn8Seed();
-    const opportunityBodies = ['Callisto', 'Jupiter'];
-    const opportunityBodyIds = seed.celestial_bodies
-      .filter((b) => opportunityBodies.includes(b.name))
-      .map((b) => b.id);
-
-    const hasOpportunityCity = seed.cities.some(
-      (c) => opportunityBodyIds.includes(c.body_id) && c.development_stage === 'establishment'
-    );
-    const hasOpportunityIntel = seed.intelligence_records.some(
-      (r) => r.intel_type === 'opportunity'
+    const callisto = seed.celestial_bodies.find((b) => b.name === 'Callisto');
+    expect(callisto).toBeDefined();
+    expect(parseJson(callisto!.resource_deposits)).toEqual(
+      TURN8_JUDGE_SCENARIO_DELTAS.resources.Callisto.deposits
     );
 
-    expect(hasOpportunityCity || hasOpportunityIntel).toBe(true);
+    const callistoCity = seed.cities.find((c) => c.body_id === callisto!.id);
+    expect(callistoCity).toMatchObject({
+      name: 'Callisto Outpost',
+      faction_id: 1,
+      population: 120_000n,
+      development_stage: 'establishment',
+      supply_status: 'stable',
+    });
+
+    const opportunityIntel = seed.intelligence_records
+      .filter((record) => record.intel_type === 'opportunity')
+      .map((record) => parseJson<Record<string, unknown>>(record.value));
+
+    expect(opportunityIntel).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          body: 'Callisto',
+          resource_deposits: TURN8_JUDGE_SCENARIO_DELTAS.resources.Callisto.deposits,
+        }),
+      ])
+    );
+  });
+
+  it('seeds public scenario cue events for Mars pressure and Callisto opportunity', () => {
+    const seed = buildTurn8Seed();
+    const cueEvents = seed.events
+      .filter((event) => event.event_type.startsWith('scenario_cue_'))
+      .sort((left, right) => left.event_type.localeCompare(right.event_type));
+
+    expect(cueEvents.map((event) => event.event_type)).toEqual([
+      'scenario_cue_callisto_opportunity',
+      'scenario_cue_mars_pressure',
+    ]);
+
+    const cues = Object.fromEntries(
+      cueEvents.map((event) => [event.event_type, parseJson<Record<string, unknown>>(event.payload)])
+    );
+    expect(cues.scenario_cue_mars_pressure).toMatchObject({
+      body: 'Mars',
+      city: 'Pavonis Hub',
+      cue: 'mars_pressure',
+      label: 'Mars pressure: Pavonis Hub strained supply',
+      severity: 'warning',
+    });
+    expect(cues.scenario_cue_callisto_opportunity).toMatchObject({
+      body: 'Callisto',
+      city: 'Callisto Outpost',
+      cue: 'callisto_opportunity',
+      label: 'Callisto opportunity: ice and volatiles window',
+      severity: 'info',
+    });
+  });
+
+  it('attaches deterministic display-only narrative to seeded commander briefings', () => {
+    const seed = buildTurn8Seed();
+    const narratedBriefings = seed.commander_inbox.filter((message) => message.narrative_json);
+
+    expect(narratedBriefings).toHaveLength(seed.commander_inbox.length);
+
+    const prose = narratedBriefings
+      .map((message) => parseJson<{ text: string }>(message.narrative_json!).text)
+      .join('\n');
+    expect(prose).toMatch(/Mars/i);
+    expect(prose).toMatch(/Pavonis Hub/i);
+    expect(prose).toMatch(/Callisto/i);
+
+    for (const message of narratedBriefings) {
+      const narrative = parseJson<Record<string, unknown>>(message.narrative_json!);
+      expect(narrative).toMatchObject({
+        authoritative: false,
+        display_only: true,
+        request_type: 'inbox',
+        schema_version: 1,
+        source: 'fixture',
+        surface: 'inbox',
+      });
+      expect(narrative.metadata).toMatchObject({
+        faction_id: message.faction_id,
+        privacy_scope: 'own_faction',
+        session_id: 1,
+        turn: 8,
+      });
+    }
+
+    const inboxRequests = seed.llm_requests.filter((request) => request.request_type === 'inbox');
+    expect(inboxRequests).toHaveLength(2);
+    expect(inboxRequests.every((request) => request.status === 'completed')).toBe(true);
+    expect(
+      inboxRequests.map((request) => parseJson<{ source: string }>(request.response_json!).source)
+    ).toEqual(['deterministic_fixture', 'deterministic_fixture']);
+  });
+
+  it('makes required world-state deltas from Turn 1 baseline explicit and testable', () => {
+    const baseline = buildTurn1Seed();
+    const seed = buildTurn8Seed();
+    const deltaEvent = seed.events.find(
+      (event) => event.event_type === 'turn8_judge_scenario_seeded'
+    );
+
+    expect(deltaEvent).toMatchObject({ turn: 8, faction_id: undefined });
+    expect(parseJson(deltaEvent!.payload)).toEqual(TURN8_JUDGE_SCENARIO_DELTAS);
+
+    const baselineSession = baseline.game_sessions[0];
+    const turn8Session = seed.game_sessions[0];
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.turn_state.current_year,
+      baselineSession.current_year,
+      turn8Session.current_year
+    );
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.turn_state.current_turn,
+      baselineSession.current_turn,
+      turn8Session.current_turn
+    );
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.turn_state.turn_phase).toBe(turn8Session.turn_phase);
+
+    const factionById = (rows: Turn8SeedRows, factionId: number) => {
+      const faction = rows.factions.find((row) => row.id === factionId);
+      expect(faction).toBeDefined();
+      return faction!;
+    };
+    const baselineFactionA = factionById(baseline, 1);
+    const baselineFactionB = factionById(baseline, 2);
+    const turn8FactionA = factionById(seed, 1);
+    const turn8FactionB = factionById(seed, 2);
+
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.factions['1'].credits,
+      baselineFactionA.credits,
+      turn8FactionA.credits
+    );
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.factions['1'].political_capital,
+      baselineFactionA.political_capital,
+      turn8FactionA.political_capital
+    );
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.factions['1'].control_score,
+      baselineFactionA.control_score,
+      turn8FactionA.control_score
+    );
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.factions['2'].credits,
+      baselineFactionB.credits,
+      turn8FactionB.credits
+    );
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.factions['2'].political_capital,
+      baselineFactionB.political_capital,
+      turn8FactionB.political_capital
+    );
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.factions['2'].control_score,
+      baselineFactionB.control_score,
+      turn8FactionB.control_score
+    );
+
+    const cityByName = (rows: Turn8SeedRows, cityName: string) => {
+      const city = rows.cities.find((row) => row.name === cityName);
+      expect(city).toBeDefined();
+      return city!;
+    };
+    const baselinePavonis = cityByName(baseline, 'Pavonis Hub');
+    const turn8Pavonis = cityByName(seed, 'Pavonis Hub');
+
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.cities['Pavonis Hub'].morale,
+      baselinePavonis.morale,
+      turn8Pavonis.morale
+    );
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.cities['Pavonis Hub'].industrial_output,
+      baselinePavonis.industrial_output,
+      turn8Pavonis.industrial_output
+    );
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.cities['Pavonis Hub'].garrison_strength,
+      baselinePavonis.garrison_strength,
+      turn8Pavonis.garrison_strength
+    );
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.cities['Pavonis Hub'].supply_status).toEqual({
+      from: baselinePavonis.supply_status,
+      to: turn8Pavonis.supply_status,
+    });
+
+    expect(baseline.cities.find((city) => city.name === 'Callisto Outpost')).toBeUndefined();
+    const callistoOutpost = cityByName(seed, 'Callisto Outpost');
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.cities['Callisto Outpost']).toEqual({
+      baseline: 'absent',
+      faction_id: callistoOutpost.faction_id,
+      population: Number(callistoOutpost.population),
+      development_stage: callistoOutpost.development_stage,
+      supply_status: callistoOutpost.supply_status,
+    });
+
+    const fleetByPosting = (rows: Turn8SeedRows, cityName: string, factionId: number) => {
+      const city = cityByName(rows, cityName);
+      const fleet = rows.fleets.find(
+        (row) => row.posting_city_id === city.id && row.faction_id === factionId
+      );
+      expect(fleet).toBeDefined();
+      return fleet!;
+    };
+    const baselineEarthFleet = fleetByPosting(baseline, 'New Geneva', 1);
+    const turn8EarthFleet = fleetByPosting(seed, 'New Geneva', 1);
+    const baselinePavonisFleet = fleetByPosting(baseline, 'Pavonis Hub', 2);
+    const turn8PavonisFleet = fleetByPosting(seed, 'Pavonis Hub', 2);
+    const callistoFleet = fleetByPosting(seed, 'Callisto Outpost', 1);
+
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.fleets['New Geneva home guard'].strength,
+      baselineEarthFleet.strength,
+      turn8EarthFleet.strength
+    );
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.fleets['New Geneva home guard'].orders).toEqual({
+      from: baselineEarthFleet.orders,
+      to: turn8EarthFleet.orders,
+    });
+    expectNumberDelta(
+      TURN8_JUDGE_SCENARIO_DELTAS.fleets['Pavonis perimeter defense'].strength,
+      baselinePavonisFleet.strength,
+      turn8PavonisFleet.strength
+    );
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.fleets['Pavonis perimeter defense'].orders).toEqual({
+      from: baselinePavonisFleet.orders,
+      to: turn8PavonisFleet.orders,
+    });
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.fleets['Callisto outpost guard']).toEqual({
+      baseline: 'absent',
+      faction_id: callistoFleet.faction_id,
+      city: 'Callisto Outpost',
+      strength: callistoFleet.strength,
+      orders: callistoFleet.orders,
+    });
+
+    const depositsByBodyName = (rows: Turn8SeedRows, bodyName: string) => {
+      const body = rows.celestial_bodies.find((row) => row.name === bodyName);
+      expect(body).toBeDefined();
+      return parseJson<Record<string, number>>(body!.resource_deposits);
+    };
+
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.resources.Mars.deposits).toEqual(
+      depositsByBodyName(baseline, 'Mars')
+    );
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.resources.Mars.deposits).toEqual(
+      depositsByBodyName(seed, 'Mars')
+    );
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.resources.Mars.pressure).toEqual({
+      city: 'Pavonis Hub',
+      supply_status: turn8Pavonis.supply_status,
+      garrison_strength: turn8Pavonis.garrison_strength,
+    });
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.resources.Callisto.deposits).toEqual(
+      depositsByBodyName(seed, 'Callisto')
+    );
+    expect(TURN8_JUDGE_SCENARIO_DELTAS.resources.Callisto.opportunity).toEqual({
+      city: 'Callisto Outpost',
+      development_stage: callistoOutpost.development_stage,
+    });
   });
 
   it('has a colony ship in transit (departed < 8, arrives > 8)', () => {
@@ -166,6 +448,7 @@ describe('Turn 8 deterministic seed', () => {
 
     expect(first).not.toBe(second);
     expect(canonicalSeed(first)).toEqual(canonicalSeed(second));
+    expect(canonicalSeed(turn8Seed)).toEqual(canonicalSeed(buildTurn8Seed()));
   });
 
   it('keeps FK references valid', () => {

@@ -278,6 +278,69 @@ describe('world map view model selectors', () => {
     ]);
   });
 
+  it('maps Turn 8 scenario cue events to body-linked Mars and Callisto alerts', () => {
+    const store = makeHydratedStore();
+
+    store.getState().actions.hydrateSubscription({
+      worldBodies: [
+        {
+          id: 30,
+          sessionId: 1,
+          name: 'Callisto',
+          systemTier: 'jupiter',
+          commsLagTurns: 3,
+          travelTimeTurns: 9,
+          resourceDeposits: '{"ice":88,"volatiles":74}',
+          position: '{"x":13,"y":-1}',
+          visibility: 'public',
+        },
+      ],
+      publicEvents: [
+        {
+          id: 402,
+          sessionId: 1,
+          turn: 8,
+          eventType: 'scenario_cue_mars_pressure',
+          visibility: 'public',
+        },
+        {
+          id: 403,
+          sessionId: 1,
+          turn: 8,
+          eventType: 'scenario_cue_callisto_opportunity',
+          visibility: 'public',
+        },
+      ],
+    });
+
+    const viewModel = selectWorldMapViewModel(store.getState());
+
+    expect(viewModel.alerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'event:402',
+          bodyId: 20,
+          eventType: 'scenario_cue_mars_pressure',
+          label: 'Mars pressure: Pavonis Hub strained supply',
+          severity: 'warning',
+        }),
+        expect.objectContaining({
+          id: 'event:403',
+          bodyId: 30,
+          eventType: 'scenario_cue_callisto_opportunity',
+          label: 'Callisto opportunity: ice and volatiles window',
+          severity: 'info',
+        }),
+      ])
+    );
+    expect(viewModel.alertsByBodyId[20].map((alert) => alert.label)).toContain(
+      'Mars pressure: Pavonis Hub strained supply',
+    );
+    expect(viewModel.alertsByBodyId[30].map((alert) => alert.label)).toContain(
+      'Callisto opportunity: ice and volatiles window',
+    );
+  });
+
   it('returns body detail slices for overlay consumers without route or component state', () => {
     const store = makeHydratedStore();
 

@@ -109,6 +109,22 @@ export interface WorldMapBodyDetail {
   alerts: WorldMapAlert[];
 }
 
+const SCENARIO_CUE_ALERTS: Record<
+  string,
+  { bodyName: string; label: string; severity: WorldMapAlertSeverity }
+> = {
+  scenario_cue_mars_pressure: {
+    bodyName: 'Mars',
+    label: 'Mars pressure: Pavonis Hub strained supply',
+    severity: 'warning',
+  },
+  scenario_cue_callisto_opportunity: {
+    bodyName: 'Callisto',
+    label: 'Callisto opportunity: ice and volatiles window',
+    severity: 'info',
+  },
+};
+
 export function selectWorldMapViewModel(state: SessionState): WorldMapViewModel {
   const sessionId = state.activeSessionId;
   if (!sessionId) return emptyWorldMapViewModel(null);
@@ -302,6 +318,8 @@ function buildAlerts(
   travel: readonly WorldMapTravelView[],
   events: readonly PublicEventProjectionRow[],
 ): WorldMapAlert[] {
+  const bodyIdsByName = new Map(bodies.map((body) => [body.name.toLocaleLowerCase(), body.id]));
+
   return [
     ...bodies
       .filter((body) => body.control.status === 'contested')
@@ -313,14 +331,7 @@ function buildAlerts(
         turn: null,
         eventType: null,
       })),
-    ...events.map((event) => ({
-      id: `event:${event.id}`,
-      severity: eventSeverity(event.eventType),
-      label: event.eventType.replace(/_/g, ' '),
-      bodyId: null,
-      turn: event.turn,
-      eventType: event.eventType,
-    })),
+    ...events.map((event) => toEventAlert(event, bodyIdsByName)),
     ...travel
       .filter((ship) => ship.turnsRemaining !== null && ship.turnsRemaining <= 1)
       .map((ship) => ({
@@ -332,6 +343,22 @@ function buildAlerts(
         eventType: null,
       })),
   ];
+}
+
+function toEventAlert(
+  event: PublicEventProjectionRow,
+  bodyIdsByName: ReadonlyMap<string, number>,
+): WorldMapAlert {
+  const cue = SCENARIO_CUE_ALERTS[event.eventType];
+
+  return {
+    id: `event:${event.id}`,
+    severity: cue?.severity ?? eventSeverity(event.eventType),
+    label: cue?.label ?? event.eventType.replace(/_/g, ' '),
+    bodyId: cue ? bodyIdsByName.get(cue.bodyName.toLocaleLowerCase()) ?? null : null,
+    turn: event.turn,
+    eventType: event.eventType,
+  };
 }
 
 function eventSeverity(eventType: string): WorldMapAlertSeverity {

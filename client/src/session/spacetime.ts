@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useSpacetimeDB, useTable } from 'spacetimedb/react';
-import { DbConnection, tables } from '../module_bindings';
 import { readHostedRuntime } from '../config/hostedRuntime';
+import { DbConnection, tables } from '../module_bindings';
 import type {
   CelestialBodies,
   Factions,

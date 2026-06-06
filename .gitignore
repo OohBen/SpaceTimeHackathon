@@ -40,10 +40,10 @@ desktop.ini
 node_modules/
 dist/
 build/
+.spacetimedb-local-data/
 .next/
 .nuxt/
 artifacts/
-.spacetimedb-local-data/
 *.log
 npm-debug.log*
 
