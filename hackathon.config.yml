@@ -1,0 +1,35 @@
+# hackathon.config.yml
+# Controls human oversight and quality requirements across all hackathon skills.
+# Missing file or missing keys default to maximum oversight:
+#   all gates: true, testing: required, parallelism: true
+
+gates:
+  project_breakdown:
+    human_required: true
+    grilling: true
+  epic_breakdown:
+    human_required: true
+    grilling: false
+  task_breakdown:
+    human_required: false
+    grilling: false
+  task_completion:
+    human_required: false
+  code_review:
+    human_required: true
+  epic_review:
+    human_required: true
+
+quality:
+  testing: required
+  validation: autonomous-script
+
+parallelism: true
+
+actions:
+  gitleaks: true
+  codeql: true
+  dependency_review: true
+  actionlint: true
+  markdownlint: true
+  contract: true
