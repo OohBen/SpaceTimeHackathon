@@ -4,6 +4,7 @@ import {
 } from './access_policy.js';
 import type {
   CommanderInboxRow,
+  FactionRow,
   IntelligenceRecordRow,
   LlmRequestRow,
   PersonnelRelationshipRow,
@@ -49,7 +50,8 @@ export function filterPrivateCommandState(
   rows: Turn1SeedRows,
   scope: IdentityScope
 ): PrivateCommandState {
-  const personnel = filterRowsByFaction(rows.personnel, scope);
+  const visibleScope = scopeForSessionFactions(rows.factions, scope);
+  const personnel = filterRowsByFaction(rows.personnel, visibleScope);
   const visiblePersonnelIds = new Set(personnel.map((row) => row.id));
 
   return {
@@ -59,13 +61,13 @@ export function filterPrivateCommandState(
         visiblePersonnelIds.has(row.personnel_a_id) &&
         visiblePersonnelIds.has(row.personnel_b_id)
     ),
-    proposals: filterRowsByFaction(rows.proposals, scope),
-    commander_inbox: filterRowsByFaction(rows.commander_inbox, scope),
-    projects: filterRowsByFaction(rows.projects, scope),
-    intelligence_records: filterIntelligenceRows(rows.intelligence_records, scope),
-    turn_summaries: filterRowsByFaction(rows.turn_summaries, scope),
-    trade_agreements: filterTradeAgreements(rows.trade_agreements, scope),
-    llm_requests: filterRowsByFaction(rows.llm_requests, scope),
+    proposals: filterRowsByFaction(rows.proposals, visibleScope),
+    commander_inbox: filterRowsByFaction(rows.commander_inbox, visibleScope),
+    projects: filterRowsByFaction(rows.projects, visibleScope),
+    intelligence_records: filterIntelligenceRows(rows.intelligence_records, visibleScope),
+    turn_summaries: filterRowsByFaction(rows.turn_summaries, visibleScope),
+    trade_agreements: filterTradeAgreements(rows.trade_agreements, visibleScope),
+    llm_requests: filterRowsByFaction(rows.llm_requests, visibleScope),
   };
 }
 
@@ -94,4 +96,22 @@ function filterTradeAgreements(
       canReadFactionPrivateData(scope, row.faction_a_id) ||
       canReadFactionPrivateData(scope, row.faction_b_id)
   );
+}
+
+function scopeForSessionFactions(
+  factions: readonly FactionRow[],
+  scope: IdentityScope
+): IdentityScope {
+  const sessionFactionIds = new Set(
+    factions
+      .filter((faction) => faction.session_id === scope.sessionId)
+      .map((faction) => faction.id)
+  );
+
+  return {
+    ...scope,
+    ownedFactionIds: scope.ownedFactionIds.filter((factionId) =>
+      sessionFactionIds.has(factionId)
+    ),
+  };
 }
