@@ -9,8 +9,10 @@ import {
   type SessionBackendResult,
 } from '../session/spacetime';
 import type { PlayerSlot, SetupParams, SetupState } from './types';
+import './CommandCenterShell.css';
 
 type View = 'landing' | 'setup' | 'game';
+type ShellPanel = 'overview' | 'session-brief';
 
 interface GameRouteParams {
   sessionId: number;
@@ -160,6 +162,8 @@ function GameRoute({
   session: SessionStoreState;
   onBack: () => void;
 }) {
+  const [activePanel, setActivePanel] = useState<ShellPanel>('overview');
+
   if (!hasCompleteSessionContext(session)) {
     return (
       <RouteGuard
@@ -179,12 +183,105 @@ function GameRoute({
   }
 
   return (
-    <div>
-      <h2>Command Center</h2>
-      <p>Session {session.sessionId}</p>
-      <p>Your slot: <strong>{session.playerSlot}</strong></p>
-      <p>Share the session ID with your opponent to start.</p>
-      <button onClick={onBack}>Back to Menu</button>
+    <CommandCenterShell
+      session={session}
+      activePanel={activePanel}
+      onPanelChange={setActivePanel}
+      onBack={onBack}
+    />
+  );
+}
+
+function CommandCenterShell({
+  session,
+  activePanel,
+  onPanelChange,
+  onBack,
+}: {
+  session: SessionStoreState & {
+    sessionId: number;
+    factionId: number;
+    playerSlot: PlayerSlot;
+    playerName: string;
+  };
+  activePanel: ShellPanel;
+  onPanelChange: (panel: ShellPanel) => void;
+  onBack: () => void;
+}) {
+  const panelTitle = activePanel === 'overview' ? 'Command Overview' : 'Session Brief';
+
+  return (
+    <div className="command-shell">
+      <header className="command-shell__header" aria-label="Command Center header" role="banner">
+        <div className="command-shell__title-block">
+          <p className="command-shell__eyebrow">Command Center</p>
+          <h2>Command Center</h2>
+          <p className="command-shell__session-line">Session {session.sessionId}</p>
+        </div>
+        <div className="command-shell__context" aria-label="Current player context">
+          <span>
+            Your slot: <strong>{session.playerSlot}</strong>
+          </span>
+          <span>Commander: {session.playerName}</span>
+          <span>Faction {session.factionId}</span>
+        </div>
+        <button className="command-shell__back" type="button" onClick={onBack}>
+          Back to Menu
+        </button>
+      </header>
+
+      <div className="command-shell__body">
+        <aside className="command-shell__sidebar" aria-label="Command sidebar">
+          <nav className="command-shell__nav" aria-label="Command panels">
+            <button
+              type="button"
+              className="command-shell__nav-button"
+              aria-pressed={activePanel === 'overview'}
+              onClick={() => onPanelChange('overview')}
+            >
+              Command Overview
+            </button>
+            <button
+              type="button"
+              className="command-shell__nav-button"
+              aria-pressed={activePanel === 'session-brief'}
+              onClick={() => onPanelChange('session-brief')}
+            >
+              Session Brief
+            </button>
+          </nav>
+        </aside>
+
+        <section className="command-shell__panel" aria-label="Command content panel">
+          <div className="command-shell__panel-heading">
+            <p className="command-shell__eyebrow">Active panel</p>
+            <h3>{panelTitle}</h3>
+          </div>
+          {activePanel === 'overview' ? (
+            <div className="command-shell__status-grid">
+              <div>
+                <span>Session</span>
+                <strong>{session.sessionId}</strong>
+              </div>
+              <div>
+                <span>Slot status</span>
+                <strong>Joined</strong>
+              </div>
+              <div>
+                <span>Commander</span>
+                <strong>{session.playerName}</strong>
+              </div>
+            </div>
+          ) : (
+            <div className="command-shell__brief">
+              <p>
+                Session Brief for {session.playerName}. Share Session {session.sessionId} with
+                the opposing browser and keep this shell open during panel work.
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
