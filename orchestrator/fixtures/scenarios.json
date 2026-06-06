@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "description": "Curated LLM fixture scenarios for tests and demos. Add new scenarios by appending an entry below and committing the file. Scenarios are looked up by (request_type, scenario_id). Use scenario_id 'default' for the fallback when no explicit scenario is provided in the request.",
+  "scenarios": [
+    {
+      "request_type": "proposals",
+      "scenario_id": "default",
+      "response": {
+        "proposals": [
+          {
+            "body": "Demo fixture: Executive department stabilizes logistics on the contested Mars corridor. Recommends rerouting 90 credits into emergency supply convoys with milestone reporting at turn end.",
+            "confidence": "HIGH",
+            "department": "Executive",
+            "resource_cost": 90,
+            "title": "Mars Corridor Logistics Stabilization"
+          },
+          {
+            "body": "Demo fixture: Research bureau proposes a bounded sprint on adaptive shielding informed by recent skirmish telemetry. Expected payoff: a doctrine option unlocking by turn 10.",
+            "confidence": "MEDIUM",
+            "department": "Research",
+            "resource_cost": 120,
+            "title": "Adaptive Shielding Sprint"
+          }
+        ],
+        "schema_version": 1
+      }
+    },
+    {
+      "request_type": "proposals",
+      "scenario_id": "turn-8-judge",
+      "response": {
+        "proposals": [
+          {
+            "body": "Turn 8 judge scenario: Defense officer recommends pre-positioning reserve fleet near Callisto to lock the opportunity window before the opponent reacts. Cost is bounded to preserve commander credit float.",
+            "confidence": "HIGH",
+            "department": "Defense",
+            "resource_cost": 140,
+            "title": "Callisto Pre-Positioning Order"
+          },
+          {
+            "body": "Turn 8 judge scenario: Industry pushes a Jupiter foundry expansion to convert idle capacity into a ship-grade fabrication queue. Pairs cleanly with the Callisto order above.",
+            "confidence": "MEDIUM",
+            "department": "Industry",
+            "resource_cost": 160,
+            "title": "Jupiter Foundry Expansion"
+          },
+          {
+            "body": "Turn 8 judge scenario: Research bureau flags a quick win to publish a public doctrine signal that nudges opponent confidence reporting. Low cost, narrative flourish.",
+            "confidence": "LOW",
+            "department": "Research",
+            "resource_cost": 60,
+            "title": "Doctrine Signaling Publication"
+          }
+        ],
+        "schema_version": 1
+      }
+    },
+    {
+      "request_type": "inbox",
+      "scenario_id": "default",
+      "response": {
+        "items": [
+          {
+            "body": "Fixture inbox: Executive officer reports steady supply and an approved logistics initiative. No decision required this turn.",
+            "requires_decision": false,
+            "subject": "Daily Operations Brief"
+          }
+        ],
+        "schema_version": 1
+      }
+    },
+    {
+      "request_type": "event_narrative",
+      "scenario_id": "default",
+      "response": {
+        "narrative": "Fixture narrative: A quiet shift over the Belt. Drone patrols complete their rotation without incident. The newsroom prepares a standard briefing for the commander.",
+        "schema_version": 1
+      }
+    },
+    {
+      "request_type": "event_narrative",
+      "scenario_id": "colony-arrival",
+      "response": {
+        "narrative": "Fixture narrative: Your colony ship completes docking at Callisto. Ground crews report nominal life-support and begin establishment-phase construction immediately.",
+        "schema_version": 1
+      }
+    },
+    {
+      "request_type": "resume_briefing",
+      "scenario_id": "default",
+      "response": {
+        "headline": "Resume Briefing — Standby",
+        "summary": "Fixture resume: Last session ended on turn 5 with both colonies stable. Pending proposals are queued for review.",
+        "schema_version": 1
+      }
+    }
+  ]
+}
