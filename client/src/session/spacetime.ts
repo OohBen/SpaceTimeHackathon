@@ -3,6 +3,13 @@ import { useSpacetimeDB, useTable } from 'spacetimedb/react';
 import { DbConnection, tables } from '../module_bindings';
 import type { Factions, GameSessions } from '../module_bindings/types';
 import type { PlayerSlot, SessionChoice, SetupState, SlotChoice } from '../routes/types';
+import {
+  createDbConnectionTransport,
+  createSpacetimeClient,
+  type DbConnectionLike,
+  type SpacetimeClient,
+} from '../spacetime/client';
+import { defaultClientConfig } from '../spacetime/config';
 
 const AUTH_TOKEN_KEY = 'solar-dominion-auth-token';
 const DEFAULT_SPACETIMEDB_URI = 'http://localhost:3000';
@@ -21,6 +28,14 @@ export interface SessionBackend {
   identity: string | null;
   sessions: readonly GameSessions[];
   factions: readonly Factions[];
+  /**
+   * Reducer-call client backed by the live `DbConnection` when one is
+   * available, or `null` while the connection is still bootstrapping. UI code
+   * dispatching turn-pipeline actions through `client/src/spacetime/session-actions`
+   * pulls this off the backend so calls actually reach the server (instead of
+   * the no-op `defaultTransport`).
+   */
+  client: SpacetimeClient | null;
   getSessionChoices(): SessionChoice[];
   getSlotChoices(sessionId?: number): SlotChoice[];
   joinOrResume(state: SetupState): Promise<SessionBackendResult>;
@@ -89,12 +104,14 @@ export function useSpacetimeSessionBackend(): SessionBackend {
 
 export function createSessionBackend(options: BackendOptions): SessionBackend {
   const { conn, isConnected, identity, sessions, factions } = options;
+  const client = conn ? buildSpacetimeClient(conn) : null;
 
   return {
     isConnected,
     identity,
     sessions,
     factions,
+    client,
     getSessionChoices: () => deriveSessionChoices(sessions),
     getSlotChoices: (sessionId?: number) => {
       const session = resolveSession(sessions, sessionId);
@@ -144,6 +161,18 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
 
 function sessionReducers(conn: DbConnection): SessionReducers {
   return conn.reducers as unknown as SessionReducers;
+}
+
+/**
+ * Build a `SpacetimeClient` whose `callReducer` dispatches through the live
+ * `DbConnection` via the snake_case→camelCase transport adapter. This is the
+ * production wiring that lets `client/src/spacetime/session-actions` reach the
+ * real server reducers (without it, every action goes to the no-op
+ * `defaultTransport` and silently drops).
+ */
+function buildSpacetimeClient(conn: DbConnection): SpacetimeClient {
+  const transport = createDbConnectionTransport(conn as unknown as DbConnectionLike);
+  return createSpacetimeClient(defaultClientConfig(), { transport });
 }
 
 export function deriveSessionChoices(sessions: readonly GameSessions[]): SessionChoice[] {
