@@ -48,7 +48,7 @@ jobs:
       # ── 2. Protected file check ─────────────────────────────────────────────
       - name: Protected files
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref }}
           BASE_REF: ${{ github.base_ref }}
@@ -123,7 +123,7 @@ jobs:
       # ── 4. Issue contract ───────────────────────────────────────────────────
       - name: Issue contract
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           PR_BODY: ${{ github.event.pull_request.body }}
           REPO: ${{ github.repository }}
         run: |

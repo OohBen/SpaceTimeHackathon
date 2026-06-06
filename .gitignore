@@ -25,6 +25,7 @@ GEMINI.md
 .copilot/
 .windsurf/
 .codex/
+.codex-tmp/
 .gemini/
 
 # ── OS ──────────────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ dist/
 build/
 .next/
 .nuxt/
+artifacts/
 *.log
 npm-debug.log*
 

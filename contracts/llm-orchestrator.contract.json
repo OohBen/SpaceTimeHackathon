@@ -1,0 +1,64 @@
+{
+  "name": "llm-orchestrator-boundary",
+  "version": 1,
+  "description": "Fixture contract for SpacetimeDB reducers, frontend route/env assumptions, and LLM request/response shape. Uses mock data only; no live app secrets.",
+  "backend": {
+    "requiredReducers": [
+      "create_session",
+      "join_or_resume_session",
+      "run_deliberation",
+      "commander_decision",
+      "submit_turn",
+      "simulate_turn"
+    ]
+  },
+  "frontend": {
+    "requiredRoutes": [
+      "/",
+      "/setup",
+      "/game/:sessionId/:playerSlot"
+    ],
+    "requiredEnv": [
+      "VITE_SPACETIME_HOST",
+      "VITE_SPACETIME_DB_NAME",
+      "VITE_LLM_MODE"
+    ]
+  },
+  "llm": {
+    "requestTypes": [
+      "proposals",
+      "inbox",
+      "event_narrative",
+      "resume_briefing"
+    ],
+    "requestRequiredFields": [
+      "sessionId",
+      "factionId",
+      "requestType",
+      "turn",
+      "context"
+    ],
+    "contextRequiredFields": [
+      "officerTraits",
+      "factionDoctrine",
+      "cityState",
+      "recentEvents"
+    ],
+    "responseRequiredFields": [
+      "status",
+      "items",
+      "usage"
+    ],
+    "itemRequiredFields": [
+      "title",
+      "body",
+      "confidence",
+      "resourceCost"
+    ],
+    "confidenceValues": [
+      "HIGH",
+      "MEDIUM",
+      "LOW"
+    ]
+  }
+}
