@@ -88,6 +88,9 @@ export function stableJson(value: unknown): string {
 }
 
 function stableValue(value: unknown): unknown {
+  if (value === undefined) {
+    return null;
+  }
   if (Array.isArray(value)) {
     return value.map(stableValue);
   }

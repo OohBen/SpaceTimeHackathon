@@ -51,8 +51,12 @@ Use `mock` when:
 
 Determinism guarantees:
 
-- Identical request payloads (with key order normalized via
+- Identical request payloads (with object-key order normalized via
   `stableJson`) produce byte-identical `response_json`.
+- `undefined` values inside context objects are normalized to `null` so
+  sparse and dense contexts hash distinctly.
+- Array order **is** semantic — `[a, b]` and `[b, a]` hash differently.
+  If your caller produces unordered collections, sort them before passing.
 - Changing the `turn` or `faction_id` changes the response.
 - No randomness, no clocks, no environment reads.
 
@@ -67,7 +71,9 @@ serves curated responses from a JSON catalog. Scenarios are keyed by
 
 The bundled catalog lives at `orchestrator/fixtures/scenarios.json` and is
 loaded by `loadFixtureCatalog(defaultFixturePath())`. Override with
-`LLM_FIXTURE_PATH` when running a custom demo script.
+`LLM_FIXTURE_PATH` when running a custom demo script. `LLM_FIXTURE_PATH` is
+treated as operator-controlled — the orchestrator process reads whatever path
+is set, so do not surface it to untrusted callers.
 
 Use `fixture` when:
 
@@ -149,6 +155,8 @@ fixture provider — never paste a live key into CI.
 | Fixture file unreadable              | `fixture_file_unreadable`   | `FixtureLookupError` at load.    |
 | Fixture file invalid JSON            | `fixture_file_invalid_json` | `FixtureLookupError` at load.    |
 | Fixture catalog schema mismatch      | `fixture_file_schema_mismatch` | `FixtureLookupError` at load. |
+| Fixture catalog has no scenarios     | `fixture_file_empty_scenarios` | `FixtureLookupError` at load. |
+| Fixture scenario response is null    | `fixture_scenario_missing_response` | `FixtureLookupError` at load. |
 | Scenario not found, no default       | `fixture_scenario_not_found`| `FixtureLookupError` at call.    |
 
 All errors carry a `code` field so callers can branch on the failure category

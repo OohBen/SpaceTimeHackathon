@@ -78,6 +78,27 @@ describe("fixture provider", () => {
     expect(() => parseFixtureCatalog(raw, "bad")).toThrowError(FixtureLookupError);
   });
 
+  it("rejects a catalog with no scenarios", () => {
+    const raw = JSON.stringify({ schema_version: 1, scenarios: [] });
+    expect(() => parseFixtureCatalog(raw, "empty")).toThrowError(FixtureLookupError);
+  });
+
+  it("rejects a scenario whose response is null", () => {
+    const raw = JSON.stringify({
+      schema_version: 1,
+      scenarios: [
+        {
+          request_type: "proposals",
+          scenario_id: "default",
+          response: null,
+        },
+      ],
+    });
+    expect(() => parseFixtureCatalog(raw, "null-response")).toThrowError(
+      FixtureLookupError
+    );
+  });
+
   it("returns scenarios by explicit scenario_id", async () => {
     const catalog = parseFixtureCatalog(sampleCatalog, "sample");
     const provider = createFixtureLlmModeProvider({ catalog });

@@ -5,6 +5,7 @@ import {
   buildMockResponse,
   createMockLlmModeProvider,
 } from "./mock_llm_provider.js";
+import { validateProposalAdvisory } from "./proposal_advisory.js";
 
 const baseRequest = (
   overrides: Partial<LlmModeRequest> = {}
@@ -70,6 +71,29 @@ describe("mock provider", () => {
       expect(["HIGH", "MEDIUM", "LOW"]).toContain(proposal.confidence);
       expect(proposal.resource_cost).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it("round-trips proposal payloads through the live advisory validator", () => {
+    for (const turn of [1, 3, 8, 12]) {
+      const response = buildMockResponse(
+        baseRequest({ request_type: "proposals", turn })
+      );
+      const outcome = validateProposalAdvisory(response.response_json);
+      expect(outcome.ok).toBe(true);
+      if (outcome.ok) {
+        expect(outcome.payload.schema_version).toBe(1);
+      }
+    }
+  });
+
+  it("distinguishes sparse contexts so undefined keys do not collide", () => {
+    const sparse = buildMockResponse(
+      baseRequest({ context: { officers: ["a"], pressure: undefined } })
+    );
+    const dense = buildMockResponse(
+      baseRequest({ context: { officers: ["a"] } })
+    );
+    expect(sparse.response_json).not.toBe(dense.response_json);
   });
 
   it("never touches process.env or fetch", async () => {

@@ -107,6 +107,13 @@ export function parseFixtureCatalog(raw: string, source: string): FixtureCatalog
     );
   }
 
+  if (parsed.scenarios.length === 0) {
+    throw new FixtureLookupError(
+      "fixture_file_empty_scenarios",
+      `Fixture file ${source} contains no scenarios; at least one is required`
+    );
+  }
+
   const scenarios = parsed.scenarios.map((scenario, index) =>
     parseScenario(scenario, source, index)
   );
@@ -140,10 +147,10 @@ function parseScenario(
     );
   }
 
-  if (!("response" in value)) {
+  if (!("response" in value) || value.response === null || value.response === undefined) {
     throw new FixtureLookupError(
       "fixture_scenario_missing_response",
-      `Fixture file ${source} scenarios[${index}] must declare a response`
+      `Fixture file ${source} scenarios[${index}] must declare a non-null response`
     );
   }
 
