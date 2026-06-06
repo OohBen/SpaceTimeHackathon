@@ -23,7 +23,7 @@ function Invoke-GhJson {
     param([string[]]$Arguments)
 
     $output = Invoke-Gh -Arguments $Arguments
-    return (($output | Out-String) | ConvertFrom-Json)
+    return ,(($output | Out-String) | ConvertFrom-Json)
 }
 
 function Get-LabelNames {
@@ -100,6 +100,8 @@ function Invoke-LabelRepair {
 
 $pages = Invoke-GhJson -Arguments @("api", "--paginate", "--slurp", "repos/$Repo/issues?state=open&per_page=100")
 $openIssues = @($pages | ForEach-Object { $_ } | Where-Object { -not $_.pull_request })
+$closedPages = Invoke-GhJson -Arguments @("api", "--paginate", "--slurp", "repos/$Repo/issues?state=closed&per_page=100")
+$closedIssues = @($closedPages | ForEach-Object { $_ } | Where-Object { -not $_.pull_request })
 
 $openIssueByNumber = @{}
 foreach ($issue in $openIssues) {
@@ -119,6 +121,7 @@ $labelRepairs = @()
 $stateLabelViolations = @()
 $projectAiApproved = @()
 $dependencyLinkGaps = @()
+$closedIssueHygiene = @()
 
 foreach ($issue in $openIssues) {
     $labels = Get-LabelNames -Issue $issue
@@ -136,7 +139,7 @@ foreach ($issue in $openIssues) {
     $isVerify = ([string]$issue.title -match "(?i)\bverify\b")
     $assigneeCount = @($issue.assignees).Count
 
-    if ($labelStates.Count -gt 1) {
+    if ($labelStates.Count -ne 1) {
         $stateLabelViolations += [pscustomobject]@{
             issue = [int]$issue.number
             title = [string]$issue.title
@@ -205,6 +208,21 @@ foreach ($issue in $openIssues) {
     }
 }
 
+foreach ($issue in $closedIssues) {
+    $labels = Get-LabelNames -Issue $issue
+    $workflowLabels = @($labels | Where-Object { ($stateLabels -contains $_) -or $_ -eq "blocked" })
+    $assignees = @($issue.assignees | ForEach-Object { [string]$_.login })
+
+    if ($workflowLabels.Count -gt 0 -or $assignees.Count -gt 0) {
+        $closedIssueHygiene += [pscustomobject]@{
+            issue = [int]$issue.number
+            title = [string]$issue.title
+            labels = $workflowLabels
+            assignees = $assignees
+        }
+    }
+}
+
 if ($ApplyLabelRepairs) {
     foreach ($repair in $labelRepairs) {
         Invoke-LabelRepair -RepoName $Repo -Number $repair.issue -Action $repair.action
@@ -214,11 +232,14 @@ if ($ApplyLabelRepairs) {
 [pscustomobject]@{
     repo = $Repo
     scannedOpenIssues = $openIssues.Count
+    scannedClosedIssues = $closedIssues.Count
     pages = @($pages).Count
+    closedPages = @($closedPages).Count
     applyLabelRepairs = [bool]$ApplyLabelRepairs
     claimableTasks = $claimableTasks
     labelRepairs = $labelRepairs
     dependencyLinkGaps = $dependencyLinkGaps
     stateLabelViolations = $stateLabelViolations
+    closedIssueHygiene = $closedIssueHygiene
     projectAiApproved = $projectAiApproved
 } | ConvertTo-Json -Depth 8
