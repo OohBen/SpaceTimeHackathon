@@ -1,0 +1,31 @@
+{
+  "name": "solar-dominion",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "server",
+    "client",
+    "orchestrator"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present && npm run ci:quality",
+    "build": "npm run build --workspaces --if-present",
+    "dev:client": "npm run dev --workspace=client",
+    "dev:orchestrator": "npm run dev --workspace=orchestrator",
+    "spacetime:build": "npm run spacetime:build --workspace=server",
+    "spacetime:start": "npm run spacetime:start --workspace=server",
+    "spacetime:publish": "npm run spacetime:publish --workspace=server",
+    "generate": "npm run generate --workspace=server",
+    "lint:actions": "node scripts/lint-actions-local.mjs",
+    "lint:markdown": "node scripts/lint-markdown-local.mjs",
+    "scan:secrets": "node scripts/scan-secrets-local.mjs",
+    "audit:dependencies": "npm audit --audit-level=moderate",
+    "test:contracts": "node scripts/test-contracts.mjs",
+    "smoke:hosted": "node scripts/hosted-smoke.mjs",
+    "ci:quality": "npm run lint:actions && npm run lint:markdown && npm run scan:secrets && npm run audit:dependencies && npm run test:contracts"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

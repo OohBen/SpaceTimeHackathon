@@ -1,0 +1,62 @@
+name: Hosted smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      hosted_frontend_url:
+        description: Hosted frontend URL
+        required: false
+        type: string
+      orchestrator_base_url:
+        description: Hosted orchestrator base URL
+        required: false
+        type: string
+      spacetime_uri:
+        description: Hosted SpacetimeDB URL
+        required: false
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/hosted-smoke.yml"
+      - "client/**"
+      - "orchestrator/**"
+      - "package-lock.json"
+      - "package.json"
+      - "scripts/hosted-smoke.mjs"
+      - "server/**"
+
+jobs:
+  hosted-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || (vars.HOSTED_FRONTEND_URL != '' && vars.ORCHESTRATOR_BASE_URL != '' && vars.SPACETIME_URI != '') }}
+    runs-on: ubuntu-latest
+    env:
+      HOSTED_FRONTEND_URL: ${{ github.event.inputs.hosted_frontend_url || vars.HOSTED_FRONTEND_URL }}
+      ORCHESTRATOR_BASE_URL: ${{ github.event.inputs.orchestrator_base_url || vars.ORCHESTRATOR_BASE_URL }}
+      SPACETIME_DB_NAME: ${{ vars.SPACETIME_DB_NAME || 'solar-dominion' }}
+      SPACETIME_URI: ${{ github.event.inputs.spacetime_uri || vars.SPACETIME_URI }}
+      VITE_DEMO_MODE: ${{ vars.DEMO_MODE || 'mock' }}
+      VITE_HOSTED: "true"
+      VITE_HOSTED_FRONTEND_URL: ${{ github.event.inputs.hosted_frontend_url || vars.HOSTED_FRONTEND_URL }}
+      VITE_ORCHESTRATOR_BASE_URL: ${{ github.event.inputs.orchestrator_base_url || vars.ORCHESTRATOR_BASE_URL }}
+      VITE_SPACETIME_DB_NAME: ${{ vars.SPACETIME_DB_NAME || 'solar-dominion' }}
+      VITE_SPACETIME_HOST: ${{ github.event.inputs.spacetime_uri || vars.SPACETIME_URI }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build hosted frontend
+        run: npm run build --workspace=client
+
+      - name: Smoke hosted surfaces
+        run: npm run smoke:hosted

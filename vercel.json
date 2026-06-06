@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npm run build --workspace=client",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    {
+      "destination": "/index.html",
+      "source": "/(.*)"
+    }
+  ]
+}

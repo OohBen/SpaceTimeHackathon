@@ -1,0 +1,80 @@
+name: Orchestrator Tests
+
+on:
+  pull_request:
+    paths:
+      - "orchestrator/**"
+      - "server/**"
+      - ".github/workflows/orchestrator-tests.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "orchestrator/**"
+      - "server/**"
+      - ".github/workflows/orchestrator-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  orchestrator:
+    name: Orchestrator (LLM_MODE=mock)
+    runs-on: ubuntu-latest
+    env:
+      LLM_MODE: mock
+      # Intentionally empty — CI must never depend on a live LLM key.
+      OPENROUTER_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dev tooling
+        run: npm ci
+
+      - name: Install orchestrator workspace
+        working-directory: orchestrator
+        run: npm install --no-audit --no-fund
+
+      - name: Type-check orchestrator
+        working-directory: orchestrator
+        run: npm run build
+
+      - name: Run orchestrator tests
+        working-directory: orchestrator
+        run: npm test
+
+  server:
+    name: Server (no live LLM)
+    runs-on: ubuntu-latest
+    env:
+      LLM_MODE: mock
+      OPENROUTER_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dev tooling
+        run: npm ci
+
+      - name: Install server workspace
+        working-directory: server
+        run: npm install --no-audit --no-fund
+
+      - name: Type-check server
+        working-directory: server
+        run: npm run build
+
+      - name: Run server tests
+        working-directory: server
+        run: npm test

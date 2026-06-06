@@ -1,0 +1,11 @@
+title = "SpaceTimeHackathon gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented placeholder env values only"
+regexes = [
+  '''OPENROUTER_API_KEY=(example|your_key_here|<redacted>)''',
+  '''SPACETIME_HOST=(localhost|example\.com|<redacted>)'''
+]
