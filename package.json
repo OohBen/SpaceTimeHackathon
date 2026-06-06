@@ -9,7 +9,8 @@
     "orchestrator"
   ],
   "scripts": {
-    "test": "npm run test:presentation-smoke && npm run test:runner && npm run test --workspaces --if-present && npm run ci:quality",
+    "test": "npm run test:presentation-artifacts && npm run test:presentation-smoke && npm run test:runner && npm run test --workspaces --if-present && npm run ci:quality",
+    "test:presentation-artifacts": "node --test scripts/presentation-artifacts.test.mjs",
     "test:presentation-smoke": "node --test scripts/presentation-smoke.test.mjs",
     "test:runner": "node --test scripts/local-demo-runner.test.mjs",
     "build": "npm run build --workspaces --if-present",
