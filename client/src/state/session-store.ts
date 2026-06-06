@@ -56,11 +56,35 @@ export interface PrivateFactionStateRow {
   visibility: Extract<VisibilityScope, 'ownFaction'>;
 }
 
+export type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'deferred' | string;
+
+export interface ProposalRow {
+  id: string;
+  sessionId: string;
+  factionId: string;
+  turn: number;
+  proposingPersonnelId: string;
+  department: string;
+  title: string;
+  body: string;
+  resourceCost: number;
+  confidence: string;
+  status: ProposalStatus;
+  decision: string | null;
+}
+
+export type SubscriptionLoadStatus =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready' }
+  | { status: 'error'; error: string };
+
 export interface SubscriptionSnapshot {
   sessions?: SessionRow[];
   playerSlots?: PlayerSlotRow[];
   publicGameStates?: PublicGameStateRow[];
   privateFactionStates?: PrivateFactionStateRow[];
+  proposals?: ProposalRow[];
 }
 
 export type SubscriptionEvent =
@@ -71,7 +95,9 @@ export type SubscriptionEvent =
   | { table: 'publicGameStates'; op: 'upsert'; row: PublicGameStateRow }
   | { table: 'publicGameStates'; op: 'delete'; sessionId: string }
   | { table: 'privateFactionStates'; op: 'upsert'; row: PrivateFactionStateRow }
-  | { table: 'privateFactionStates'; op: 'delete'; sessionId: string; factionId: string };
+  | { table: 'privateFactionStates'; op: 'delete'; sessionId: string; factionId: string }
+  | { table: 'proposals'; op: 'upsert'; row: ProposalRow }
+  | { table: 'proposals'; op: 'delete'; id: string };
 
 export interface OptimisticSessionUpdate {
   kind: 'session';
@@ -94,6 +120,8 @@ export interface SessionState {
   playerSlotsByKey: Record<string, PlayerSlotRow>;
   publicGameStateBySessionId: Record<string, PublicGameStateRow>;
   privateFactionStateByKey: Record<string, PrivateFactionStateRow>;
+  proposalsById: Record<string, ProposalRow>;
+  proposalsSubscription: SubscriptionLoadStatus;
   reducerCalls: Record<string, ReducerCallState>;
   actions: SessionStoreActions;
 }
@@ -102,6 +130,7 @@ export interface SessionStoreActions {
   setConnection: (connection: Partial<ConnectionState>) => void;
   hydrateSubscription: (snapshot: SubscriptionSnapshot) => void;
   applySubscriptionEvent: (event: SubscriptionEvent) => void;
+  setProposalsSubscription: (status: SubscriptionLoadStatus) => void;
   beginReducerCall: (
     key: string,
     descriptor: ReducerCallDescriptor,
@@ -132,8 +161,14 @@ export function createSessionStore(): SessionStore {
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
     privateFactionStateByKey: {},
+    proposalsById: {},
+    proposalsSubscription: { status: 'idle' },
     reducerCalls: {},
     actions: {
+      setProposalsSubscription(status) {
+        set(() => ({ proposalsSubscription: status }));
+      },
+
       setConnection(connection) {
         set((state) => ({
           connection: {
@@ -151,6 +186,7 @@ export function createSessionStore(): SessionStore {
           const playerSlotsByKey = { ...state.playerSlotsByKey };
           const publicGameStateBySessionId = { ...state.publicGameStateBySessionId };
           const privateFactionStateByKey = { ...state.privateFactionStateByKey };
+          const proposalsById = { ...state.proposalsById };
 
           for (const session of snapshot.sessions ?? []) {
             sessionsById[session.id] = session;
@@ -166,12 +202,20 @@ export function createSessionStore(): SessionStore {
               privateFactionKey(factionState.sessionId, factionState.factionId)
             ] = factionState;
           }
+          for (const proposal of snapshot.proposals ?? []) {
+            proposalsById[proposal.id] = proposal;
+          }
+
+          const proposalsSubscription: SubscriptionLoadStatus =
+            snapshot.proposals !== undefined ? { status: 'ready' } : state.proposalsSubscription;
 
           return {
             sessionsById,
             playerSlotsByKey,
             publicGameStateBySessionId,
             privateFactionStateByKey,
+            proposalsById,
+            proposalsSubscription,
             activeSessionId: nextActiveSessionId(state.activeSessionId, sessionsById),
           };
         });
@@ -301,6 +345,30 @@ export function selectReducerCall(state: SessionState, key: string): ReducerCall
   return state.reducerCalls[key] ?? null;
 }
 
+export function selectProposalsSubscriptionStatus(state: SessionState): SubscriptionLoadStatus {
+  return state.proposalsSubscription;
+}
+
+export function selectProposalById(state: SessionState, id: string): ProposalRow | null {
+  return state.proposalsById[id] ?? null;
+}
+
+export function selectInboxProposalsForCurrentPlayer(state: SessionState): ProposalRow[] {
+  const activeSessionId = state.activeSessionId;
+  const slot = selectCurrentPlayerSlot(state);
+  if (!activeSessionId || !slot) return [];
+
+  return Object.values(state.proposalsById)
+    .filter(
+      (proposal) =>
+        proposal.sessionId === activeSessionId && proposal.factionId === slot.factionId,
+    )
+    .sort((a, b) => {
+      if (a.turn !== b.turn) return b.turn - a.turn;
+      return a.id.localeCompare(b.id);
+    });
+}
+
 function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<SessionState> {
   if (event.table === 'sessions') {
     const sessionsById = { ...state.sessionsById };
@@ -339,14 +407,24 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
     return { publicGameStateBySessionId };
   }
 
-  const privateFactionStateByKey = { ...state.privateFactionStateByKey };
-  if (event.op === 'delete') {
-    delete privateFactionStateByKey[privateFactionKey(event.sessionId, event.factionId)];
-  } else {
-    privateFactionStateByKey[privateFactionKey(event.row.sessionId, event.row.factionId)] =
-      event.row;
+  if (event.table === 'privateFactionStates') {
+    const privateFactionStateByKey = { ...state.privateFactionStateByKey };
+    if (event.op === 'delete') {
+      delete privateFactionStateByKey[privateFactionKey(event.sessionId, event.factionId)];
+    } else {
+      privateFactionStateByKey[privateFactionKey(event.row.sessionId, event.row.factionId)] =
+        event.row;
+    }
+    return { privateFactionStateByKey };
   }
-  return { privateFactionStateByKey };
+
+  const proposalsById = { ...state.proposalsById };
+  if (event.op === 'delete') {
+    delete proposalsById[event.id];
+  } else {
+    proposalsById[event.row.id] = event.row;
+  }
+  return { proposalsById };
 }
 
 function nextActiveSessionId(
