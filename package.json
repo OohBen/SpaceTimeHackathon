@@ -7,6 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "test": "npm run ci:quality",
     "lint:actions": "node scripts/lint-actions-local.mjs",
     "lint:markdown": "node scripts/lint-markdown-local.mjs",
     "scan:secrets": "node scripts/scan-secrets-local.mjs",
