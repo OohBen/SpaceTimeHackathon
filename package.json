@@ -11,7 +11,11 @@
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "dev:client": "npm run dev --workspace=client",
-    "dev:orchestrator": "npm run dev --workspace=orchestrator"
+    "dev:orchestrator": "npm run dev --workspace=orchestrator",
+    "spacetime:build": "npm run spacetime:build --workspace=server",
+    "spacetime:start": "npm run spacetime:start --workspace=server",
+    "spacetime:publish": "npm run spacetime:publish --workspace=server",
+    "generate": "npm run generate --workspace=server"
   },
   "engines": {
     "node": ">=20"
