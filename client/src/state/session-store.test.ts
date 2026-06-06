@@ -4,6 +4,8 @@ import {
   selectActiveSession,
   selectConnectionStatus,
   selectCurrentPlayerSlot,
+  selectIntelligenceRecords,
+  selectPersonnelRoster,
   selectPrivateFactionState,
   selectPublicGameState,
   selectReducerCall,
@@ -144,6 +146,150 @@ describe('session store', () => {
 
     expect(selectPublicGameState(store.getState())).not.toHaveProperty('resources');
     expect(selectPrivateFactionState(store.getState(), 'mars')?.resources.metals).toBe(140);
+  });
+
+  it('selects faction personnel rosters and intelligence records from hydrated private feeds', () => {
+    const store = createSessionStore();
+
+    store.getState().actions.hydrateSubscription({
+      sessions: [
+        {
+          id: 'session-4',
+          code: 'SOL-004',
+          status: 'active',
+          currentTurn: 5,
+          phase: 'planning',
+        },
+      ],
+      personnel: [
+        {
+          id: 'p-1',
+          factionId: 'earth',
+          name: 'Ada Watanabe',
+          role: 'Chief Scientist',
+          department: 'Research',
+          postingCityId: 'city-1',
+          competence: 88,
+          creativity: 91,
+          reliability: 76,
+          ambition: 45,
+          politicalSkill: 50,
+          communication: 72,
+          loyalty: 84,
+          autonomyTolerance: 68,
+          morale: 73,
+          burnout: 12,
+          salary: 18,
+        },
+        {
+          id: 'p-2',
+          factionId: 'mars',
+          name: 'Vera Okoye',
+          role: 'Defense Liaison',
+          department: 'Defense',
+          postingCityId: null,
+          competence: 80,
+          creativity: 55,
+          reliability: 89,
+          ambition: 64,
+          politicalSkill: 70,
+          communication: 67,
+          loyalty: 78,
+          autonomyTolerance: 40,
+          morale: 66,
+          burnout: 19,
+          salary: 15,
+        },
+      ],
+      intelligenceRecords: [
+        {
+          id: 'intel-1',
+          observerFactionId: 'earth',
+          targetFactionId: 'mars',
+          intelType: 'scouting',
+          value: '{"visible_bodies":["Mars","Luna"],"known_cities":["Pavonis"]}',
+          accuracy: 82,
+          acquiredTurn: 5,
+        },
+        {
+          id: 'intel-2',
+          observerFactionId: 'mars',
+          targetFactionId: 'earth',
+          intelType: 'signals',
+          value: '{"known_cities":["New Geneva"]}',
+          accuracy: 74,
+          acquiredTurn: 4,
+        },
+      ],
+    });
+
+    expect(selectPersonnelRoster(store.getState(), 'earth').map((person) => person.name)).toEqual([
+      'Ada Watanabe',
+    ]);
+    expect(selectPersonnelRoster(store.getState(), 'earth')[0].morale).toBe(73);
+    expect(selectPersonnelRoster(store.getState(), 'earth')[0].burnout).toBe(12);
+    expect(selectIntelligenceRecords(store.getState(), 'earth').map((intel) => intel.intelType)).toEqual([
+      'scouting',
+    ]);
+    expect(selectIntelligenceRecords(store.getState(), 'earth')[0].accuracy).toBe(82);
+  });
+
+  it('applies personnel and intelligence upsert/delete events', () => {
+    const store = createSessionStore();
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'personnel',
+      op: 'upsert',
+      row: {
+        id: 'p-3',
+        factionId: 'earth',
+        name: 'Morgan Lee',
+        role: 'Logistics Director',
+        department: 'Logistics',
+        postingCityId: null,
+        competence: 77,
+        creativity: 62,
+        reliability: 86,
+        ambition: 51,
+        politicalSkill: 48,
+        communication: 73,
+        loyalty: 81,
+        autonomyTolerance: 57,
+        morale: 69,
+        burnout: 21,
+        salary: 16,
+      },
+    });
+    store.getState().actions.applySubscriptionEvent({
+      table: 'intelligenceRecords',
+      op: 'upsert',
+      row: {
+        id: 'intel-3',
+        observerFactionId: 'earth',
+        targetFactionId: 'mars',
+        intelType: 'survey',
+        value: '{"body":"Callisto"}',
+        accuracy: 67,
+        acquiredTurn: 6,
+      },
+    });
+
+    expect(selectPersonnelRoster(store.getState(), 'earth')).toHaveLength(1);
+    expect(selectIntelligenceRecords(store.getState(), 'earth')).toHaveLength(1);
+
+    store.getState().actions.applySubscriptionEvent({
+      table: 'personnel',
+      op: 'delete',
+      id: 'p-3',
+    });
+    store.getState().actions.applySubscriptionEvent({
+      table: 'intelligenceRecords',
+      op: 'delete',
+      id: 'intel-3',
+    });
+
+    expect(selectPersonnelRoster(store.getState(), 'earth')).toHaveLength(0);
+    expect(selectIntelligenceRecords(store.getState(), 'earth')).toHaveLength(0);
   });
 
   it('tracks reducer loading, optimism, success, and errors coherently', () => {

@@ -168,6 +168,143 @@
   line-height: 1.55;
 }
 
+.command-shell__data-panel {
+  width: min(100%, 980px);
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.command-shell__table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d6ded9;
+  background: #ffffff;
+}
+
+.command-shell__table caption {
+  padding: 10px 12px;
+  color: #32433c;
+  font-weight: 700;
+  text-align: left;
+}
+
+.command-shell__table th,
+.command-shell__table td {
+  padding: 10px 12px;
+  border-top: 1px solid #d6ded9;
+  text-align: left;
+  vertical-align: top;
+}
+
+.command-shell__table th {
+  color: #32433c;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.command-shell__table strong,
+.command-shell__table span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.command-shell__table span {
+  margin-top: 4px;
+  color: #5c6862;
+  font-size: 0.88rem;
+}
+
+.command-shell__metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.command-shell__metric-grid > div,
+.command-shell__ledger,
+.command-shell__intel-record {
+  min-width: 0;
+  border: 1px solid #d6ded9;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.command-shell__metric-grid span {
+  display: block;
+  margin-bottom: 6px;
+  color: #5c6862;
+  font-size: 0.8rem;
+}
+
+.command-shell__metric-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.command-shell__ledger h4,
+.command-shell__intel-record h4 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.command-shell__ledger dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.command-shell__ledger dl > div {
+  min-width: 0;
+}
+
+.command-shell__ledger dt {
+  color: #5c6862;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.command-shell__ledger dd {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.command-shell__ledger p {
+  margin: 10px 0 0;
+}
+
+.command-shell__intel-list {
+  display: grid;
+  gap: 12px;
+}
+
+.command-shell__intel-record {
+  display: grid;
+  gap: 8px;
+}
+
+.command-shell__intel-record header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+}
+
+.command-shell__intel-record header span {
+  color: #32433c;
+  font-weight: 700;
+}
+
+.command-shell__intel-record p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
 .command-shell__hud-absent {
   color: #9aada5;
 }
@@ -230,5 +367,14 @@
 
   .command-shell__status-grid {
     grid-template-columns: 1fr;
+  }
+
+  .command-shell__metric-grid,
+  .command-shell__ledger dl {
+    grid-template-columns: 1fr;
+  }
+
+  .command-shell__table {
+    min-width: 680px;
   }
 }

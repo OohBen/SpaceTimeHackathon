@@ -19,6 +19,9 @@ describe('session subscription wiring', () => {
     const bridge = wireSessionSubscriptions(store, client);
 
     expect(subscribedQueries).toEqual([[...SESSION_SUBSCRIPTION_QUERIES]]);
+    expect(subscribedQueries[0]).toEqual(
+      expect.arrayContaining(['SELECT * FROM personnel', 'SELECT * FROM intelligence_records']),
+    );
 
     bridge.hydrate({
       sessions: [
