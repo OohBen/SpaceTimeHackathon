@@ -4,10 +4,9 @@ import {
   generateFallbackProposals,
   type FallbackProposalInput,
 } from './fallback_proposals.js';
-import { turn1Seed, type ProposalRow } from './turn1_seed.js';
+import { turn1Seed } from './turn1_seed.js';
 
 const proposalKeys = [
-  'id',
   'faction_id',
   'turn',
   'proposing_personnel_id',
@@ -57,16 +56,16 @@ describe('deterministic fallback proposal generator', () => {
     }
   });
 
-  it('matches the proposal row contract expected by decision reducers', () => {
-    const proposals: ProposalRow[] = generateFallbackProposals(makeInput());
+  it('omits auto-increment IDs so insertion can allocate unique proposal keys', () => {
+    const proposals = generateFallbackProposals(makeInput());
 
     expect(proposals).toHaveLength(2);
     for (const proposal of proposals) {
       expect(Object.keys(proposal)).toEqual(proposalKeys);
+      expect(proposal).not.toHaveProperty('id');
       expect(proposal).toMatchObject({
         decision: undefined,
         faction_id: makeInput().faction.id,
-        id: 0,
         status: 'unread',
         turn: makeInput().session.current_turn,
       });
