@@ -265,6 +265,7 @@ export const tables = {
       public: true,
       indexes: [
         { accessor: 'llm_status_idx', algorithm: 'btree', columns: ['status'] as const },
+        { accessor: 'llm_session_turn_idx', algorithm: 'btree', columns: ['session_id', 'faction_id', 'created_turn'] as const },
       ],
     },
     {
@@ -276,7 +277,10 @@ export const tables = {
       status: t.string(),
       response_json: t.option(t.string()),
       error: t.option(t.string()),
+      error_code: t.option(t.string()),
+      attempt_count: t.u32(),
       created_turn: t.u32(),
+      updated_turn: t.u32(),
     }
   ),
 };

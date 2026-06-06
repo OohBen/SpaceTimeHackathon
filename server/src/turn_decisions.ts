@@ -6,8 +6,13 @@ import {
   type FactionRow,
   type GameSessionRow,
 } from './session_lifecycle.js';
+import {
+  LLM_REQUEST_STATUS,
+  LLM_REQUEST_TYPE,
+  buildQueuedLlmRequest,
+  type LlmRequestRow,
+} from './llm_queue_contract.js';
 import type {
-  LlmRequestRow,
   ProposalRow,
 } from './turn1_seed.js';
 
@@ -62,22 +67,18 @@ export function runDeliberationReducer(
   assertTurnPhase(session, 'deliberation');
   assertNoDuplicateDeliberationRequest(ctx, faction.id, session);
 
-  ctx.db.llm_requests.insert({
-    id: 0,
+  ctx.db.llm_requests.insert(buildQueuedLlmRequest({
     session_id: session.id,
     faction_id: faction.id,
-    request_type: 'proposals',
-    context_json: stableJson({
+    request_type: LLM_REQUEST_TYPE.proposals,
+    context: {
       faction_id: faction.id,
       request: 'run_deliberation',
       session_id: session.id,
       turn: session.current_turn,
-    }),
-    status: 'queued',
-    response_json: undefined,
-    error: undefined,
+    },
     created_turn: session.current_turn,
-  });
+  }));
 }
 
 export function commanderDecisionReducer(
@@ -182,8 +183,8 @@ function assertNoDuplicateDeliberationRequest(
       request.faction_id === factionId &&
       request.session_id === session.id &&
       request.created_turn === session.current_turn &&
-      request.request_type === 'proposals' &&
-      request.status !== 'failed'
+      request.request_type === LLM_REQUEST_TYPE.proposals &&
+      request.status !== LLM_REQUEST_STATUS.failed
     ) {
       throw new Error(
         `deliberation request already exists for faction ${factionId} turn ${session.current_turn}`
