@@ -20,6 +20,7 @@ import {
   checkVictoryReducer,
   simulateTurnReducer,
 } from './turn_resolution.js';
+import { seedDemoWorldReducer } from './seed_demo_world.js';
 import {
   projectCity,
   projectColonyShip,
@@ -119,6 +120,13 @@ export const check_victory = spacetimedb.reducer(
     session_id: t.u32(),
   },
   checkVictoryReducer
+);
+
+export const seed_demo_world = spacetimedb.reducer(
+  {
+    session_id: t.u32(),
+  },
+  seedDemoWorldReducer
 );
 
 const publicFactionRowType = t.object('PublicFactionProjection', {

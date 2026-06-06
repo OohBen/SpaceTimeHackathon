@@ -121,6 +121,20 @@ export interface TurnSummaryRow {
   updatedAt?: string;
 }
 
+export interface LlmRequestRow {
+  id: OperationalRowId;
+  sessionId: OperationalRowId;
+  factionId: OperationalRowId;
+  requestType: string;
+  status: string;
+  responseJson: string | null;
+  error: string | null;
+  errorCode: string | null;
+  attemptCount: number;
+  createdTurn: number;
+  updatedTurn: number;
+}
+
 export interface PublicFactionRow {
   id: string;
   sessionId: string;
@@ -228,6 +242,7 @@ export interface SubscriptionSnapshot {
   intelligenceRecords?: IntelligenceRecordRow[];
   events?: EventRow[];
   turnSummaries?: TurnSummaryRow[];
+  llmRequests?: LlmRequestRow[];
 }
 
 export type SubscriptionEvent =
@@ -262,7 +277,9 @@ export type SubscriptionEvent =
   | { table: 'events'; op: 'upsert'; row: EventRow }
   | { table: 'events'; op: 'delete'; id: OperationalRowId }
   | { table: 'turnSummaries'; op: 'upsert'; row: TurnSummaryRow }
-  | { table: 'turnSummaries'; op: 'delete'; id: OperationalRowId };
+  | { table: 'turnSummaries'; op: 'delete'; id: OperationalRowId }
+  | { table: 'llmRequests'; op: 'upsert'; row: LlmRequestRow }
+  | { table: 'llmRequests'; op: 'delete'; id: OperationalRowId };
 
 export interface OptimisticSessionUpdate {
   kind: 'session';
@@ -299,6 +316,7 @@ export interface SessionState {
   intelligenceRecordsById: Record<string, IntelligenceRecordRow>;
   eventsById: Record<string, EventRow>;
   turnSummariesById: Record<string, TurnSummaryRow>;
+  llmRequestsById: Record<string, LlmRequestRow>;
   reducerCalls: Record<string, ReducerCallState>;
   actions: SessionStoreActions;
 }
@@ -352,6 +370,7 @@ export function createSessionStore(): SessionStore {
     intelligenceRecordsById: {},
     eventsById: {},
     turnSummariesById: {},
+    llmRequestsById: {},
     reducerCalls: {},
     actions: {
       setConnection(connection) {
@@ -388,6 +407,7 @@ export function createSessionStore(): SessionStore {
           const intelligenceRecordsById = { ...state.intelligenceRecordsById };
           const eventsById = { ...state.eventsById };
           const turnSummariesById = { ...state.turnSummariesById };
+          const llmRequestsById = { ...state.llmRequestsById };
 
           for (const session of snapshot.sessions ?? []) {
             sessionsById[session.id] = session;
@@ -418,6 +438,7 @@ export function createSessionStore(): SessionStore {
           indexOperationalRows(intelligenceRecordsById, snapshot.intelligenceRecords);
           indexOperationalRows(eventsById, snapshot.events);
           indexOperationalRows(turnSummariesById, snapshot.turnSummaries);
+          indexOperationalRows(llmRequestsById, snapshot.llmRequests);
           indexById(worldBodiesById, snapshot.worldBodies);
           indexById(publicCitiesById, snapshot.publicCities);
           indexById(publicFleetsById, snapshot.publicFleets);
@@ -445,6 +466,7 @@ export function createSessionStore(): SessionStore {
             intelligenceRecordsById,
             eventsById,
             turnSummariesById,
+            llmRequestsById,
             activeSessionId: nextActiveSessionId(state.activeSessionId, sessionsById),
           };
         });
@@ -674,6 +696,42 @@ export function selectInboxProposalsForCurrentPlayer(state: SessionState): Propo
     .sort((left, right) => left.turn - right.turn || left.title.localeCompare(right.title));
 }
 
+export function selectTurnSummaryForCurrentPlayer(state: SessionState): TurnSummaryRow | null {
+  const activeSession = selectActiveSession(state);
+  const slot = selectCurrentPlayerSlot(state);
+  if (!activeSession || !slot) return null;
+
+  const sessionId = String(activeSession.id);
+  const factionId = String(slot.factionId);
+  return (
+    Object.values(state.turnSummariesById)
+      .filter(
+        (summary) =>
+          String(summary.sessionId) === sessionId &&
+          String(summary.factionId) === factionId &&
+          summary.turn === activeSession.currentTurn,
+      )
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)))[0] ?? null
+  );
+}
+
+export function selectLlmRequestsForCurrentPlayer(state: SessionState): LlmRequestRow[] {
+  const activeSessionId = state.activeSessionId;
+  const slot = selectCurrentPlayerSlot(state);
+  if (!activeSessionId || !slot) return [];
+
+  const factionId = String(slot.factionId);
+  return Object.values(state.llmRequestsById)
+    .filter(
+      (request) =>
+        String(request.sessionId) === activeSessionId && String(request.factionId) === factionId,
+    )
+    .sort((a, b) => {
+      if (a.updatedTurn !== b.updatedTurn) return b.updatedTurn - a.updatedTurn;
+      return String(b.id).localeCompare(String(a.id));
+    });
+}
+
 function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<SessionState> {
   if (event.table === 'sessions') {
     const sessionsById = { ...state.sessionsById };
@@ -739,6 +797,9 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
   }
   if (event.table === 'turnSummaries') {
     return { turnSummariesById: updateOperationalById(state.turnSummariesById, event) };
+  }
+  if (event.table === 'llmRequests') {
+    return { llmRequestsById: updateOperationalById(state.llmRequestsById, event) };
   }
 
   if (event.table === 'worldBodies') {
