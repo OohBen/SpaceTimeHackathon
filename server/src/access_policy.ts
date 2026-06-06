@@ -171,6 +171,11 @@ export const TABLE_ACCESS_POLICIES = {
     ownerKey: 'faction_id',
     notes: 'Prompt context and provider responses are faction-private plus orchestrator/internal processing data.',
   },
+  module_settings: {
+    visibility: 'internal',
+    subscription: { public: 'none', internal: 'full' },
+    notes: 'Singleton module config (e.g. deliberation_mode) is internal-only state for orchestration and module-level toggles.',
+  },
 } as const satisfies Record<Turn1SeedTableName, TableAccessPolicy>;
 
 export type ReducerName =

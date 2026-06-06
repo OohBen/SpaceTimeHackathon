@@ -620,10 +620,13 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
         proposal_ids: [1, 2],
         turn: TURN8_TURN,
       }),
-      status: 'complete',
+      status: 'completed',
       response_json: stableJson({ proposal_ids: [1, 2], source: 'deterministic_fixture' }),
       error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
       created_turn: TURN8_TURN,
+      updated_turn: TURN8_TURN,
     },
     {
       id: 2,
@@ -638,10 +641,13 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
         proposal_ids: [3, 4],
         turn: TURN8_TURN,
       }),
-      status: 'complete',
+      status: 'completed',
       response_json: stableJson({ proposal_ids: [3, 4], source: 'deterministic_fixture' }),
       error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
       created_turn: TURN8_TURN,
+      updated_turn: TURN8_TURN,
     },
   ];
 
@@ -662,6 +668,7 @@ export function buildTurn8Seed(input: Turn8SeedInput = {}): Turn8SeedRows {
     turn_summaries,
     trade_agreements,
     llm_requests,
+    module_settings: [],
   };
 }
 

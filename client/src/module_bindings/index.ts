@@ -194,6 +194,11 @@ const tablesSchema = __schema({
       { accessor: 'llm_status_idx', name: 'llm_requests_status_idx_btree', algorithm: 'btree', columns: [
         'status',
       ] },
+      { accessor: 'llm_session_turn_idx', name: 'llm_requests_session_id_faction_id_created_turn_idx_btree', algorithm: 'btree', columns: [
+        'sessionId',
+        'factionId',
+        'createdTurn',
+      ] },
     ],
     constraints: [
       { name: 'llm_requests_id_key', constraint: 'unique', columns: ['id'] },

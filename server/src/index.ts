@@ -9,6 +9,7 @@ import {
 import {
   commanderDecisionReducer,
   runDeliberationReducer,
+  setDeliberationModeReducer,
 } from './turn_decisions.js';
 import {
   expireTurnReducer,
@@ -76,6 +77,13 @@ export const commander_decision = spacetimedb.reducer(
     allocation: t.i32(),
   },
   commanderDecisionReducer
+);
+
+export const set_deliberation_mode = spacetimedb.reducer(
+  {
+    mode: t.string(),
+  },
+  setDeliberationModeReducer
 );
 
 export const submit_turn = spacetimedb.reducer(

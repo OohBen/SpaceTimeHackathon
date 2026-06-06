@@ -1,5 +1,14 @@
 import { Identity, Timestamp } from 'spacetimedb';
 
+import type { LlmRequestRow } from './llm_queue_contract.js';
+
+export type { LlmRequestRow };
+
+export type ModuleSettingsRow = {
+  id: number;
+  deliberation_mode: string;
+};
+
 export type GameSessionRow = {
   id: number;
   state: string;
@@ -178,18 +187,6 @@ export type TradeAgreementRow = {
   expires_turn: number | undefined;
 };
 
-export type LlmRequestRow = {
-  id: number;
-  session_id: number;
-  faction_id: number;
-  request_type: string;
-  context_json: string;
-  status: string;
-  response_json: string | undefined;
-  error: string | undefined;
-  created_turn: number;
-};
-
 export type Turn1SeedRows = {
   game_sessions: GameSessionRow[];
   factions: FactionRow[];
@@ -207,6 +204,7 @@ export type Turn1SeedRows = {
   turn_summaries: TurnSummaryRow[];
   trade_agreements: TradeAgreementRow[];
   llm_requests: LlmRequestRow[];
+  module_settings: ModuleSettingsRow[];
 };
 
 export type Turn1SeedInput = {
@@ -242,6 +240,7 @@ export const TURN1_SEED_INSERT_ORDER = [
   'turn_summaries',
   'trade_agreements',
   'llm_requests',
+  'module_settings',
 ] as const satisfies readonly Turn1SeedTableName[];
 
 const TURN1_YEAR = 2150;
@@ -746,10 +745,13 @@ export function buildTurn1Seed(input: Turn1SeedInput = {}): Turn1SeedRows {
         proposal_ids: [1, 2],
         turn: TURN1_TURN,
       }),
-      status: 'complete',
+      status: 'completed',
       response_json: stableJson({ proposal_ids: [1, 2], source: 'deterministic_fixture' }),
       error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
       created_turn: TURN1_TURN,
+      updated_turn: TURN1_TURN,
     },
     {
       id: 2,
@@ -764,12 +766,17 @@ export function buildTurn1Seed(input: Turn1SeedInput = {}): Turn1SeedRows {
         proposal_ids: [3, 4],
         turn: TURN1_TURN,
       }),
-      status: 'complete',
+      status: 'completed',
       response_json: stableJson({ proposal_ids: [3, 4], source: 'deterministic_fixture' }),
       error: undefined,
+      error_code: undefined,
+      attempt_count: 0,
       created_turn: TURN1_TURN,
+      updated_turn: TURN1_TURN,
     },
   ];
+
+  const module_settings: ModuleSettingsRow[] = [];
 
   return {
     game_sessions,
@@ -788,6 +795,7 @@ export function buildTurn1Seed(input: Turn1SeedInput = {}): Turn1SeedRows {
     turn_summaries,
     trade_agreements,
     llm_requests,
+    module_settings,
   };
 }
 
