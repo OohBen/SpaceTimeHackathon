@@ -37,6 +37,39 @@ import { Inbox } from '../components/inbox/Inbox';
 import './CommandCenterShell.css';
 
 type View = 'landing' | 'setup' | 'game';
+const LOCAL_DEMO_SESSION_ID = 9001;
+
+const LOCAL_DEMO_SLOTS: Record<
+  PlayerSlot,
+  {
+    factionId: number;
+    factionName: string;
+    identity: string;
+    defaultCommander: string;
+    resources: Record<string, number>;
+    morale: number;
+    doctrine: string;
+  }
+> = {
+  player_a: {
+    factionId: 202,
+    factionName: 'Solar Republic',
+    identity: 'demo-browser-a',
+    defaultCommander: 'Browser A Commander',
+    resources: { credits: 150, minerals: 30, science: 12 },
+    morale: 80,
+    doctrine: 'expansion',
+  },
+  player_b: {
+    factionId: 303,
+    factionName: 'Martian League',
+    identity: 'demo-browser-b',
+    defaultCommander: 'Browser B Commander',
+    resources: { credits: 90, minerals: 42, science: 18 },
+    morale: 76,
+    doctrine: 'contested-mars',
+  },
+};
 
 interface GameRouteParams {
   sessionId: number;
@@ -99,6 +132,21 @@ function AppRouterView({
   }, []);
 
   useEffect(() => {
+    if (router.view === 'game' && router.gameRoute && isLocalDemoRoute(router.gameRoute)) {
+      const routeMatchesStoredContext =
+        hasCompleteSessionContext(session) && storedContextMatchesRoute(session, router.gameRoute);
+
+      if (session.status !== 'ready' || !routeMatchesStoredContext) {
+        const result = seedLocalDemoSession(
+          LOCAL_DEMO_SLOTS[router.gameRoute.playerSlot].defaultCommander,
+          router.gameRoute.playerSlot,
+        );
+        session.setReady(result);
+        onSessionReady?.(result.sessionId, result.playerSlot);
+        return;
+      }
+    }
+
     if (session.status === 'ready') {
       return;
     }
@@ -133,7 +181,7 @@ function AppRouterView({
 
   const defaultSubmit = async (state: SetupState): Promise<void> => {
     if (state.mode === 'demo') {
-      const result = seedLocalDemoSession(state.playerName);
+      const result = seedLocalDemoSession(state.playerName, state.playerSlot ?? 'player_a');
       session.setReady(result);
       onSessionReady?.(result.sessionId, result.playerSlot);
       enterGame(result);
@@ -1338,6 +1386,10 @@ function matchesGameRoute(route: GameRouteParams, result: SessionBackendResult):
   return route.sessionId === result.sessionId && route.playerSlot === result.playerSlot;
 }
 
+function isLocalDemoRoute(route: GameRouteParams): boolean {
+  return route.sessionId === LOCAL_DEMO_SESSION_ID;
+}
+
 function isPlayerSlot(value: unknown): value is PlayerSlot {
   return value === 'player_a' || value === 'player_b';
 }
@@ -1355,20 +1407,63 @@ function actionableSessionError(err: unknown): string {
   return msg;
 }
 
-function seedLocalDemoSession(playerName: string): SessionBackendResult {
+function seedLocalDemoSession(playerName: string, playerSlot: PlayerSlot): SessionBackendResult {
+  const selected = LOCAL_DEMO_SLOTS[playerSlot];
+  const commanderName = playerName.trim() || selected.defaultCommander;
   const result: SessionBackendResult = {
-    sessionId: 9001,
-    factionId: 202,
-    playerSlot: 'player_a',
-    playerName,
+    sessionId: LOCAL_DEMO_SESSION_ID,
+    factionId: selected.factionId,
+    playerSlot,
+    playerName: commanderName,
     isResume: false,
   };
 
+  sessionStore.getState().actions.setConnection({
+    status: 'connected',
+    identity: selected.identity,
+    error: null,
+  });
   sessionStore.getState().actions.hydrateSubscription({
-    sessions: [{ id: '9001', code: 'DEMO', status: 'active', currentTurn: 5, phase: 'summary' }],
+    sessions: [
+      {
+        id: String(LOCAL_DEMO_SESSION_ID),
+        code: 'DEMO',
+        status: 'active',
+        currentTurn: 5,
+        phase: 'summary',
+      },
+    ],
+    playerSlots: [
+      {
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
+        slot: 1,
+        identity: LOCAL_DEMO_SLOTS.player_a.identity,
+        factionId: String(LOCAL_DEMO_SLOTS.player_a.factionId),
+        factionName: LOCAL_DEMO_SLOTS.player_a.factionName,
+        playerName:
+          playerSlot === 'player_a'
+            ? commanderName
+            : LOCAL_DEMO_SLOTS.player_a.defaultCommander,
+        occupied: true,
+        visibility: playerSlot === 'player_a' ? 'own' : 'public',
+      },
+      {
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
+        slot: 2,
+        identity: LOCAL_DEMO_SLOTS.player_b.identity,
+        factionId: String(LOCAL_DEMO_SLOTS.player_b.factionId),
+        factionName: LOCAL_DEMO_SLOTS.player_b.factionName,
+        playerName:
+          playerSlot === 'player_b'
+            ? commanderName
+            : LOCAL_DEMO_SLOTS.player_b.defaultCommander,
+        occupied: true,
+        visibility: playerSlot === 'player_b' ? 'own' : 'public',
+      },
+    ],
     publicGameStates: [
       {
-        sessionId: '9001',
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
         turn: 5,
         year: 2351,
         phase: 'summary',
@@ -1377,21 +1472,21 @@ function seedLocalDemoSession(playerName: string): SessionBackendResult {
       },
     ],
     privateFactionStates: [
-      {
-        sessionId: '9001',
-        factionId: '202',
-        resources: { credits: 150, minerals: 30, science: 12 },
-        morale: 80,
-        doctrine: 'expansion',
-        visibility: 'ownFaction',
-      },
+      ...Object.values(LOCAL_DEMO_SLOTS).map((slot) => ({
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
+        factionId: String(slot.factionId),
+        resources: slot.resources,
+        morale: slot.morale,
+        doctrine: slot.doctrine,
+        visibility: 'ownFaction' as const,
+      })),
     ],
     factions: [
       {
         id: '202',
-        sessionId: '9001',
-        name: 'Solar Republic',
-        credits: 150,
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
+        name: LOCAL_DEMO_SLOTS.player_a.factionName,
+        credits: LOCAL_DEMO_SLOTS.player_a.resources.credits,
         politicalCapital: 18,
         doctrineVector: '{"strategy":72,"approach":36,"command":64,"focus":58,"style":44}',
         controlScore: 52,
@@ -1399,9 +1494,9 @@ function seedLocalDemoSession(playerName: string): SessionBackendResult {
       },
       {
         id: '303',
-        sessionId: '9001',
-        name: 'Martian League',
-        credits: 90,
+        sessionId: String(LOCAL_DEMO_SESSION_ID),
+        name: LOCAL_DEMO_SLOTS.player_b.factionName,
+        credits: LOCAL_DEMO_SLOTS.player_b.resources.credits,
         politicalCapital: 11,
         doctrineVector: '{"strategy":44,"approach":68,"command":47,"focus":42,"style":61}',
         controlScore: 38,
