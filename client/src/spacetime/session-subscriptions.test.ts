@@ -15,7 +15,7 @@ describe('session subscription wiring', () => {
       reconnect: () => ({ disconnect: () => undefined }),
       disconnect: () => undefined,
       subscribe: (queries) => subscribedQueries.push(queries),
-      callReducer: () => undefined,
+      callReducer: () => Promise.resolve(),
       diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
     };
     const store = createSessionStore();
@@ -48,7 +48,7 @@ describe('session subscription wiring', () => {
       reconnect: () => ({ disconnect: () => undefined }),
       disconnect: () => undefined,
       subscribe: () => undefined,
-      callReducer: () => undefined,
+      callReducer: () => Promise.resolve(),
       diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
     };
     const store = createSessionStore();
@@ -101,7 +101,7 @@ describe('session subscription wiring', () => {
       reconnect: () => ({ disconnect: () => undefined }),
       disconnect: () => undefined,
       subscribe: (queries) => subscribedQueries.push(queries),
-      callReducer: () => undefined,
+      callReducer: () => Promise.resolve(),
       diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
     };
     const store = createSessionStore();
@@ -126,7 +126,7 @@ describe('session subscription wiring', () => {
       reconnect: () => ({ disconnect: () => undefined }),
       disconnect: () => undefined,
       subscribe: () => undefined,
-      callReducer: () => undefined,
+      callReducer: () => Promise.resolve(),
       diagnostics: () => ({ host: 'ws://localhost:3000', dbName: 'solar-dominion', issues: [] }),
     };
     const store = createSessionStore();

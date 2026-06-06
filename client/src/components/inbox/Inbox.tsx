@@ -301,7 +301,7 @@ function DeliberationStatus({ call }: { call: ReducerCallState | null }) {
   if (call?.status === 'loading') {
     return (
       <p data-testid="deliberation-status" role="status" style={{ margin: 0 }}>
-        Requesting proposals from orchestrator or fallback path...
+        Requesting live proposals from the orchestrator...
       </p>
     );
   }
@@ -419,14 +419,12 @@ function OrchestratorStatus({ requests }: { requests: LlmRequestRow[] }) {
   if (request.status === 'completed') {
     detail =
       source === 'deterministic_fallback'
-        ? `${typeLabel} completed through deterministic fallback.`
-        : `${typeLabel} completed through orchestrator output.`;
+        ? `${typeLabel} completed.`
+        : `${typeLabel} completed through live orchestrator output.`;
   } else if (request.status === 'failed' || request.status === 'cancelled') {
-    detail = `${typeLabel} unavailable: ${
-      request.error ?? request.errorCode ?? request.status
-    }. Deterministic fallback keeps the command flow playable.`;
+    detail = `${typeLabel} unavailable: ${request.error ?? request.errorCode ?? request.status}.`;
   } else {
-    detail = `${typeLabel} ${request.status}. Deterministic fallback keeps the command flow playable when configured.`;
+    detail = `${typeLabel} ${request.status}. Waiting for worker write-back.`;
   }
 
   return (
@@ -515,8 +513,7 @@ function ResolutionPanel({
         </>
       ) : phase === 'summary' ? (
         <p data-testid="resolution-summary" role="status" style={{ margin: 0 }}>
-          Resolution summary pending. Deterministic summary fallback keeps the command flow playable
-          while narrative output arrives.
+          Resolution summary pending. Waiting for authoritative turn output.
         </p>
       ) : null}
     </section>
@@ -764,6 +761,7 @@ function ProposalReader({
         currentSlot={view.currentSlot}
         factionState={view.factionState}
         decisionCall={view.decisionCall}
+        phase={view.activeSession?.phase ?? null}
         store={store}
         client={client}
       />
@@ -776,6 +774,7 @@ interface ProposalDecisionControlsProps {
   currentSlot: PlayerSlotRow | null;
   factionState: PrivateFactionStateRow | null;
   decisionCall: ReducerCallState | null;
+  phase: string | null;
   store: SessionStore;
   client?: SpacetimeClient;
 }
@@ -785,6 +784,7 @@ function ProposalDecisionControls({
   currentSlot,
   factionState,
   decisionCall,
+  phase,
   store,
   client,
 }: ProposalDecisionControlsProps) {
@@ -803,8 +803,11 @@ function ProposalDecisionControls({
   );
   const terminal = hasTerminalDecision(proposal);
   const openForDecision = isOpenForDecision(proposal);
+  const inDecisionPhase = phase === 'decision';
   const loading = decisionCall?.status === 'loading';
-  const canSubmitBase = Boolean(client && reducerIds && openForDecision && !terminal && !loading);
+  const canSubmitBase = Boolean(
+    client && reducerIds && openForDecision && inDecisionPhase && !terminal && !loading,
+  );
   const disableApprove = !canSubmitBase || allocationValidation !== null;
   const disableNonSpendDecision = !canSubmitBase;
   const inputId = `proposal-${proposal.id}-allocation`;
@@ -814,7 +817,7 @@ function ProposalDecisionControls({
   }, [proposal.id, proposal.resourceCost]);
 
   const submitDecision = (decision: CommanderDecision) => {
-    if (!client || !reducerIds || !openForDecision || terminal || loading) return;
+    if (!client || !reducerIds || !openForDecision || !inDecisionPhase || terminal || loading) return;
     if (decision === 'approved' && (allocation === null || allocationValidation)) return;
 
     commanderDecisionAction(store, client, {
@@ -896,6 +899,7 @@ function ProposalDecisionControls({
         clientReady={Boolean(client)}
         idsReady={Boolean(reducerIds)}
         openForDecision={openForDecision}
+        inDecisionPhase={inDecisionPhase}
         terminal={terminal}
         decisionCall={decisionCall}
       />
@@ -931,12 +935,14 @@ function DecisionStatus({
   clientReady,
   idsReady,
   openForDecision,
+  inDecisionPhase,
   terminal,
   decisionCall,
 }: {
   clientReady: boolean;
   idsReady: boolean;
   openForDecision: boolean;
+  inDecisionPhase: boolean;
   terminal: boolean;
   decisionCall: ReducerCallState | null;
 }) {
@@ -958,6 +964,9 @@ function DecisionStatus({
   }
   if (!openForDecision) {
     return <p role="status" style={{ margin: 0 }}>Proposal is not open for decision.</p>;
+  }
+  if (!inDecisionPhase) {
+    return <p role="status" style={{ margin: 0 }}>Start decision phase before recording decisions.</p>;
   }
   if (!idsReady) {
     return (

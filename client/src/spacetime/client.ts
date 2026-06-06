@@ -5,7 +5,7 @@ import type { ReducerCallDescriptor } from './reducers';
 // this module does not pull in the full module_bindings just to define a
 // transport boundary.
 export interface DbConnectionLike {
-  reducers: Record<string, (args: unknown) => unknown>;
+  reducers: Record<string, (args: unknown) => Promise<void>>;
   subscriptionBuilder?: () => {
     subscribe: (queries: unknown) => unknown;
   };
@@ -32,7 +32,7 @@ export interface ConnectionLifecycleEvent {
 export interface ConnectionTransport {
   connect: (config: ClientConfig) => ConnectionHandle;
   subscribe: (handle: ConnectionHandle, queries: string[]) => void;
-  callReducer: (handle: ConnectionHandle, call: ReducerCallDescriptor) => void;
+  callReducer: (handle: ConnectionHandle, call: ReducerCallDescriptor) => Promise<void>;
 }
 
 export interface SpacetimeClientOptions {
@@ -45,7 +45,7 @@ export interface SpacetimeClient {
   reconnect: () => ConnectionHandle;
   disconnect: () => void;
   subscribe: (queries: string[]) => void;
-  callReducer: (call: ReducerCallDescriptor) => void;
+  callReducer: (call: ReducerCallDescriptor) => Promise<void>;
   diagnostics: () => ClientDiagnostics;
 }
 
@@ -56,7 +56,7 @@ const defaultTransport: ConnectionTransport = {
     },
   }),
   subscribe: () => undefined,
-  callReducer: () => undefined,
+  callReducer: () => Promise.reject(new Error('SpacetimeDB connection is not ready')),
 };
 
 export function createSpacetimeClient(
@@ -123,9 +123,11 @@ export function createSpacetimeClient(
       transport.subscribe(activeConnection, [...queries]);
     },
 
-    callReducer(call: ReducerCallDescriptor): void {
-      if (!activeConnection) return;
-      transport.callReducer(activeConnection, call);
+    callReducer(call: ReducerCallDescriptor): Promise<void> {
+      if (!activeConnection) {
+        return Promise.reject(new Error('SpacetimeDB connection is not ready'));
+      }
+      return transport.callReducer(activeConnection, call);
     },
 
     diagnostics(): ClientDiagnostics {
@@ -162,7 +164,7 @@ export function createDbConnectionTransport(
       if (!builder) return;
       builder.subscribe(queries);
     },
-    callReducer(_handle, call) {
+    async callReducer(_handle, call) {
       const methodName = snakeToCamel(call.reducer);
       const method = conn.reducers[methodName];
       if (typeof method !== 'function') {
@@ -170,7 +172,7 @@ export function createDbConnectionTransport(
           `reducer ${call.reducer} (method ${methodName}) is not exposed on conn.reducers`,
         );
       }
-      method(call.args);
+      await method(call.args);
     },
   };
 }

@@ -67,28 +67,29 @@ describe('reducerRegistry', () => {
 });
 
 describe('createDbConnectionTransport', () => {
-  it('translates snake_case reducer names to camelCase methods on conn.reducers', () => {
+  it('translates snake_case reducer names to camelCase methods on conn.reducers', async () => {
     const calls: Array<{ method: string; args: unknown }> = [];
     const conn: DbConnectionLike = {
       reducers: new Proxy({}, {
         get(_target, prop: string) {
           return (args: unknown) => {
             calls.push({ method: prop, args });
+            return Promise.resolve();
           };
         },
-      }) as Record<string, (args: unknown) => unknown>,
+      }) as Record<string, (args: unknown) => Promise<void>>,
     };
 
     const transport = createDbConnectionTransport(conn);
     const handle = transport.connect(defaultClientConfig());
 
-    transport.callReducer(handle, reducerRegistry.commanderDecision({
+    await transport.callReducer(handle, reducerRegistry.commanderDecision({
       factionId: 7,
       proposalId: 101,
       decision: 'approved',
       allocation: 25,
     }));
-    transport.callReducer(handle, reducerRegistry.joinOrResumeSession({
+    await transport.callReducer(handle, reducerRegistry.joinOrResumeSession({
       sessionId: 1,
       playerSlot: 'player_b',
     }));
@@ -117,13 +118,13 @@ describe('createDbConnectionTransport', () => {
     expect(subscribed).toEqual([['SELECT * FROM proposals']]);
   });
 
-  it('throws if a reducer name is not exposed on conn.reducers', () => {
+  it('rejects if a reducer name is not exposed on conn.reducers', async () => {
     const conn: DbConnectionLike = { reducers: {} };
     const transport = createDbConnectionTransport(conn);
     const handle = transport.connect(defaultClientConfig());
 
-    expect(() =>
+    await expect(
       transport.callReducer(handle, reducerRegistry.submitTurn({ factionId: 1 })),
-    ).toThrow(/submit_turn/);
+    ).rejects.toThrow(/submit_turn/);
   });
 });

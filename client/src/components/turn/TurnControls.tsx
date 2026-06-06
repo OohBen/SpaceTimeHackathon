@@ -3,6 +3,8 @@ import type { SpacetimeClient } from '../../spacetime/client';
 import {
   ackResolutionAction,
   ackResolutionKey,
+  advanceTurnPhaseAction,
+  advanceTurnPhaseKey,
   advanceWorldAction,
   advanceWorldKey,
   checkVictoryAction,
@@ -56,6 +58,9 @@ export function TurnControls({ store = sessionStore, client }: TurnControlsProps
   const simulateTurnCall = useStoreSlice(store, (state) =>
     sessionId !== null ? selectReducerCall(state, simulateTurnKey(sessionId)) : null,
   );
+  const advanceDecisionCall = useStoreSlice(store, (state) =>
+    sessionId !== null ? selectReducerCall(state, advanceTurnPhaseKey(sessionId)) : null,
+  );
   const ackResolutionCall = useStoreSlice(store, (state) =>
     factionId !== null ? selectReducerCall(state, ackResolutionKey(factionId)) : null,
   );
@@ -88,10 +93,20 @@ export function TurnControls({ store = sessionStore, client }: TurnControlsProps
       key: 'runDeliberation',
       label: 'Run Deliberation',
       call: deliberationCall,
-      appliesToPhase: true,
+      appliesToPhase: phase === 'deliberation',
       run: () => {
         if (factionId === null) return;
         runDeliberationAction(store, client!, { factionId });
+      },
+    },
+    {
+      key: 'advanceDecision',
+      label: 'Start Decision Phase',
+      call: advanceDecisionCall,
+      appliesToPhase: phase === 'deliberation',
+      run: () => {
+        if (sessionId === null) return;
+        advanceTurnPhaseAction(store, client!, { sessionId, nextPhase: 'decision' });
       },
     },
     {
@@ -146,11 +161,21 @@ export function TurnControls({ store = sessionStore, client }: TurnControlsProps
           const pending = action.call?.status === 'loading';
           const idReady =
             action.key === 'advanceWorld' ||
+            action.key === 'advanceDecision' ||
             action.key === 'simulateTurn' ||
             action.key === 'checkVictory'
               ? sessionId !== null
               : factionId !== null;
           const disabled = !client || pending || !action.appliesToPhase || !idReady;
+          const blockedReason = disabled
+            ? turnActionBlockedReason({
+                clientReady: Boolean(client),
+                idReady,
+                pending,
+                appliesToPhase: action.appliesToPhase,
+                phase,
+              })
+            : null;
           return (
             <li key={action.key} className="turn-controls__item">
               <button
@@ -171,6 +196,10 @@ export function TurnControls({ store = sessionStore, client }: TurnControlsProps
                 >
                   {action.call.error}
                 </p>
+              ) : blockedReason ? (
+                <p className="turn-controls__hint" data-testid={`turn-action-hint-${action.key}`}>
+                  {blockedReason}
+                </p>
               ) : null}
             </li>
           );
@@ -178,6 +207,26 @@ export function TurnControls({ store = sessionStore, client }: TurnControlsProps
       </ul>
     </section>
   );
+}
+
+function turnActionBlockedReason({
+  clientReady,
+  idReady,
+  pending,
+  appliesToPhase,
+  phase,
+}: {
+  clientReady: boolean;
+  idReady: boolean;
+  pending: boolean;
+  appliesToPhase: boolean;
+  phase: string;
+}): string | null {
+  if (!clientReady) return 'Waiting for SpacetimeDB connection.';
+  if (!idReady) return 'Waiting for session identity.';
+  if (pending) return 'Reducer call in flight.';
+  if (!appliesToPhase) return `Blocked in ${phase} phase.`;
+  return null;
 }
 
 function useStoreSlice<T>(store: SessionStore, selector: (state: SessionState) => T): T {

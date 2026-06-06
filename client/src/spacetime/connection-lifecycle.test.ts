@@ -35,7 +35,7 @@ describe('connection lifecycle handling', () => {
     const transport: ConnectionTransport = {
       connect: () => ({ disconnect: () => undefined }),
       subscribe: (_handle, queries) => subscribedQueries.push(queries),
-      callReducer: () => undefined,
+      callReducer: () => Promise.resolve(),
     };
     const client = createSpacetimeClient(createClientConfig(), {
       transport,
@@ -61,7 +61,7 @@ describe('connection lifecycle handling', () => {
           throw new Error('connection refused');
         },
         subscribe: () => undefined,
-        callReducer: () => undefined,
+        callReducer: () => Promise.resolve(),
       },
       onLifecycleChange: (event) => events.push(event),
     });

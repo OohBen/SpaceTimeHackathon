@@ -298,6 +298,7 @@ export interface ReducerCallState {
 export interface SessionState {
   connection: ConnectionState;
   activeSessionId: string | null;
+  activePlayerSlot: number | null;
   sessionsById: Record<string, SessionRow>;
   playerSlotsByKey: Record<string, PlayerSlotRow>;
   publicGameStateBySessionId: Record<string, PublicGameStateRow>;
@@ -323,6 +324,7 @@ export interface SessionState {
 
 export interface SessionStoreActions {
   setActiveSession: (sessionId: OperationalRowId | null) => void;
+  setActivePlayerSlot: (slot: number | null) => void;
   setConnection: (connection: Partial<ConnectionState>) => void;
   setProposalsSubscription: (status: SubscriptionLoadStatus) => void;
   hydrateSubscription: (snapshot: SubscriptionSnapshot) => void;
@@ -353,6 +355,7 @@ export function createSessionStore(): SessionStore {
   return createStore<SessionState>()((set) => ({
     connection: initialConnection,
     activeSessionId: null,
+    activePlayerSlot: null,
     sessionsById: {},
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
@@ -376,6 +379,10 @@ export function createSessionStore(): SessionStore {
     actions: {
       setActiveSession(sessionId) {
         set(() => ({ activeSessionId: sessionId == null ? null : String(sessionId) }));
+      },
+
+      setActivePlayerSlot(slot) {
+        set(() => ({ activePlayerSlot: slot }));
       },
 
       setConnection(connection) {
@@ -570,6 +577,7 @@ export function resetSessionStoreData(store: SessionStore = sessionStore): void 
       diagnostics: { ...initialConnection.diagnostics },
     },
     activeSessionId: null,
+    activePlayerSlot: null,
     sessionsById: {},
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
@@ -605,7 +613,13 @@ export function selectActiveSession(state: SessionState): SessionRow | null {
 export function selectCurrentPlayerSlot(state: SessionState): PlayerSlotRow | null {
   const activeSessionId = state.activeSessionId;
   const identity = state.connection.identity;
-  if (!activeSessionId || !identity) return null;
+  if (!activeSessionId) return null;
+
+  if (state.activePlayerSlot !== null) {
+    return state.playerSlotsByKey[playerSlotKey(activeSessionId, state.activePlayerSlot)] ?? null;
+  }
+
+  if (!identity) return null;
 
   return (
     Object.values(state.playerSlotsByKey).find(

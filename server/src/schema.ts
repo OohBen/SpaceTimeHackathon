@@ -30,9 +30,6 @@ export const tables = {
         { accessor: 'factions_session_idx', algorithm: 'btree', columns: ['session_id'] as const },
         { accessor: 'factions_player_idx', algorithm: 'btree', columns: ['player_id'] as const },
       ],
-      constraints: [
-        { constraint: 'unique', columns: ['player_id'] as const },
-      ],
     },
     {
       id: t.u32().primaryKey().autoInc(),

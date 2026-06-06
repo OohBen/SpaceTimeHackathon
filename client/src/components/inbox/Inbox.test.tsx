@@ -152,13 +152,15 @@ function makeTurnSummary(overrides: Partial<TurnSummaryRow> = {}): TurnSummaryRo
   };
 }
 
-function fakeClient(onCall: (call: ReducerCallDescriptor) => void): SpacetimeClient {
+function fakeClient(onCall: (call: ReducerCallDescriptor) => unknown): SpacetimeClient {
   return {
     connect: () => ({ disconnect: () => undefined }),
     reconnect: () => ({ disconnect: () => undefined }),
     disconnect: () => undefined,
     subscribe: () => undefined,
-    callReducer: onCall,
+    callReducer: async (call) => {
+      await onCall(call);
+    },
     diagnostics: () => ({
       host: 'ws://localhost:3000',
       dbName: 'solar-dominion',

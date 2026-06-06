@@ -24,12 +24,6 @@ export function Landing({ onNavigate }: LandingProps) {
           >
             Resume Session
           </button>
-          <button
-            className="landing__action"
-            onClick={() => onNavigate('setup', { mode: 'demo' })}
-          >
-            Start Local Demo
-          </button>
         </div>
       </div>
     </div>

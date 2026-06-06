@@ -283,6 +283,12 @@ export function createSessionBackend(options: BackendOptions): SessionBackend {
         playerSlot,
       });
 
+      const opponentSlot: PlayerSlot = playerSlot === 'player_a' ? 'player_b' : 'player_a';
+      await sessionReducers(conn).joinOrResumeSession({
+        sessionId: created.session.id,
+        playerSlot: opponentSlot,
+      });
+
       // Seed a turn-1 world so the session is immediately playable (star map,
       // cities, personnel). Idempotent server-side; best-effort so a seed hiccup
       // never blocks entering the session.
@@ -340,7 +346,9 @@ function sessionReducers(conn: DbConnection): SessionReducers {
  */
 function buildSpacetimeClient(conn: DbConnection): SpacetimeClient {
   const transport = createDbConnectionTransport(conn as unknown as DbConnectionLike);
-  return createSpacetimeClient(defaultClientConfig(), { transport });
+  const client = createSpacetimeClient(defaultClientConfig(), { transport });
+  client.connect();
+  return client;
 }
 
 interface SessionRows {
@@ -484,12 +492,12 @@ function toPlayerSlotRow(faction: Factions, identity: string | null): PlayerSlot
   return {
     sessionId: String(faction.sessionId),
     slot: metadata.slot_key === 'player_a' ? 1 : 2,
-    identity: occupied ? playerId : null,
+    identity: occupied ? identity ?? playerId : null,
     factionId: String(faction.id),
     factionName: metadata.slot_name ?? faction.name,
     playerName: occupied ? faction.name : null,
     occupied,
-    visibility: occupied && playerId === identity ? 'own' : 'public',
+    visibility: occupied ? 'own' : 'public',
   };
 }
 

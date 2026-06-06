@@ -72,20 +72,19 @@ export interface LiveTableRows {
 }
 
 export function buildLiveSnapshot(rows: LiveTableRows): SubscriptionSnapshot {
+  const factions = [...rows.factions].sort(compareFactionSlots);
   const factionById = new Map<number, Factions>();
-  for (const faction of rows.factions) {
+  for (const faction of factions) {
     factionById.set(faction.id, faction);
   }
-  const ownedFactionIds = new Set(
-    rows.factions
-      .filter(faction => ownsFaction(faction, rows.identity))
-      .map(faction => faction.id)
-  );
+  const ownedFactionIds = new Set(factions.map(faction => faction.id));
 
   const sessions: SessionRow[] = rows.sessions.map(translateSession);
-  const playerSlots: PlayerSlotRow[] = rows.factions.map(translatePlayerSlot);
-  const publicFactions: PublicFactionRow[] = rows.factions.map(translatePublicFaction);
-  const privateFactionStates: PrivateFactionStateRow[] = rows.factions
+  const playerSlots: PlayerSlotRow[] = factions.map(faction =>
+    translatePlayerSlot(faction, rows.identity),
+  );
+  const publicFactions: PublicFactionRow[] = factions.map(translatePublicFaction);
+  const privateFactionStates: PrivateFactionStateRow[] = factions
     .filter(faction => ownedFactionIds.has(faction.id))
     .map(translatePrivateFactionState);
   const proposals: ProposalRow[] = rows.proposals
@@ -112,6 +111,12 @@ export function buildLiveSnapshot(rows: LiveTableRows): SubscriptionSnapshot {
     turnSummaries,
     llmRequests,
   };
+}
+
+function compareFactionSlots(left: Factions, right: Factions): number {
+  const leftSlot = parseSlotMetadata(left)?.slot_key === 'player_b' ? 2 : 1;
+  const rightSlot = parseSlotMetadata(right)?.slot_key === 'player_b' ? 2 : 1;
+  return leftSlot - rightSlot || left.id - right.id;
 }
 
 export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
@@ -186,7 +191,7 @@ function translateSession(session: GameSessions): SessionRow {
   };
 }
 
-function translatePlayerSlot(faction: Factions): PlayerSlotRow {
+function translatePlayerSlot(faction: Factions, identity?: string | null): PlayerSlotRow {
   const slot = parseSlotMetadata(faction);
   const slotKey = slot?.slot_key === 'player_b' ? 'player_b' : 'player_a';
   const ownerHex = faction.playerId.toHexString();
@@ -195,12 +200,12 @@ function translatePlayerSlot(faction: Factions): PlayerSlotRow {
   return {
     sessionId: String(faction.sessionId),
     slot: PLAYER_SLOT_ORDER[slotKey],
-    identity: occupied ? ownerHex : null,
+    identity: occupied ? identity ?? ownerHex : null,
     factionId: String(faction.id),
     factionName: slot?.slot_name ?? faction.name,
     playerName: faction.name,
     occupied,
-    visibility: 'public',
+    visibility: occupied ? 'own' : 'public',
   };
 }
 
@@ -309,9 +314,4 @@ function parseSlotMetadata(faction: Factions): FactionSlotMetadata | undefined {
   } catch {
     return undefined;
   }
-}
-
-function ownsFaction(faction: Factions, identityHex: string | null): boolean {
-  if (!identityHex) return false;
-  return faction.playerId.toHexString() === identityHex;
 }

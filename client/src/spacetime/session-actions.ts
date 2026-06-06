@@ -35,7 +35,10 @@ export function createSessionAction(
   });
 
   try {
-    client.callReducer(call);
+    client
+      .callReducer(call)
+      .then(() => store.getState().actions.completeReducerCall('createSession'))
+      .catch((error: unknown) => store.getState().actions.failReducerCall('createSession', error));
   } catch (error) {
     store.getState().actions.failReducerCall('createSession', error);
   }
@@ -51,7 +54,12 @@ export function joinOrResumeSessionAction(
   store.getState().actions.beginReducerCall('joinOrResumeSession', call);
 
   try {
-    client.callReducer(call);
+    client
+      .callReducer(call)
+      .then(() => store.getState().actions.completeReducerCall('joinOrResumeSession'))
+      .catch((error: unknown) =>
+        store.getState().actions.failReducerCall('joinOrResumeSession', error),
+      );
   } catch (error) {
     store.getState().actions.failReducerCall('joinOrResumeSession', error);
   }
@@ -105,7 +113,10 @@ function dispatch(
 ): void {
   store.getState().actions.beginReducerCall(key, call);
   try {
-    client.callReducer(call);
+    client
+      .callReducer(call)
+      .then(() => store.getState().actions.completeReducerCall(key))
+      .catch((error: unknown) => store.getState().actions.failReducerCall(key, error));
   } catch (error) {
     store.getState().actions.failReducerCall(key, error);
   }

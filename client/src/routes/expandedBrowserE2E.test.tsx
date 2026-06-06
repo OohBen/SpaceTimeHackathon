@@ -16,7 +16,7 @@ function fakeClient(calls: ReducerCallDescriptor[]): SpacetimeClient {
     reconnect: vi.fn(() => handle),
     disconnect: vi.fn(),
     subscribe: vi.fn(),
-    callReducer: vi.fn((call) => {
+    callReducer: vi.fn(async (call) => {
       calls.push(call);
     }),
     diagnostics: () => ({

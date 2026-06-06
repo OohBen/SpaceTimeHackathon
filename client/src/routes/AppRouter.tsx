@@ -155,6 +155,11 @@ function AppRouterView({
 
     if (router.view === 'game' && router.gameRoute && hasCompleteSessionContext(session)) {
       if (!storedContextMatchesRoute(session, router.gameRoute)) {
+        const routed = findRoutedSlot(backend, router.gameRoute);
+        if (routed) {
+          session.setReady(routed);
+          onSessionReady?.(routed.sessionId, routed.playerSlot);
+        }
         return;
       }
 
@@ -167,8 +172,21 @@ function AppRouterView({
       return;
     }
 
+    if (router.view === 'game' && router.gameRoute) {
+      const routed = findRoutedSlot(backend, router.gameRoute);
+      if (routed) {
+        session.setReady(routed);
+        onSessionReady?.(routed.sessionId, routed.playerSlot);
+        return;
+      }
+    }
+
     const owned = findOwnedSlot(backend.sessions, backend.factions, backend.identity);
     if (!owned) {
+      return;
+    }
+
+    if (router.view !== 'game') {
       return;
     }
 
@@ -235,6 +253,29 @@ function AppRouterView({
       onNavigate={(view, params) => setRouter({ view, setupParams: params })}
     />
   );
+}
+
+function findRoutedSlot(
+  backend: SessionBackend,
+  route: GameRouteParams,
+): SessionBackendResult | null {
+  const session = backend.sessions.find((row) => row.id === route.sessionId);
+  if (!session) return null;
+
+  const factionId =
+    route.playerSlot === 'player_a'
+      ? session.playerAFactionId
+      : session.playerBFactionId;
+  if (factionId === undefined) return null;
+
+  const faction = backend.factions.find((row) => row.id === factionId);
+  return {
+    sessionId: session.id,
+    factionId,
+    playerSlot: route.playerSlot,
+    playerName: faction?.name ?? route.playerSlot,
+    isResume: true,
+  };
 }
 
 type SessionStoreState = ReturnType<typeof useSessionStore.getState>;
@@ -304,8 +345,10 @@ function CommandCenterShell({
   const hud = useHudData(String(session.factionId));
 
   useEffect(() => {
-    sessionStore.getState().actions.setActiveSession(session.sessionId);
-  }, [session.sessionId]);
+    const actions = sessionStore.getState().actions;
+    actions.setActiveSession(session.sessionId);
+    actions.setActivePlayerSlot(session.playerSlot === 'player_b' ? 2 : 1);
+  }, [session.playerSlot, session.sessionId]);
 
   return (
     <div className="command-shell">
