@@ -360,6 +360,34 @@ describe("retry policy", () => {
   });
 });
 
+describe("provider unavailable end-to-end", () => {
+  it("surfaces a deterministic reliability error when the provider is unavailable", async () => {
+    let calls = 0;
+    const client = createOpenRouterClient(baseConfig, {
+      fetch: async () => {
+        calls += 1;
+        throw new TypeError("ECONNREFUSED");
+      },
+    });
+
+    const wrapped = withReliability(client, {
+      baseDelayMs: 0,
+      maxAttempts: 3,
+      maxDelayMs: 0,
+      sleep: async () => undefined,
+    });
+
+    await expect(
+      wrapped.completeText({ prompt: "p", system: "s" })
+    ).rejects.toMatchObject({
+      attempts: 3,
+      category: "network",
+      name: "OpenRouterReliabilityError",
+    });
+    expect(calls).toBe(3);
+  });
+});
+
 describe("OpenRouterReliabilityError", () => {
   it("preserves category, attempts, and last underlying error", () => {
     const root = new OpenRouterTimeoutError(123);

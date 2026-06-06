@@ -1,4 +1,8 @@
 import {
+  TelemetryLogger,
+  noopTelemetryLogger,
+} from "./logging.js";
+import {
   LlmTextClient,
   LlmTextRequest,
   LlmTextResponse,
@@ -81,6 +85,7 @@ export class OpenRouterReliabilityError extends Error {
 
 export type ReliabilityOptions = {
   baseDelayMs?: number;
+  logger?: TelemetryLogger;
   maxAttempts?: number;
   maxDelayMs?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -88,6 +93,7 @@ export type ReliabilityOptions = {
 
 type NormalizedReliabilityOptions = {
   baseDelayMs: number;
+  logger: TelemetryLogger;
   maxAttempts: number;
   maxDelayMs: number;
   sleep: (ms: number) => Promise<void>;
@@ -113,6 +119,7 @@ function normalizeReliabilityOptions(
   );
   return {
     baseDelayMs,
+    logger: options?.logger ?? noopTelemetryLogger,
     maxAttempts,
     maxDelayMs,
     sleep: options?.sleep ?? defaultSleep,
@@ -160,7 +167,26 @@ export function withReliability(
         } catch (error) {
           lastError = error;
           lastCategory = classifyOpenRouterError(error);
+          settings.logger.log({
+            event: "openrouter.retry_attempt",
+            fields: {
+              attempt,
+              category: lastCategory,
+              max_attempts: settings.maxAttempts,
+              transient: isTransientCategory(lastCategory),
+            },
+            level: "warn",
+          });
           if (!isTransientCategory(lastCategory)) {
+            settings.logger.log({
+              event: "openrouter.gave_up",
+              fields: {
+                attempts: attempt,
+                category: lastCategory,
+                reason: "terminal_category",
+              },
+              level: "error",
+            });
             throw new OpenRouterReliabilityError(
               lastCategory,
               attempt,
@@ -170,6 +196,15 @@ export function withReliability(
         }
       }
 
+      settings.logger.log({
+        event: "openrouter.gave_up",
+        fields: {
+          attempts: settings.maxAttempts,
+          category: lastCategory,
+          reason: "max_attempts_exhausted",
+        },
+        level: "error",
+      });
       throw new OpenRouterReliabilityError(
         lastCategory,
         settings.maxAttempts,
