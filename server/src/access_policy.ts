@@ -149,8 +149,9 @@ export const TABLE_ACCESS_POLICIES = {
     visibility: 'mixed',
     subscription: { public: 'projection', owner: 'full' },
     ownerKey: 'faction_id',
-    publicProjection: ['id', 'session_id', 'turn', 'event_type', 'payload'],
-    notes: 'Rows with no faction_id are shared events; faction-addressed rows are private unless projected safely.',
+    publicProjection: ['id', 'session_id', 'turn', 'event_type'],
+    privateFields: ['payload'],
+    notes: 'Rows with no faction_id may expose sanitized payloads by event type; faction-addressed raw payloads are owner-private.',
   },
   turn_summaries: {
     visibility: 'faction_private',
@@ -175,6 +176,7 @@ export const TABLE_ACCESS_POLICIES = {
 export type ReducerName =
   | 'create_session'
   | 'join_or_resume_session'
+  | 'seed_demo_turn_8'
   | 'advance_turn_phase'
   | 'advance_world'
   | 'run_deliberation'
@@ -197,6 +199,29 @@ export const REDUCER_ACCESS_POLICIES = {
     reads: ['game_sessions', 'factions'],
     writes: ['factions', 'game_sessions'],
     notes: 'Unclaimed slot can be claimed once; claimed slot resumes only for the same identity.',
+  },
+  seed_demo_turn_8: {
+    access: 'system_only',
+    reads: ['game_sessions'],
+    writes: [
+      'game_sessions',
+      'factions',
+      'celestial_bodies',
+      'cities',
+      'personnel',
+      'personnel_relationships',
+      'proposals',
+      'commander_inbox',
+      'fleets',
+      'colony_ships',
+      'projects',
+      'intelligence_records',
+      'events',
+      'turn_summaries',
+      'trade_agreements',
+      'llm_requests',
+    ],
+    notes: 'Judge-demo seeding is an administrative fixture loader, not a player reducer.',
   },
   advance_turn_phase: {
     access: 'system_only',

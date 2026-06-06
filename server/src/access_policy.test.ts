@@ -73,9 +73,12 @@ describe('access policy contract', () => {
     });
     expect(getTableAccessPolicy('events')).toMatchObject({
       ownerKey: 'faction_id',
+      privateFields: ['payload'],
+      publicProjection: ['id', 'session_id', 'turn', 'event_type'],
       subscription: { public: 'projection', owner: 'full' },
       visibility: 'mixed',
     });
+    expect(getTableAccessPolicy('events').publicProjection).not.toContain('payload');
     expect(getTableAccessPolicy('trade_agreements')).toMatchObject({
       participantKeys: ['faction_a_id', 'faction_b_id'],
       subscription: { public: 'none', participant: 'full' },
@@ -92,6 +95,28 @@ describe('access policy contract', () => {
       access: 'slot_claim_or_same_identity',
       reads: ['game_sessions', 'factions'],
       writes: ['factions', 'game_sessions'],
+    });
+    expect(getReducerAccessPolicy('seed_demo_turn_8')).toMatchObject({
+      access: 'system_only',
+      reads: ['game_sessions'],
+      writes: [
+        'game_sessions',
+        'factions',
+        'celestial_bodies',
+        'cities',
+        'personnel',
+        'personnel_relationships',
+        'proposals',
+        'commander_inbox',
+        'fleets',
+        'colony_ships',
+        'projects',
+        'intelligence_records',
+        'events',
+        'turn_summaries',
+        'trade_agreements',
+        'llm_requests',
+      ],
     });
     expect(getReducerAccessPolicy('commander_decision')).toMatchObject({
       access: 'faction_owner',
@@ -111,6 +136,7 @@ describe('access policy contract', () => {
       'expire_turn',
       'join_or_resume_session',
       'run_deliberation',
+      'seed_demo_turn_8',
       'simulate_turn',
       'submit_turn',
     ]);

@@ -192,7 +192,7 @@ Identity scope is per SpacetimeDB `ctx.sender` and per game session. `join_or_re
 | `cities` | Projection | Full | `faction_id` | Public map/control projection; owner full row includes exact operating stats. |
 | `fleets` | Projection | Full | `faction_id` | Public presence/strength projection; owner full row includes orders. |
 | `colony_ships` | Projection | Full | `faction_id` | Public transit/status projection; owner full row includes manifest and launch context. |
-| `events` | Projection | Full | `faction_id` | Rows with no `faction_id` are shared; faction-addressed rows are private unless projected. |
+| `events` | Projection without raw `payload` | Full | `faction_id` | Rows with no `faction_id` may expose sanitized payloads by event type; faction-addressed raw payloads are owner-private. |
 | `personnel`, `proposals`, `commander_inbox`, `projects`, `turn_summaries`, `llm_requests` | None | Full | `faction_id` | Private command data for the owning faction. |
 | `personnel_relationships` | None | Full | derived personnel faction | Inherits visibility from connected personnel. |
 | `intelligence_records` | None | Full | `observer_faction_id` | Intel belongs to the observing faction. |
@@ -204,6 +204,7 @@ Identity scope is per SpacetimeDB `ctx.sender` and per game session. `join_or_re
 |---|---|---|
 | `create_session` | Anonymous sender allowed | Creates `game_sessions`, claimable `factions`. |
 | `join_or_resume_session` | Slot claim or same claimed identity | Reads/writes `game_sessions`, `factions`. |
+| `seed_demo_turn_8` | System-only/admin fixture loader | Reads `game_sessions`; writes the full seeded scenario table set. |
 | `advance_turn_phase` | System-only/admin repair | Reads/writes `game_sessions`; normal gameplay should use bounded reducers. |
 | `advance_world` | Session participant | Reads `game_sessions`, `factions`; advances session phase. |
 | `run_deliberation` | Faction owner | Reads `factions`, `game_sessions`, `llm_requests`; writes `llm_requests`. |
