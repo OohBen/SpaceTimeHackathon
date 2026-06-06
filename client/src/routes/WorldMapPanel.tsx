@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import { sessionStore } from '../state/session-store';
 import {
   selectWorldMapViewModel,
+  type WorldMapAlert,
   type WorldMapBodyView,
   type WorldMapCityView,
   type WorldMapFleetView,
@@ -13,6 +14,12 @@ import {
 interface PlotPoint {
   x: number;
   y: number;
+}
+
+type SelectedKind = 'body' | 'city';
+interface Selected {
+  kind: SelectedKind;
+  id: number;
 }
 
 const VIEWBOX_WIDTH = 1000;
@@ -28,6 +35,22 @@ export function WorldMapPanel({ sessionId }: { sessionId?: number | string }) {
       sessionId === undefined ? state : { ...state, activeSessionId: String(sessionId) };
     return selectWorldMapViewModel(scopedState);
   }, [sessionId, state]);
+
+  const [selected, setSelected] = useState<Selected | null>(null);
+
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.kind === 'body' && !viewModel.bodiesById[selected.id]) {
+      setSelected(null);
+    }
+    if (selected.kind === 'city' && !viewModel.citiesById[selected.id]) {
+      setSelected(null);
+    }
+  }, [selected, viewModel]);
+
+  const selectBody = useCallback((id: number) => setSelected({ kind: 'body', id }), []);
+  const selectCity = useCallback((id: number) => setSelected({ kind: 'city', id }), []);
+  const clearSelection = useCallback(() => setSelected(null), []);
 
   if (!viewModel.sessionId || viewModel.bodies.length === 0) {
     return (
@@ -48,16 +71,35 @@ export function WorldMapPanel({ sessionId }: { sessionId?: number | string }) {
 
       <div className="world-map__layout">
         <div className="world-map__canvas-wrap">
-          <WorldMapSvg viewModel={viewModel} />
+          <WorldMapSvg viewModel={viewModel} onSelectBody={selectBody} onSelectCity={selectCity} />
+          <AlertBoard alerts={viewModel.alerts} onSelectBody={selectBody} />
         </div>
-        <MapLegend viewModel={viewModel} />
+        <MapLegend viewModel={viewModel} onSelectBody={selectBody} />
       </div>
+
+      {selected ? (
+        <DetailOverlay
+          selected={selected}
+          viewModel={viewModel}
+          onClose={clearSelection}
+          onSelectBody={selectBody}
+          onSelectCity={selectCity}
+        />
+      ) : null}
     </div>
   );
 }
 
-function WorldMapSvg({ viewModel }: { viewModel: WorldMapViewModel }) {
-  const plot = createPlotter(viewModel.bodies);
+function WorldMapSvg({
+  viewModel,
+  onSelectBody,
+  onSelectCity,
+}: {
+  viewModel: WorldMapViewModel;
+  onSelectBody: (id: number) => void;
+  onSelectCity: (id: number) => void;
+}) {
+  const plot = useMemo(() => createPlotter(viewModel.bodies), [viewModel.bodies]);
 
   return (
     <svg
@@ -99,6 +141,8 @@ function WorldMapSvg({ viewModel }: { viewModel: WorldMapViewModel }) {
           cities={viewModel.citiesByBodyId[body.id] ?? []}
           fleets={viewModel.fleetsByBodyId[body.id] ?? []}
           plot={plot}
+          onSelectBody={onSelectBody}
+          onSelectCity={onSelectCity}
         />
       ))}
     </svg>
@@ -110,22 +154,34 @@ function BodyMarker({
   cities,
   fleets,
   plot,
+  onSelectBody,
+  onSelectCity,
 }: {
   body: WorldMapBodyView;
   cities: WorldMapCityView[];
   fleets: WorldMapFleetView[];
   plot: (body: WorldMapBodyView) => PlotPoint;
+  onSelectBody: (id: number) => void;
+  onSelectCity: (id: number) => void;
 }) {
   const point = plot(body);
   const radius = body.control.status === 'contested' ? 34 : 28;
-  const controlLabel = body.control.controllingFactionName
-    ? `controlled by ${body.control.controllingFactionName}`
-    : body.control.status;
+  const summary = bodyControlSummary(body);
+  const accessibleLabel = `Open detail for ${body.name}: ${summary}`;
 
   return (
     <g
-      aria-label={`body ${body.name} ${controlLabel}`}
+      role="button"
+      tabIndex={0}
+      aria-label={accessibleLabel}
       className={`world-map__body world-map__body--${body.control.status}`}
+      onClick={() => onSelectBody(body.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelectBody(body.id);
+        }
+      }}
     >
       <circle
         cx={point.x}
@@ -153,6 +209,7 @@ function BodyMarker({
           origin={point}
           index={index}
           total={cities.length}
+          onSelectCity={onSelectCity}
         />
       ))}
 
@@ -174,27 +231,46 @@ function CityMarker({
   origin,
   index,
   total,
+  onSelectCity,
 }: {
   city: WorldMapCityView;
   origin: PlotPoint;
   index: number;
   total: number;
+  onSelectCity: (id: number) => void;
 }) {
   const angle = orbitAngle(index, total, -120);
   const marker = radialPoint(origin, 48, angle);
   const color = colorForFaction(city.factionId);
 
   return (
-    <rect
-      aria-label={`city marker ${city.name}`}
-      className="world-map__city-marker"
-      x={marker.x - 7}
-      y={marker.y - 7}
-      width="14"
-      height="14"
-      rx="2"
-      fill={color}
-    />
+    <g
+      role="button"
+      tabIndex={0}
+      aria-label={`Open detail for ${city.name} city marker (${city.factionName})`}
+      className="world-map__city-group"
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelectCity(city.id);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          onSelectCity(city.id);
+        }
+      }}
+    >
+      <rect
+        className="world-map__city-marker"
+        x={marker.x - 7}
+        y={marker.y - 7}
+        width="14"
+        height="14"
+        rx="2"
+        fill={color}
+      />
+    </g>
   );
 }
 
@@ -267,7 +343,298 @@ function TravelRoute({
   );
 }
 
-function MapLegend({ viewModel }: { viewModel: WorldMapViewModel }) {
+function AlertBoard({
+  alerts,
+  onSelectBody,
+}: {
+  alerts: readonly WorldMapAlert[];
+  onSelectBody: (id: number) => void;
+}) {
+  if (alerts.length === 0) {
+    return (
+      <aside className="world-map__alert-board" aria-label="Map alerts">
+        <h4>Map alerts</h4>
+        <p className="world-map__alert-empty">No active alerts.</p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="world-map__alert-board" aria-label="Map alerts">
+      <h4>Map alerts</h4>
+      <ul className="world-map__alert-list">
+        {alerts.map((alert) => (
+          <li key={alert.id} className={`world-map__alert world-map__alert--${alert.severity}`}>
+            {alert.bodyId !== null ? (
+              <button
+                type="button"
+                className="world-map__alert-link"
+                onClick={() => onSelectBody(alert.bodyId as number)}
+              >
+                <span className="world-map__alert-severity">{alert.severity}</span>
+                <span>{alert.label}</span>
+              </button>
+            ) : (
+              <>
+                <span className="world-map__alert-severity">{alert.severity}</span>
+                <span>{alert.label}</span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
+function DetailOverlay({
+  selected,
+  viewModel,
+  onClose,
+  onSelectBody,
+  onSelectCity,
+}: {
+  selected: Selected;
+  viewModel: WorldMapViewModel;
+  onClose: () => void;
+  onSelectBody: (id: number) => void;
+  onSelectCity: (id: number) => void;
+}) {
+  if (selected.kind === 'body') {
+    const body = viewModel.bodiesById[selected.id];
+    if (!body) return null;
+    return (
+      <BodyDetail
+        body={body}
+        viewModel={viewModel}
+        onClose={onClose}
+        onSelectCity={onSelectCity}
+      />
+    );
+  }
+
+  const city = viewModel.citiesById[selected.id];
+  if (!city) return null;
+  return (
+    <CityDetail city={city} viewModel={viewModel} onClose={onClose} onSelectBody={onSelectBody} />
+  );
+}
+
+function BodyDetail({
+  body,
+  viewModel,
+  onClose,
+  onSelectCity,
+}: {
+  body: WorldMapBodyView;
+  viewModel: WorldMapViewModel;
+  onClose: () => void;
+  onSelectCity: (id: number) => void;
+}) {
+  const cities = body.cityIds.map((id) => viewModel.citiesById[id]).filter(Boolean);
+  const fleets = body.fleetIds.map((id) => viewModel.fleetsById[id]).filter(Boolean);
+  const travel = body.travelIds.map((id) => viewModel.travelById[id]).filter(Boolean);
+  const alerts = body.alertIds.map((id) => viewModel.alertsById[id]).filter(Boolean);
+  const deposits = formatDeposits(body.resourceDeposits);
+
+  return (
+    <section
+      className="world-map__overlay"
+      role="dialog"
+      aria-label="Selected body detail"
+      aria-modal="false"
+    >
+      <header className="world-map__overlay-header">
+        <div>
+          <p className="world-map__overlay-eyebrow">Body detail</p>
+          <h4>{body.name}</h4>
+          <p className="world-map__overlay-meta">
+            {body.systemTier} · {controlLabel(body)}
+          </p>
+        </div>
+        <button type="button" className="world-map__overlay-close" onClick={onClose}>
+          Close detail
+        </button>
+      </header>
+
+      <dl className="world-map__overlay-stats">
+        <div>
+          <dt>Status</dt>
+          <dd>{statusLabel(body)}</dd>
+        </div>
+        <div>
+          <dt>Comms lag</dt>
+          <dd>{body.commsLagTurns} turns</dd>
+        </div>
+        <div>
+          <dt>Travel time</dt>
+          <dd>{body.travelTimeTurns} turns</dd>
+        </div>
+        <div>
+          <dt>Resources</dt>
+          <dd>{deposits}</dd>
+        </div>
+      </dl>
+
+      {cities.length > 0 ? (
+        <section aria-label="Body cities" className="world-map__overlay-section">
+          <h5>Cities</h5>
+          <ul className="world-map__overlay-list">
+            {cities.map((city) => (
+              <li key={city.id}>
+                <button
+                  type="button"
+                  className="world-map__overlay-row"
+                  onClick={() => onSelectCity(city.id)}
+                >
+                  <strong>{city.name}</strong>
+                  <span>
+                    {city.factionName} · {city.developmentStage}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {fleets.length > 0 ? (
+        <section aria-label="Body fleets" className="world-map__overlay-section">
+          <h5>Fleets</h5>
+          <ul className="world-map__overlay-list">
+            {fleets.map((fleet) => (
+              <li key={fleet.id}>
+                <strong>{fleet.factionName}</strong>
+                <span>strength {fleet.strength}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {travel.length > 0 ? (
+        <section aria-label="Body inbound travel" className="world-map__overlay-section">
+          <h5>Inbound travel</h5>
+          <ul className="world-map__overlay-list">
+            {travel.map((ship) => (
+              <li key={ship.id}>
+                <strong>{ship.factionName}</strong>
+                <span>
+                  Arrives T{ship.arrivesTurn}
+                  {ship.turnsRemaining !== null ? ` (${ship.turnsRemaining} turns remaining)` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {alerts.length > 0 ? (
+        <section aria-label="Body alerts" className="world-map__overlay-section">
+          <h5>Alerts</h5>
+          <ul className="world-map__overlay-list">
+            {alerts.map((alert) => (
+              <li key={alert.id}>
+                <span className={`world-map__alert-pill world-map__alert-pill--${alert.severity}`}>
+                  {alert.severity}
+                </span>
+                <span>{alert.label}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </section>
+  );
+}
+
+function CityDetail({
+  city,
+  viewModel,
+  onClose,
+  onSelectBody,
+}: {
+  city: WorldMapCityView;
+  viewModel: WorldMapViewModel;
+  onClose: () => void;
+  onSelectBody: (id: number) => void;
+}) {
+  const body = viewModel.bodiesById[city.bodyId];
+  const fleets = (viewModel.fleetsByBodyId[city.bodyId] ?? []).filter(
+    (fleet) => fleet.cityId === city.id,
+  );
+
+  return (
+    <section
+      className="world-map__overlay"
+      role="dialog"
+      aria-label="Selected city detail"
+      aria-modal="false"
+    >
+      <header className="world-map__overlay-header">
+        <div>
+          <p className="world-map__overlay-eyebrow">City detail</p>
+          <h4>{city.name}</h4>
+          <p className="world-map__overlay-meta">
+            {city.factionName} · {city.developmentStage}
+          </p>
+        </div>
+        <button type="button" className="world-map__overlay-close" onClick={onClose}>
+          Close detail
+        </button>
+      </header>
+
+      <dl className="world-map__overlay-stats">
+        <div>
+          <dt>Faction</dt>
+          <dd>{city.factionName}</dd>
+        </div>
+        <div>
+          <dt>Stage</dt>
+          <dd>{city.developmentStage}</dd>
+        </div>
+        <div>
+          <dt>Home body</dt>
+          <dd>
+            {body ? (
+              <button
+                type="button"
+                className="world-map__overlay-link"
+                onClick={() => onSelectBody(body.id)}
+              >
+                {body.name}
+              </button>
+            ) : (
+              'Unknown'
+            )}
+          </dd>
+        </div>
+      </dl>
+
+      {fleets.length > 0 ? (
+        <section aria-label="City fleets" className="world-map__overlay-section">
+          <h5>Posted fleets</h5>
+          <ul className="world-map__overlay-list">
+            {fleets.map((fleet) => (
+              <li key={fleet.id}>
+                <strong>{fleet.factionName}</strong>
+                <span>strength {fleet.strength}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </section>
+  );
+}
+
+function MapLegend({
+  viewModel,
+  onSelectBody,
+}: {
+  viewModel: WorldMapViewModel;
+  onSelectBody: (id: number) => void;
+}) {
   const factions = uniqueFactions(viewModel);
 
   return (
@@ -311,15 +678,21 @@ function MapLegend({ viewModel }: { viewModel: WorldMapViewModel }) {
         <ol className="world-map__body-ledger">
           {viewModel.bodies.map((body) => (
             <li key={body.id}>
-              <strong>{body.name}</strong>
-              <span>{controlSummary(body)}</span>
-              <span>
-                {(viewModel.citiesByBodyId[body.id] ?? []).length} cities,
-                {' '}
-                {(viewModel.fleetsByBodyId[body.id] ?? []).length} fleets,
-                {' '}
-                {(viewModel.travelByDestinationBodyId[body.id] ?? []).length} inbound
-              </span>
+              <button
+                type="button"
+                className="world-map__ledger-row"
+                onClick={() => onSelectBody(body.id)}
+              >
+                <strong>{body.name}</strong>
+                <span>{controlSummary(body)}</span>
+                <span>
+                  {(viewModel.citiesByBodyId[body.id] ?? []).length} cities,
+                  {' '}
+                  {(viewModel.fleetsByBodyId[body.id] ?? []).length} fleets,
+                  {' '}
+                  {(viewModel.travelByDestinationBodyId[body.id] ?? []).length} inbound
+                </span>
+              </button>
             </li>
           ))}
         </ol>
@@ -382,6 +755,43 @@ function controlSummary(body: WorldMapBodyView): string {
   }
 
   return 'Uncontrolled';
+}
+
+function bodyControlSummary(body: WorldMapBodyView): string {
+  if (body.control.status === 'controlled' && body.control.controllingFactionName) {
+    return `controlled by ${body.control.controllingFactionName}`;
+  }
+  if (body.control.status === 'contested') {
+    return `contested`;
+  }
+  return 'uncontrolled';
+}
+
+function statusLabel(body: WorldMapBodyView): string {
+  if (body.control.status === 'controlled') {
+    return `Controlled by ${body.control.controllingFactionName ?? 'unknown faction'}`;
+  }
+  if (body.control.status === 'contested') {
+    return `Contested by ${body.control.factionNames.join(' / ')}`;
+  }
+  return 'Uncontrolled';
+}
+
+function controlLabel(body: WorldMapBodyView): string {
+  if (body.control.status === 'controlled') return 'Controlled';
+  if (body.control.status === 'contested') return 'Contested';
+  return 'Uncontrolled';
+}
+
+function formatDeposits(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const entries = Object.entries(parsed);
+    if (entries.length === 0) return 'None reported';
+    return entries.map(([resource, level]) => `${resource}: ${String(level)}`).join(', ');
+  } catch {
+    return raw || 'None reported';
+  }
 }
 
 function colorForFaction(factionId: number): string {
