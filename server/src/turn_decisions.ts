@@ -1,4 +1,5 @@
 import { type Identity, type Timestamp } from 'spacetimedb';
+import { SenderError } from 'spacetimedb/server';
 
 import {
   ACTIVE_SESSION_STATE,
@@ -133,7 +134,9 @@ export function runDeliberationReducer(
   assertFactionOwner(ctx.sender, faction);
   const session = findActiveFactionSession(ctx, faction);
   assertTurnPhase(session, 'deliberation');
-  assertNoDuplicateDeliberationRequest(ctx, faction.id, session);
+  if (hasActiveDeliberationRequest(ctx, faction.id, session)) {
+    return;
+  }
 
   const mode = getDeliberationMode(ctx);
 
@@ -516,17 +519,17 @@ function findActiveFactionSession(
 ): GameSessionRow {
   const session = ctx.db.game_sessions.id.find(faction.session_id);
   if (!session) {
-    throw new Error(`session ${faction.session_id} not found`);
+    throw new SenderError(`session ${faction.session_id} not found`);
   }
   if (session.state !== ACTIVE_SESSION_STATE) {
-    throw new Error(`session ${session.id} is not active`);
+    throw new SenderError(`session ${session.id} is not active`);
   }
   return session;
 }
 
 function assertFactionOwner(sender: Identity, faction: FactionRow): void {
   if (sender.toHexString() !== faction.player_id.toHexString()) {
-    throw new Error(`sender does not own faction ${faction.id}`);
+    throw new SenderError(`sender does not own faction ${faction.id}`);
   }
 }
 
@@ -536,17 +539,17 @@ function assertTurnPhase(
 ): void {
   const phase = parseTurnPhase(session.turn_phase);
   if (phase !== expectedPhase) {
-    throw new Error(
+    throw new SenderError(
       `session ${session.id} must be in ${expectedPhase} phase, got ${phase}`
     );
   }
 }
 
-function assertNoDuplicateDeliberationRequest(
+function hasActiveDeliberationRequest(
   ctx: DecisionReducerContext,
   factionId: number,
   session: GameSessionRow
-): void {
+): boolean {
   for (const request of ctx.db.llm_requests.iter()) {
     if (
       request.faction_id === factionId &&
@@ -555,11 +558,10 @@ function assertNoDuplicateDeliberationRequest(
       request.request_type === LLM_REQUEST_TYPE.proposals &&
       request.status !== LLM_REQUEST_STATUS.failed
     ) {
-      throw new Error(
-        `deliberation request already exists for faction ${factionId} turn ${session.current_turn}`
-      );
+      return true;
     }
   }
+  return false;
 }
 
 function assertProposalBelongsToActiveTurn(

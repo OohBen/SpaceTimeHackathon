@@ -147,16 +147,18 @@ describe('run_deliberation reducer', () => {
     });
   });
 
-  it('rejects duplicate non-failed deliberation queue requests', () => {
+  it('treats duplicate non-failed deliberation queue requests as idempotent', () => {
     const rows = makeRows('deliberation');
     const faction = rows.factions[0];
     const ctx = makeDecisionCtx(faction.player_id, rows);
 
     runDeliberationReducer(ctx, { faction_id: faction.id });
+    const firstRequest = rows.llmRequests[0];
 
     expect(() =>
       runDeliberationReducer(ctx, { faction_id: faction.id })
-    ).toThrow(/already exists/);
+    ).not.toThrow();
+    expect(rows.llmRequests).toEqual([firstRequest]);
   });
 
   it('rejects queue requests from non-owners and wrong phases', () => {

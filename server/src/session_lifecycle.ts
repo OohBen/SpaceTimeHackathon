@@ -526,7 +526,7 @@ function findSessionForPhaseUpdate(
 ): GameSessionRow {
   const session = ctx.db.game_sessions.id.find(sessionId);
   if (!session) {
-    throw new Error(`session ${sessionId} not found`);
+    throw new SenderError(`session ${sessionId} not found`);
   }
 
   return session;
@@ -538,13 +538,13 @@ function isTurnPhase(phase: string): phase is TurnPhase {
 
 function assertSessionCanTransition(session: GameSessionRow): void {
   if (session.state === COMPLETED_SESSION_STATE || session.turn_phase === 'complete') {
-    throw new Error(`session ${session.id} is already complete`);
+    throw new SenderError(`session ${session.id} is already complete`);
   }
 }
 
 function assertActiveSessionForWorldUpdate(session: GameSessionRow): void {
   if (session.state !== ACTIVE_SESSION_STATE) {
-    throw new Error(
+    throw new SenderError(
       `session ${session.id} must be active before world update can advance`
     );
   }
@@ -559,7 +559,7 @@ function assertInitializedForActivePhase(
     (session.player_a_faction_id === undefined ||
       session.player_b_faction_id === undefined)
   ) {
-    throw new Error(`session ${session.id} is not fully initialized`);
+    throw new SenderError(`session ${session.id} is not fully initialized`);
   }
 }
 

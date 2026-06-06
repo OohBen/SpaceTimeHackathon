@@ -233,6 +233,26 @@ function AppRouterView({
         route={router.gameRoute}
         session={session}
         sessionClient={sessionClient}
+        onJoinRoute={async (route) => {
+          const slot = backend
+            .getSlotChoices(route.sessionId)
+            .find((choice) => choice.key === route.playerSlot);
+          session.beginMutation();
+          try {
+            const result = await backend.joinOrResume({
+              mode: 'resume',
+              playerName: slot?.factionName ?? route.playerSlot,
+              sessionId: route.sessionId,
+              playerSlot: route.playerSlot,
+            });
+            session.setReady(result);
+            onSessionReady?.(result.sessionId, result.playerSlot);
+            enterGame(result, 'replace');
+          } catch (err) {
+            const msg = actionableSessionError(err);
+            session.setError(msg);
+          }
+        }}
         onBack={resetToLanding}
       />
     );
@@ -285,11 +305,13 @@ function GameRoute({
   route,
   session,
   sessionClient,
+  onJoinRoute,
   onBack,
 }: {
   route: GameRouteParams;
   session: SessionStoreState;
   sessionClient: SessionBackend['client'];
+  onJoinRoute: (route: GameRouteParams) => Promise<void>;
   onBack: () => void;
 }) {
   const { activePanel, setPanel } = usePanelStore();
@@ -298,6 +320,11 @@ function GameRoute({
     return (
       <RouteGuard
         message="Join or resume this session before entering the game route."
+        actionLabel="Join this slot"
+        actionBusyLabel="Joining..."
+        actionError={session.error}
+        actionPending={session.status === 'loading'}
+        onAction={() => onJoinRoute(route)}
         onBack={onBack}
       />
     );
@@ -307,6 +334,7 @@ function GameRoute({
     return (
       <RouteGuard
         message="Route does not match stored session context. Return to the menu and join the correct slot."
+        actionError={session.error}
         onBack={onBack}
       />
     );
@@ -1367,10 +1395,32 @@ function GlobalHud({
   );
 }
 
-function RouteGuard({ message, onBack }: { message: string; onBack: () => void }) {
+function RouteGuard({
+  message,
+  actionLabel,
+  actionBusyLabel,
+  actionError,
+  actionPending = false,
+  onAction,
+  onBack,
+}: {
+  message: string;
+  actionLabel?: string;
+  actionBusyLabel?: string;
+  actionError?: string | null;
+  actionPending?: boolean;
+  onAction?: () => Promise<void>;
+  onBack: () => void;
+}) {
   return (
     <div>
       <p role="alert">{message}</p>
+      {onAction ? (
+        <button type="button" disabled={actionPending} onClick={() => { void onAction(); }}>
+          {actionPending ? actionBusyLabel ?? actionLabel : actionLabel}
+        </button>
+      ) : null}
+      {actionError ? <p role="alert">{actionError}</p> : null}
       <button onClick={onBack}>Back to Menu</button>
     </div>
   );

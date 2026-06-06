@@ -77,13 +77,14 @@ export function TurnControls({ store = sessionStore, client }: TurnControlsProps
   }
 
   const phase = activeSession.phase;
+  const sessionActive = activeSession.status === 'active';
 
   const actions: TurnAction[] = [
     {
       key: 'advanceWorld',
       label: 'Advance World',
       call: advanceWorldCall,
-      appliesToPhase: phase === 'setup' || phase === 'world_update',
+      appliesToPhase: sessionActive && (phase === 'setup' || phase === 'world_update'),
       run: () => {
         if (sessionId === null) return;
         advanceWorldAction(store, client!, { sessionId });
