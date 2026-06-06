@@ -64,12 +64,12 @@ function buildDeps(ctx: { db: AnyDb; reducers: AnyReducers }, llm: LlmTextClient
       for (const f of db.factions.iter()) if (f.id === id) return f;
       return undefined;
     },
-    getCitiesForFaction: (id) => [...db.cities.iter()].filter((c) => c.faction_id === id),
-    getPersonnelForFaction: (id) => [...db.personnel.iter()].filter((p) => p.faction_id === id),
-    getBodies: (sessionId) => [...db.celestial_bodies.iter()].filter((b) => b.session_id === sessionId),
+    getCitiesForFaction: (id) => [...db.cities.iter()].filter((c) => c.factionId === id),
+    getPersonnelForFaction: (id) => [...db.personnel.iter()].filter((p) => p.factionId === id),
+    getBodies: (sessionId) => [...db.celestial_bodies.iter()].filter((b) => b.sessionId === sessionId),
     getRecentEvents: (sessionId, factionId) =>
       [...db.events.iter()]
-        .filter((e) => e.session_id === sessionId && (e.faction_id == null || e.faction_id === factionId))
+        .filter((e) => e.sessionId === sessionId && (e.factionId == null || e.factionId === factionId))
         .sort((a, b) => a.turn - b.turn),
     fulfill: (requestId, itemsJson) => {
       ctx.reducers.fulfillDeliberation({ requestId, itemsJson });
@@ -83,7 +83,7 @@ function buildDeps(ctx: { db: AnyDb; reducers: AnyReducers }, llm: LlmTextClient
 const inFlight = new Set<number>();
 
 function isDrainable(row: QueueRequestRow): boolean {
-  return row.status === LLM_REQUEST_STATUS.queued && row.request_type === LLM_REQUEST_TYPE.proposals;
+  return row.status === LLM_REQUEST_STATUS.queued && row.requestType === LLM_REQUEST_TYPE.proposals;
 }
 
 async function handle(ctx: { db: AnyDb; reducers: AnyReducers }, row: QueueRequestRow, llm: LlmTextClient): Promise<void> {
@@ -107,13 +107,28 @@ function main(): void {
   builder
     .onConnect((ctx, identity) => {
       logger("connected", { identity: identity.toHexString().slice(0, 12) });
+
+      // Scan the full llm_requests table and process any queued proposals.
+      // Runs on subscription-applied AND on a periodic timer so we drain the
+      // pre-existing backlog robustly (onInsert only fires for new rows, and a
+      // single onApplied pass can race the initial data load).
+      const drainAll = (): void => {
+        let total = 0;
+        let queued = 0;
+        for (const row of ctx.db.llm_requests.iter()) {
+          total += 1;
+          const r = row as QueueRequestRow;
+          if (isDrainable(r)) queued += 1;
+          void handle(ctx, r, llm);
+        }
+        logger("drain scan", { total, queued });
+      };
+
       ctx
         .subscriptionBuilder()
         .onApplied(() => {
-          logger("subscription applied; draining backlog");
-          for (const row of ctx.db.llm_requests.iter()) {
-            void handle(ctx, row as QueueRequestRow, llm);
-          }
+          logger("subscription applied");
+          drainAll();
         })
         .subscribe([
           "SELECT * FROM llm_requests",
@@ -124,6 +139,8 @@ function main(): void {
           "SELECT * FROM events",
           "SELECT * FROM game_sessions",
         ]);
+
+      setInterval(drainAll, 3000);
 
       ctx.db.llm_requests.onInsert((rowCtx: { db: AnyDb; reducers: AnyReducers }, row: QueueRequestRow) => {
         void handle(rowCtx, row, llm);
@@ -143,11 +160,11 @@ function main(): void {
 type AnyTable<T> = { iter(): Iterable<T>; onInsert(cb: (ctx: never, row: T) => void): void };
 type AnyDb = {
   llm_requests: AnyTable<QueueRequestRow> & { onInsert(cb: (ctx: { db: AnyDb; reducers: AnyReducers }, row: QueueRequestRow) => void): void };
-  factions: { iter(): Iterable<{ id: number; name: string; doctrine_vector: string }> };
-  cities: { iter(): Iterable<{ faction_id: number; name: string; population: number | bigint; morale: number; infrastructure_level: number }> };
-  personnel: { iter(): Iterable<{ faction_id: number; name: string; department: string; competence: number; creativity: number; reliability: number; ambition: number; political_skill: number }> };
-  celestial_bodies: { iter(): Iterable<{ session_id: number; name: string }> };
-  events: { iter(): Iterable<{ session_id: number; faction_id: number | null | undefined; turn: number; event_type: string; payload: string }> };
+  factions: { iter(): Iterable<{ id: number; name: string; doctrineVector: string }> };
+  cities: { iter(): Iterable<{ factionId: number; name: string; population: number | bigint; morale: number; infrastructureLevel: number }> };
+  personnel: { iter(): Iterable<{ factionId: number; name: string; department: string; competence: number; creativity: number; reliability: number; ambition: number; politicalSkill: number }> };
+  celestial_bodies: { iter(): Iterable<{ sessionId: number; name: string }> };
+  events: { iter(): Iterable<{ sessionId: number; factionId: number | null | undefined; turn: number; eventType: string; payload: string }> };
 };
 type AnyReducers = {
   fulfillDeliberation(args: { requestId: number; itemsJson: string }): void;

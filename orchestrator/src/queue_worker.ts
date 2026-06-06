@@ -32,42 +32,45 @@ export const LLM_REQUEST_STATUS = {
   cancelled: "cancelled",
 } as const;
 
+// NOTE: the SpacetimeDB TS SDK deserializes row columns to camelCase
+// (request_type -> requestType, faction_id -> factionId, etc.), so these
+// worker-facing row types use camelCase to match the live rows directly.
 export type FactionRow = {
   id: number;
   name: string;
-  doctrine_vector: string;
+  doctrineVector: string;
 };
 
 export type CityRow = {
-  faction_id: number;
+  factionId: number;
   name: string;
   population: number | bigint;
   morale: number;
-  infrastructure_level: number;
+  infrastructureLevel: number;
 };
 
 export type PersonnelRow = {
-  faction_id: number;
+  factionId: number;
   name: string;
   department: string;
   competence: number;
   creativity: number;
   reliability: number;
   ambition: number;
-  political_skill: number;
+  politicalSkill: number;
 };
 
 export type BodyRow = { name: string };
 
-export type EventRow = { turn: number; event_type: string; payload: string };
+export type EventRow = { turn: number; eventType: string; payload: string };
 
 export type QueueRequestRow = {
   id: number;
-  faction_id: number;
-  session_id: number;
-  request_type: string;
+  factionId: number;
+  sessionId: number;
+  requestType: string;
   status: string;
-  created_turn: number;
+  createdTurn: number;
 };
 
 export type WorkerDeps = {
@@ -92,14 +95,14 @@ export async function processProposalsRequest(
   deps: WorkerDeps
 ): Promise<void> {
   try {
-    if (request.request_type !== LLM_REQUEST_TYPE.proposals) {
-      deps.fail(request.id, `unsupported request_type ${request.request_type}`, "unsupported_type");
+    if (request.requestType !== LLM_REQUEST_TYPE.proposals) {
+      deps.fail(request.id, `unsupported request_type ${request.requestType}`, "unsupported_type");
       return;
     }
 
-    const faction = deps.getFaction(request.faction_id);
+    const faction = deps.getFaction(request.factionId);
     if (!faction) {
-      deps.fail(request.id, `faction ${request.faction_id} not found`, "faction_missing");
+      deps.fail(request.id, `faction ${request.factionId} not found`, "faction_missing");
       return;
     }
 
@@ -114,13 +117,13 @@ export async function processProposalsRequest(
       faction,
       cities,
       personnel,
-      bodies: deps.getBodies(request.session_id),
-      events: deps.getRecentEvents(request.session_id, faction.id),
+      bodies: deps.getBodies(request.sessionId),
+      events: deps.getRecentEvents(request.sessionId, faction.id),
     });
 
     const textRequest = buildProposalPrompt(promptInput);
 
-    log(deps, "worker.llm.request", { request_id: request.id, faction_id: faction.id });
+    log(deps, "worker.llm.request", { request_id: request.id, faction_id: faction.id, turn: request.createdTurn });
     const response = await deps.llm.completeText(textRequest);
 
     const outcome = validateProposalAdvisory(response.content);
@@ -149,7 +152,7 @@ export function buildPromptInput(input: {
   events: EventRow[];
 }): ProposalPromptInput {
   return {
-    doctrine: parseDoctrine(input.faction.doctrine_vector),
+    doctrine: parseDoctrine(input.faction.doctrineVector),
     officer: pickOfficer(input.personnel),
     world: {
       cities: input.cities.map((c) => ({
@@ -161,7 +164,7 @@ export function buildPromptInput(input: {
     },
     events: input.events
       .slice(-10)
-      .map((e) => ({ turn: e.turn, description: `${e.event_type}: ${truncate(e.payload, 160)}` })),
+      .map((e) => ({ turn: e.turn, description: `${e.eventType}: ${truncate(e.payload, 160)}` })),
   };
 }
 
@@ -195,7 +198,7 @@ function deriveTraits(o: PersonnelRow): string[] {
   if (o.creativity >= 70) traits.push("creative");
   if (o.ambition >= 70) traits.push("ambitious");
   if (o.reliability >= 70) traits.push("reliable");
-  if (o.political_skill >= 70) traits.push("politically astute");
+  if (o.politicalSkill >= 70) traits.push("politically astute");
   if (o.competence >= 70) traits.push("highly competent");
   if (traits.length === 0) traits.push("pragmatic");
   return traits;

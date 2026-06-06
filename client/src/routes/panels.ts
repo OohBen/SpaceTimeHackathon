@@ -6,6 +6,7 @@ export type PanelId =
   | 'session-brief'
   | 'map'
   | 'inbox'
+  | 'turn-controls'
   | 'strategic'
   | 'personnel'
   | 'resources'
@@ -26,6 +27,7 @@ export const CORE_PANELS: PanelDef[] = [
   { id: 'session-brief', label: 'Session Brief' },
   { id: 'map', label: 'Star Map' },
   { id: 'inbox', label: 'Inbox' },
+  { id: 'turn-controls', label: 'Turn Controls' },
   { id: 'strategic', label: 'Strategic View' },
   {
     id: 'personnel',

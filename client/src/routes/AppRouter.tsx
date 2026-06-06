@@ -35,6 +35,7 @@ import type { PlayerSlot, SetupParams, SetupState } from './types';
 import { usePanelStore, CORE_PANELS, findPanelDef, type PanelId } from './panels';
 import { WorldMapPanel } from './WorldMapPanel';
 import { Inbox } from '../components/inbox/Inbox';
+import { TurnControls } from '../components/turn/TurnControls';
 import './CommandCenterShell.css';
 
 type View = 'landing' | 'setup' | 'game';
@@ -414,6 +415,10 @@ function PanelContent({
 
   if (panel === 'inbox') {
     return <Inbox client={sessionClient ?? undefined} />;
+  }
+
+  if (panel === 'turn-controls') {
+    return <TurnControls client={sessionClient ?? undefined} />;
   }
 
   if (panel === 'map') {

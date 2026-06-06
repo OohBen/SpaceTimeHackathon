@@ -162,3 +162,44 @@ a {
   background: var(--sd-accent-dark);
   border-color: var(--sd-accent-dark);
 }
+
+.turn-controls {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 420px);
+}
+
+.turn-controls__status {
+  margin: 0;
+  font-weight: 700;
+  color: var(--sd-accent-dark);
+}
+
+.turn-controls__empty {
+  margin: 0;
+  color: var(--sd-muted);
+}
+
+.turn-controls__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.turn-controls__item {
+  display: grid;
+  gap: 4px;
+}
+
+.turn-controls__item .command-shell__nav-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.turn-controls__error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sd-focus);
+}
