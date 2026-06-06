@@ -91,7 +91,7 @@ describe('Turn 8 deterministic seed', () => {
     expect(inTransit!.arrives_turn).toBeGreaterThan(8);
   });
 
-  it('faction doctrine_vector has slot metadata supporting resume via joinOrResumeSessionReducer', () => {
+  it('faction doctrine_vector has slot metadata supporting resume via joinOrResumeSession', () => {
     const seed = buildTurn8Seed();
     const [factionA, factionB] = seed.factions;
     const session = seed.game_sessions[0];
@@ -101,6 +101,8 @@ describe('Turn 8 deterministic seed', () => {
 
     expect(slotA).toMatchObject({ slot_key: 'player_a', claim_status: 'claimable' });
     expect(slotB).toMatchObject({ slot_key: 'player_b', claim_status: 'claimable' });
+    expect(slotA.placeholder_player_id).toBe(factionA.player_id.toHexString());
+    expect(slotB.placeholder_player_id).toBe(factionB.player_id.toHexString());
 
     const judge = Identity.fromString('a'.padStart(64, '0'));
     const factions = [...seed.factions];
@@ -112,7 +114,7 @@ describe('Turn 8 deterministic seed', () => {
       db: {
         game_sessions: {
           id: {
-            find: (id: number) => sessions.find((s) => s.id === id),
+            find: (id: number) => sessions.find((s) => s.id === id) ?? null,
             update: (row: typeof sessions[0]) => {
               const idx = sessions.findIndex((s) => s.id === row.id);
               sessions[idx] = row;
@@ -122,7 +124,7 @@ describe('Turn 8 deterministic seed', () => {
         },
         factions: {
           id: {
-            find: (id: number) => factions.find((f) => f.id === id),
+            find: (id: number) => factions.find((f) => f.id === id) ?? null,
             update: (row: typeof factions[0]) => {
               const idx = factions.findIndex((f) => f.id === row.id);
               factions[idx] = row;
@@ -141,6 +143,15 @@ describe('Turn 8 deterministic seed', () => {
     expect(result.is_resume).toBe(false);
     expect(result.session_id).toBe(session.id);
     expect(result.current_turn).toBe(8);
+
+    const resumed = joinOrResumeSession(ctx, {
+      session_id: session.id,
+      player_slot: 'player_a',
+    });
+
+    expect(resumed.is_resume).toBe(true);
+    expect(resumed.session_id).toBe(session.id);
+    expect(resumed.current_turn).toBe(8);
   });
 
   it('is deterministic for identical inputs', () => {
