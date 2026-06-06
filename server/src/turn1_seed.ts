@@ -156,6 +156,18 @@ export type EventRow = {
   payload: string;
 };
 
+export type TurnSummaryRow = {
+  id: number;
+  session_id: number;
+  faction_id: number;
+  turn: number;
+  summary_json: string;
+  acknowledged: boolean;
+  acknowledged_at: Timestamp | undefined;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+};
+
 export type TradeAgreementRow = {
   id: number;
   session_id: number;
@@ -192,6 +204,7 @@ export type Turn1SeedRows = {
   projects: ProjectRow[];
   intelligence_records: IntelligenceRecordRow[];
   events: EventRow[];
+  turn_summaries: TurnSummaryRow[];
   trade_agreements: TradeAgreementRow[];
   llm_requests: LlmRequestRow[];
 };
@@ -226,6 +239,7 @@ export const TURN1_SEED_INSERT_ORDER = [
   'projects',
   'intelligence_records',
   'events',
+  'turn_summaries',
   'trade_agreements',
   'llm_requests',
 ] as const satisfies readonly Turn1SeedTableName[];
@@ -716,6 +730,7 @@ export function buildTurn1Seed(input: Turn1SeedInput = {}): Turn1SeedRows {
   ];
 
   const trade_agreements: TradeAgreementRow[] = [];
+  const turn_summaries: TurnSummaryRow[] = [];
 
   const llm_requests: LlmRequestRow[] = [
     {
@@ -770,6 +785,7 @@ export function buildTurn1Seed(input: Turn1SeedInput = {}): Turn1SeedRows {
     projects,
     intelligence_records,
     events,
+    turn_summaries,
     trade_agreements,
     llm_requests,
   };

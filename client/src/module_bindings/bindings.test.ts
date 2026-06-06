@@ -17,18 +17,22 @@ const REQUIRED_TABLES = [
   'projects',
   'intelligence_records',
   'events',
+  'turn_summaries',
   'trade_agreements',
   'llm_requests',
 ];
 
 const REQUIRED_REDUCERS = [
+  'ack_resolution',
   'advance_turn_phase',
   'advance_world',
+  'check_victory',
   'commander_decision',
   'create_session',
   'expire_turn',
   'join_or_resume_session',
   'run_deliberation',
+  'simulate_turn',
   'submit_turn',
 ];
 
@@ -67,5 +71,6 @@ describe('module bindings scaffold', () => {
     expect(src).toContain('GameSessions');
     expect(src).toContain('Factions');
     expect(src).toContain('LlmRequests');
+    expect(src).toContain('TurnSummaries');
   });
 });
