@@ -1,6 +1,16 @@
 import { buildClientDiagnostics, type ClientConfig, type ClientDiagnostics } from './config';
 import type { ReducerCallDescriptor } from './reducers';
 
+// Minimal structural type of the generated `DbConnection`. Kept structural so
+// this module does not pull in the full module_bindings just to define a
+// transport boundary.
+export interface DbConnectionLike {
+  reducers: Record<string, (args: unknown) => unknown>;
+  subscriptionBuilder?: () => {
+    subscribe: (queries: unknown) => unknown;
+  };
+}
+
 export interface ConnectionHandle {
   disconnect: () => void;
 }
@@ -128,4 +138,43 @@ function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
   return 'unknown connection error';
+}
+
+// Bridge a generated SpacetimeDB `DbConnection` into the `ConnectionTransport`
+// shape used by `createSpacetimeClient`. The descriptor's `reducer` field is
+// the snake_case wire name; the generated client exposes camelCase methods, so
+// the adapter translates before dispatch.
+export function createDbConnectionTransport(
+  conn: DbConnectionLike,
+): ConnectionTransport {
+  const handle: ConnectionHandle = {
+    disconnect() {
+      return undefined;
+    },
+  };
+
+  return {
+    connect() {
+      return handle;
+    },
+    subscribe(_handle, queries) {
+      const builder = conn.subscriptionBuilder?.();
+      if (!builder) return;
+      builder.subscribe(queries);
+    },
+    callReducer(_handle, call) {
+      const methodName = snakeToCamel(call.reducer);
+      const method = conn.reducers[methodName];
+      if (typeof method !== 'function') {
+        throw new Error(
+          `reducer ${call.reducer} (method ${methodName}) is not exposed on conn.reducers`,
+        );
+      }
+      method(call.args);
+    },
+  };
+}
+
+function snakeToCamel(snake: string): string {
+  return snake.replace(/_([a-z])/g, (_match, ch: string) => ch.toUpperCase());
 }

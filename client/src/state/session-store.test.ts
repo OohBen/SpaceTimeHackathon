@@ -173,14 +173,14 @@ describe('session store', () => {
     store.getState().actions.completeReducerCall('createSession');
     expect(selectReducerCall(store.getState(), 'createSession')?.status).toBe('success');
 
-    store.getState().actions.beginReducerCall('joinSession', {
-      reducer: 'join_session',
-      args: { sessionId: 'missing', playerName: 'Atlas' },
+    store.getState().actions.beginReducerCall('joinOrResumeSession', {
+      reducer: 'join_or_resume_session',
+      args: { sessionId: 999, playerSlot: 'player_a' },
     });
-    store.getState().actions.failReducerCall('joinSession', new Error('session not found'));
+    store.getState().actions.failReducerCall('joinOrResumeSession', new Error('session not found'));
 
-    expect(selectReducerCall(store.getState(), 'joinSession')?.status).toBe('error');
-    expect(selectReducerCall(store.getState(), 'joinSession')?.error).toBe('session not found');
+    expect(selectReducerCall(store.getState(), 'joinOrResumeSession')?.status).toBe('error');
+    expect(selectReducerCall(store.getState(), 'joinOrResumeSession')?.error).toBe('session not found');
   });
 
   it('exposes proposals for the current player faction and ignores other factions', () => {

@@ -6,13 +6,24 @@ import type {
 } from '../state/session-store';
 import type { SpacetimeClient } from './client';
 
+// Subscription queries target the real server tables and views exposed by
+// `server/src/index.ts` (see `docs/P4E1-integration-contracts-audit.md`).
+// Each query corresponds to a logical surface the playable path consumes:
+//   - game_sessions / factions: session lifecycle, faction state, slot binding
+//   - public_factions: redacted projection used by the opposing-player view
+//   - proposals / commander_inbox: deliberation + decision UI
+//   - turn_summaries / events: resolution + summary UI
+//   - llm_requests / module_settings: orchestrator boundary visibility
 export const SESSION_SUBSCRIPTION_QUERIES = [
-  'SELECT * FROM sessions',
-  'SELECT * FROM player_slots',
-  'SELECT * FROM public_game_state',
+  'SELECT * FROM game_sessions',
+  'SELECT * FROM factions',
   'SELECT * FROM public_factions',
-  'SELECT * FROM private_faction_state',
   'SELECT * FROM proposals',
+  'SELECT * FROM commander_inbox',
+  'SELECT * FROM turn_summaries',
+  'SELECT * FROM events',
+  'SELECT * FROM llm_requests',
+  'SELECT * FROM module_settings',
 ] as const;
 
 export interface SessionSubscriptionBridge {
