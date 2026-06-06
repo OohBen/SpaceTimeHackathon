@@ -77,3 +77,39 @@ export type {
   ProposalAdvisoryResult,
   ProposalAdvisorySuccess,
 } from "./proposal_advisory.js";
+export {
+  LLM_MODE_PROVIDER_SCHEMA_VERSION,
+  LLM_REQUEST_TYPES,
+  LlmModeRequestError,
+  assertRequestType,
+  defaultScenarioId,
+  isLlmRequestType,
+  selectLlmModeProvider,
+  stableContextHash,
+  stableJson,
+} from "./llm_mode_provider.js";
+export type {
+  LlmModeProvider,
+  LlmModeRequest,
+  LlmModeResponse,
+  LlmRequestType,
+  SelectLlmModeProviderDeps,
+} from "./llm_mode_provider.js";
+export {
+  buildMockResponse,
+  createMockLlmModeProvider,
+} from "./mock_llm_provider.js";
+export {
+  FIXTURE_DEFAULT_SCENARIO_ID,
+  FIXTURE_SCHEMA_VERSION,
+  FixtureLookupError,
+  createFixtureLlmModeProvider,
+  defaultFixturePath,
+  loadFixtureCatalog,
+  parseFixtureCatalog,
+} from "./fixture_llm_provider.js";
+export type {
+  FixtureCatalog,
+  FixtureProviderOptions,
+  FixtureScenario,
+} from "./fixture_llm_provider.js";
