@@ -7,4 +7,6 @@ export interface SetupParams {
 export interface SetupState {
   playerName: string;
   mode: SessionMode;
+  sessionId?: number;
+  playerSlot?: 'player_a' | 'player_b';
 }
