@@ -56,11 +56,45 @@ export interface PrivateFactionStateRow {
   visibility: Extract<VisibilityScope, 'ownFaction'>;
 }
 
+export type OperationalRowId = string | number;
+
+export interface PersonnelRow {
+  id: OperationalRowId;
+  factionId: OperationalRowId;
+  name: string;
+  role: string;
+  department: string;
+  postingCityId: OperationalRowId | null | undefined;
+  competence: number;
+  creativity: number;
+  reliability: number;
+  ambition: number;
+  politicalSkill: number;
+  communication: number;
+  loyalty: number;
+  autonomyTolerance: number;
+  morale: number;
+  burnout: number;
+  salary: number;
+}
+
+export interface IntelligenceRecordRow {
+  id: OperationalRowId;
+  observerFactionId: OperationalRowId;
+  targetFactionId: OperationalRowId;
+  intelType: string;
+  value: string;
+  accuracy: number;
+  acquiredTurn: number;
+}
+
 export interface SubscriptionSnapshot {
   sessions?: SessionRow[];
   playerSlots?: PlayerSlotRow[];
   publicGameStates?: PublicGameStateRow[];
   privateFactionStates?: PrivateFactionStateRow[];
+  personnel?: PersonnelRow[];
+  intelligenceRecords?: IntelligenceRecordRow[];
 }
 
 export type SubscriptionEvent =
@@ -71,7 +105,11 @@ export type SubscriptionEvent =
   | { table: 'publicGameStates'; op: 'upsert'; row: PublicGameStateRow }
   | { table: 'publicGameStates'; op: 'delete'; sessionId: string }
   | { table: 'privateFactionStates'; op: 'upsert'; row: PrivateFactionStateRow }
-  | { table: 'privateFactionStates'; op: 'delete'; sessionId: string; factionId: string };
+  | { table: 'privateFactionStates'; op: 'delete'; sessionId: string; factionId: string }
+  | { table: 'personnel'; op: 'upsert'; row: PersonnelRow }
+  | { table: 'personnel'; op: 'delete'; id: OperationalRowId }
+  | { table: 'intelligenceRecords'; op: 'upsert'; row: IntelligenceRecordRow }
+  | { table: 'intelligenceRecords'; op: 'delete'; id: OperationalRowId };
 
 export interface OptimisticSessionUpdate {
   kind: 'session';
@@ -94,6 +132,8 @@ export interface SessionState {
   playerSlotsByKey: Record<string, PlayerSlotRow>;
   publicGameStateBySessionId: Record<string, PublicGameStateRow>;
   privateFactionStateByKey: Record<string, PrivateFactionStateRow>;
+  personnelById: Record<string, PersonnelRow>;
+  intelligenceRecordsById: Record<string, IntelligenceRecordRow>;
   reducerCalls: Record<string, ReducerCallState>;
   actions: SessionStoreActions;
 }
@@ -132,6 +172,8 @@ export function createSessionStore(): SessionStore {
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
     privateFactionStateByKey: {},
+    personnelById: {},
+    intelligenceRecordsById: {},
     reducerCalls: {},
     actions: {
       setConnection(connection) {
@@ -151,6 +193,8 @@ export function createSessionStore(): SessionStore {
           const playerSlotsByKey = { ...state.playerSlotsByKey };
           const publicGameStateBySessionId = { ...state.publicGameStateBySessionId };
           const privateFactionStateByKey = { ...state.privateFactionStateByKey };
+          const personnelById = { ...state.personnelById };
+          const intelligenceRecordsById = { ...state.intelligenceRecordsById };
 
           for (const session of snapshot.sessions ?? []) {
             sessionsById[session.id] = session;
@@ -166,12 +210,20 @@ export function createSessionStore(): SessionStore {
               privateFactionKey(factionState.sessionId, factionState.factionId)
             ] = factionState;
           }
+          for (const person of snapshot.personnel ?? []) {
+            personnelById[String(person.id)] = person;
+          }
+          for (const record of snapshot.intelligenceRecords ?? []) {
+            intelligenceRecordsById[String(record.id)] = record;
+          }
 
           return {
             sessionsById,
             playerSlotsByKey,
             publicGameStateBySessionId,
             privateFactionStateByKey,
+            personnelById,
+            intelligenceRecordsById,
             activeSessionId: nextActiveSessionId(state.activeSessionId, sessionsById),
           };
         });
@@ -286,7 +338,14 @@ export function selectCurrentPlayerSlot(state: SessionState): PlayerSlotRow | nu
 
 export function selectPublicGameState(state: SessionState): PublicGameStateRow | null {
   if (!state.activeSessionId) return null;
-  return state.publicGameStateBySessionId[state.activeSessionId] ?? null;
+  return selectPublicGameStateForSession(state, state.activeSessionId);
+}
+
+export function selectPublicGameStateForSession(
+  state: SessionState,
+  sessionId: OperationalRowId,
+): PublicGameStateRow | null {
+  return state.publicGameStateBySessionId[String(sessionId)] ?? null;
 }
 
 export function selectPrivateFactionState(
@@ -294,7 +353,33 @@ export function selectPrivateFactionState(
   factionId: string,
 ): PrivateFactionStateRow | null {
   if (!state.activeSessionId) return null;
-  return state.privateFactionStateByKey[privateFactionKey(state.activeSessionId, factionId)] ?? null;
+  return selectPrivateFactionStateForSession(state, state.activeSessionId, factionId);
+}
+
+export function selectPrivateFactionStateForSession(
+  state: SessionState,
+  sessionId: OperationalRowId,
+  factionId: OperationalRowId,
+): PrivateFactionStateRow | null {
+  return state.privateFactionStateByKey[privateFactionKey(String(sessionId), String(factionId))] ?? null;
+}
+
+export function selectPersonnelRoster(
+  state: SessionState,
+  factionId: OperationalRowId,
+): PersonnelRow[] {
+  return Object.values(state.personnelById)
+    .filter((person) => String(person.factionId) === String(factionId))
+    .sort((a, b) => compareOperationalIds(a.id, b.id));
+}
+
+export function selectIntelligenceRecords(
+  state: SessionState,
+  observerFactionId: OperationalRowId,
+): IntelligenceRecordRow[] {
+  return Object.values(state.intelligenceRecordsById)
+    .filter((record) => String(record.observerFactionId) === String(observerFactionId))
+    .sort((a, b) => b.acquiredTurn - a.acquiredTurn || compareOperationalIds(a.id, b.id));
 }
 
 export function selectReducerCall(state: SessionState, key: string): ReducerCallState | null {
@@ -339,14 +424,34 @@ function applyEvent(state: SessionState, event: SubscriptionEvent): Partial<Sess
     return { publicGameStateBySessionId };
   }
 
-  const privateFactionStateByKey = { ...state.privateFactionStateByKey };
-  if (event.op === 'delete') {
-    delete privateFactionStateByKey[privateFactionKey(event.sessionId, event.factionId)];
-  } else {
-    privateFactionStateByKey[privateFactionKey(event.row.sessionId, event.row.factionId)] =
-      event.row;
+  if (event.table === 'privateFactionStates') {
+    const privateFactionStateByKey = { ...state.privateFactionStateByKey };
+    if (event.op === 'delete') {
+      delete privateFactionStateByKey[privateFactionKey(event.sessionId, event.factionId)];
+    } else {
+      privateFactionStateByKey[privateFactionKey(event.row.sessionId, event.row.factionId)] =
+        event.row;
+    }
+    return { privateFactionStateByKey };
   }
-  return { privateFactionStateByKey };
+
+  if (event.table === 'personnel') {
+    const personnelById = { ...state.personnelById };
+    if (event.op === 'delete') {
+      delete personnelById[String(event.id)];
+    } else {
+      personnelById[String(event.row.id)] = event.row;
+    }
+    return { personnelById };
+  }
+
+  const intelligenceRecordsById = { ...state.intelligenceRecordsById };
+  if (event.op === 'delete') {
+    delete intelligenceRecordsById[String(event.id)];
+  } else {
+    intelligenceRecordsById[String(event.row.id)] = event.row;
+  }
+  return { intelligenceRecordsById };
 }
 
 function nextActiveSessionId(
@@ -363,6 +468,15 @@ function playerSlotKey(sessionId: string, slot: number): string {
 
 function privateFactionKey(sessionId: string, factionId: string): string {
   return `${sessionId}:${factionId}`;
+}
+
+function compareOperationalIds(a: OperationalRowId, b: OperationalRowId): number {
+  const numericA = Number(a);
+  const numericB = Number(b);
+  if (Number.isFinite(numericA) && Number.isFinite(numericB)) {
+    return numericA - numericB;
+  }
+  return String(a).localeCompare(String(b));
 }
 
 function errorMessage(error: unknown): string {

@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react';
+import { useStore } from 'zustand';
 import { Landing } from './Landing';
 import { Setup } from './Setup';
 import { useSessionStore } from '../session/store';
+import {
+  selectIntelligenceRecords,
+  selectPersonnelRoster,
+  selectPrivateFactionStateForSession,
+  selectPublicGameStateForSession,
+  sessionStore,
+  type IntelligenceRecordRow,
+  type PersonnelRow,
+  type PrivateFactionStateRow,
+  type PublicGameStateRow,
+} from '../state/session-store';
 import {
   findOwnedSlot,
   useSpacetimeSessionBackend,
@@ -269,6 +281,18 @@ function PanelContent({
   panel: PanelId;
   session: SessionRouteState;
 }) {
+  const sessionId = String(session.sessionId);
+  const factionId = String(session.factionId);
+  const operationalState = useStore(sessionStore);
+  const publicGameState = selectPublicGameStateForSession(operationalState, sessionId);
+  const privateFactionState = selectPrivateFactionStateForSession(
+    operationalState,
+    sessionId,
+    factionId,
+  );
+  const personnel = selectPersonnelRoster(operationalState, factionId);
+  const intelligenceRecords = selectIntelligenceRecords(operationalState, factionId);
+
   if (panel === 'overview') {
     return (
       <div className="command-shell__status-grid">
@@ -299,6 +323,24 @@ function PanelContent({
     );
   }
 
+  if (panel === 'personnel') {
+    return <PersonnelPanel personnel={personnel} />;
+  }
+
+  if (panel === 'resources') {
+    return (
+      <ResourcesPanel
+        factionState={privateFactionState}
+        publicGameState={publicGameState}
+        factionId={factionId}
+      />
+    );
+  }
+
+  if (panel === 'intelligence') {
+    return <IntelligencePanel records={intelligenceRecords} />;
+  }
+
   const panelDef = findPanelDef(panel);
   return (
     <div className="command-shell__brief" aria-label={`${panelDef.label} panel placeholder`}>
@@ -309,6 +351,178 @@ function PanelContent({
       </p>
     </div>
   );
+}
+
+function PersonnelPanel({ personnel }: { personnel: PersonnelRow[] }) {
+  if (personnel.length === 0) {
+    return (
+      <div className="command-shell__brief" aria-label="Personnel roster unavailable">
+        <p>Personnel roster data is not yet available for this faction.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="command-shell__data-panel" aria-label="Personnel roster">
+      <table className="command-shell__table">
+        <caption>Faction roster</caption>
+        <thead>
+          <tr>
+            <th scope="col">Officer</th>
+            <th scope="col">Assignment</th>
+            <th scope="col">State</th>
+            <th scope="col">Traits</th>
+          </tr>
+        </thead>
+        <tbody>
+          {personnel.map((person) => (
+            <tr key={String(person.id)}>
+              <td>
+                <strong>{person.name}</strong>
+                <span>Salary {person.salary}</span>
+              </td>
+              <td>
+                <strong>{person.role}</strong>
+                <span>{person.department}</span>
+                <span>Posting {person.postingCityId ?? 'Unassigned'}</span>
+              </td>
+              <td>
+                <span>Morale {person.morale}</span>
+                <span>Burnout {person.burnout}</span>
+                <span>Loyalty {person.loyalty}</span>
+              </td>
+              <td>
+                <span>Competence {person.competence}</span>
+                <span>Creativity {person.creativity}</span>
+                <span>Reliability {person.reliability}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ResourcesPanel({
+  factionState,
+  publicGameState,
+  factionId,
+}: {
+  factionState: PrivateFactionStateRow | null;
+  publicGameState: PublicGameStateRow | null;
+  factionId: string;
+}) {
+  if (!factionState && !publicGameState) {
+    return (
+      <div className="command-shell__brief" aria-label="Resource state unavailable">
+        <p>Economy and logistics state is not yet available for this faction.</p>
+      </div>
+    );
+  }
+
+  const resources = Object.entries(factionState?.resources ?? {}).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  const controlScore = publicGameState?.controlScores[factionId] ?? null;
+
+  return (
+    <div className="command-shell__data-panel" aria-label="Resource and logistics state">
+      <div className="command-shell__metric-grid">
+        <div>
+          <span>Turn</span>
+          <strong>{publicGameState ? `Turn ${publicGameState.turn}` : 'Unknown'}</strong>
+        </div>
+        <div>
+          <span>Year</span>
+          <strong>{publicGameState?.year ?? 'Unknown'}</strong>
+        </div>
+        <div>
+          <span>Phase</span>
+          <strong>{publicGameState?.phase ?? 'Unknown'}</strong>
+        </div>
+        <div>
+          <span>Control</span>
+          <strong>{controlScore != null ? `Control ${controlScore}` : 'Unknown'}</strong>
+        </div>
+        <div>
+          <span>Morale</span>
+          <strong>{factionState ? `Morale ${factionState.morale}` : 'Unknown'}</strong>
+        </div>
+        <div>
+          <span>Doctrine</span>
+          <strong>{factionState ? `Doctrine ${factionState.doctrine}` : 'Unknown'}</strong>
+        </div>
+      </div>
+
+      <section className="command-shell__ledger" aria-label="Resource ledger">
+        <h4>Resource ledger</h4>
+        {resources.length > 0 ? (
+          <dl>
+            {resources.map(([name, amount]) => (
+              <div key={name}>
+                <dt>{name}</dt>
+                <dd>{amount}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p>No resource entries are available yet.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function IntelligencePanel({ records }: { records: IntelligenceRecordRow[] }) {
+  if (records.length === 0) {
+    return (
+      <div className="command-shell__brief" aria-label="Intelligence records unavailable">
+        <p>Intelligence reports are not yet available for this faction.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="command-shell__data-panel" aria-label="Intelligence records">
+      <div className="command-shell__intel-list">
+        {records.map((record) => (
+          <article key={String(record.id)} className="command-shell__intel-record">
+            <header>
+              <h4>{record.intelType}</h4>
+              <span>Accuracy {record.accuracy}%</span>
+            </header>
+            <p>
+              Target {record.targetFactionId} - Turn {record.acquiredTurn}
+            </p>
+            <p>{formatIntelValue(record.value)}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatIntelValue(value: string): string {
+  try {
+    return summarizeIntelValue(JSON.parse(value));
+  } catch {
+    return value;
+  }
+}
+
+function summarizeIntelValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map(summarizeIntelValue).join(', ');
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.entries(value)
+      .map(([key, entry]) => `${key}: ${summarizeIntelValue(entry)}`)
+      .join('; ');
+  }
+
+  return String(value);
 }
 
 function GlobalHud({

@@ -10,6 +10,8 @@ export const SESSION_SUBSCRIPTION_QUERIES = [
   'SELECT * FROM player_slots',
   'SELECT * FROM public_game_state',
   'SELECT * FROM private_faction_state',
+  'SELECT * FROM personnel',
+  'SELECT * FROM intelligence_records',
 ] as const;
 
 export interface SessionSubscriptionBridge {

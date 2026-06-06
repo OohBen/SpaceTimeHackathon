@@ -46,8 +46,11 @@ function makeDecisionRows() {
       turn_phase: 'decision',
     })) as GameSessionRow[],
     factions: seed.factions.map((faction) => ({ ...faction })) as FactionRow[],
+    cities: seed.cities.map((city) => ({ ...city })),
+    personnel: seed.personnel.map((person) => ({ ...person })),
     proposals: seed.proposals.map((proposal) => ({ ...proposal })),
     llmRequests: [] as LlmRequestRow[],
+    moduleSettings: seed.module_settings.map((setting) => ({ ...setting })),
   };
 }
 
@@ -85,12 +88,40 @@ function makeDecisionCtx(
             return row;
           },
         },
+        iter: () => rows.proposals.values(),
+        insert: row => {
+          const inserted = { ...row, id: rows.proposals.length + 1 };
+          rows.proposals.push(inserted);
+          return inserted;
+        },
+      },
+      cities: {
+        iter: () => rows.cities.values(),
+      },
+      personnel: {
+        iter: () => rows.personnel.values(),
       },
       llm_requests: {
         iter: () => rows.llmRequests.values(),
         insert: row => {
           const inserted = { ...row, id: rows.llmRequests.length + 1 };
           rows.llmRequests.push(inserted);
+          return inserted;
+        },
+      },
+      module_settings: {
+        id: {
+          find: id => rows.moduleSettings.find(setting => setting.id === id) ?? null,
+          update: row => {
+            const idx = rows.moduleSettings.findIndex(setting => setting.id === row.id);
+            if (idx === -1) throw new Error(`module setting ${row.id} not found`);
+            rows.moduleSettings[idx] = row;
+            return row;
+          },
+        },
+        insert: row => {
+          const inserted = { ...row };
+          rows.moduleSettings.push(inserted);
           return inserted;
         },
       },

@@ -42,7 +42,69 @@ function resetSessionStore() {
     playerSlotsByKey: {},
     publicGameStateBySessionId: {},
     privateFactionStateByKey: {},
+    personnelById: {},
+    intelligenceRecordsById: {},
     reducerCalls: {},
+  });
+}
+
+function hydrateOperationalPanelState() {
+  act(() => {
+    sessionStore.getState().actions.hydrateSubscription({
+      sessions: [{ id: '42', code: 'GAME1', status: 'active', currentTurn: 5, phase: 'orders' }],
+      publicGameStates: [
+        {
+          sessionId: '42',
+          turn: 5,
+          year: 2351,
+          phase: 'orders',
+          controlScores: { '202': 47, '303': 41 },
+          visibleFactionIds: ['202', '303'],
+        },
+      ],
+      privateFactionStates: [
+        {
+          sessionId: '42',
+          factionId: '202',
+          resources: { credits: 150, minerals: 30, science: 12 },
+          morale: 80,
+          doctrine: 'expansion',
+          visibility: 'ownFaction',
+        },
+      ],
+      personnel: [
+        {
+          id: '1',
+          factionId: '202',
+          name: 'Ada Watanabe',
+          role: 'Chief Scientist',
+          department: 'Research',
+          postingCityId: '7',
+          competence: 88,
+          creativity: 91,
+          reliability: 76,
+          ambition: 45,
+          politicalSkill: 50,
+          communication: 72,
+          loyalty: 84,
+          autonomyTolerance: 68,
+          morale: 73,
+          burnout: 12,
+          salary: 18,
+        },
+      ],
+      intelligenceRecords: [
+        {
+          id: '10',
+          observerFactionId: '202',
+          targetFactionId: '303',
+          intelType: 'scouting',
+          value: '{"visible_bodies":["Mars","Luna"],"known_cities":["Pavonis"]}',
+          accuracy: 82,
+          acquiredTurn: 5,
+        },
+      ],
+    });
   });
 }
 
@@ -202,6 +264,59 @@ describe('Command Center shell', () => {
       expect(panel).toHaveTextContent(/Diplomacy/i);
       expect(panel).toHaveTextContent(/not yet available/i);
       expect(panel).toHaveTextContent(/Session 42/i);
+    });
+
+    it('renders personnel panel from faction roster data', () => {
+      enterStoredGameContext();
+      hydrateOperationalPanelState();
+      usePanelStore.getState().setPanel('personnel');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/Ada Watanabe/i);
+      expect(panel).toHaveTextContent(/Chief Scientist/i);
+      expect(panel).toHaveTextContent(/Research/i);
+      expect(panel).toHaveTextContent(/Morale 73/i);
+      expect(panel).toHaveTextContent(/Burnout 12/i);
+      expect(panel).toHaveTextContent(/Competence 88/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders resources panel from private economy and public session state', () => {
+      enterStoredGameContext();
+      hydrateOperationalPanelState();
+      usePanelStore.getState().setPanel('resources');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/credits/i);
+      expect(panel).toHaveTextContent(/150/i);
+      expect(panel).toHaveTextContent(/minerals/i);
+      expect(panel).toHaveTextContent(/30/i);
+      expect(panel).toHaveTextContent(/Morale 80/i);
+      expect(panel).toHaveTextContent(/Doctrine expansion/i);
+      expect(panel).toHaveTextContent(/Control 47/i);
+      expect(panel).toHaveTextContent(/Turn 5/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
+    });
+
+    it('renders intelligence panel from scouting records visible to the faction', () => {
+      enterStoredGameContext();
+      hydrateOperationalPanelState();
+      usePanelStore.getState().setPanel('intelligence');
+
+      render(<AppRouter backend={backend()} />);
+
+      const panel = screen.getByRole('region', { name: /command content panel/i });
+      expect(panel).toHaveTextContent(/scouting/i);
+      expect(panel).toHaveTextContent(/Target 303/i);
+      expect(panel).toHaveTextContent(/Accuracy 82%/i);
+      expect(panel).toHaveTextContent(/Turn 5/i);
+      expect(panel).toHaveTextContent(/visible_bodies: Mars, Luna/i);
+      expect(panel).toHaveTextContent(/known_cities: Pavonis/i);
+      expect(panel).not.toHaveTextContent(/not yet available/i);
     });
 
     it('active panel persists across remount via local storage', () => {
