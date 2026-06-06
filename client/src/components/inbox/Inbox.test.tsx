@@ -854,4 +854,106 @@ describe('Inbox component', () => {
       /acknowledging resolution/i,
     );
   });
+
+  it('renders the same authoritative resolution outcome for both browser stores', () => {
+    const callsA: ReducerCallDescriptor[] = [];
+    const callsB: ReducerCallDescriptor[] = [];
+    const summaryJson = JSON.stringify({
+      event: 'turn_summary',
+      proposal_outcomes: { approved: 1, rejected: 1 },
+      simulation_outputs: {
+        narrative: 'Authoritative Callisto route outcome synced to both clients.',
+      },
+    });
+    const publicFactions = [
+      {
+        id: '202',
+        sessionId: '9001',
+        name: 'Solar Republic',
+        controlScore: 54,
+        readyForTurn: true,
+      },
+      {
+        id: '303',
+        sessionId: '9001',
+        name: 'Martian League',
+        controlScore: 41,
+        readyForTurn: true,
+      },
+    ];
+    const browserA = seedStore({
+      sessionId: '9001',
+      phase: 'summary',
+      factionId: '202',
+      factionName: 'Solar Republic',
+      identity: 'demo-browser-a',
+      playerName: 'Browser A Commander',
+      resources: { credits: 105 },
+      publicFactions,
+    });
+    const browserB = seedStore({
+      sessionId: '9001',
+      phase: 'summary',
+      factionId: '303',
+      factionName: 'Martian League',
+      identity: 'demo-browser-b',
+      playerName: 'Browser B Commander',
+      slot: 2,
+      resources: { credits: 55 },
+      publicFactions,
+    });
+
+    browserA.getState().actions.hydrateSubscription({
+      proposals: [],
+      turnSummaries: [
+        makeTurnSummary({
+          id: 'summary-202',
+          sessionId: '9001',
+          factionId: '202',
+          turn: 4,
+          summaryJson,
+        }),
+      ],
+    });
+    browserB.getState().actions.hydrateSubscription({
+      proposals: [],
+      turnSummaries: [
+        makeTurnSummary({
+          id: 'summary-303',
+          sessionId: '9001',
+          factionId: '303',
+          turn: 4,
+          summaryJson,
+        }),
+      ],
+    });
+
+    render(
+      <div>
+        <section aria-label="Browser A resolution">
+          <Inbox store={browserA} client={fakeClient((call) => callsA.push(call))} />
+        </section>
+        <section aria-label="Browser B resolution">
+          <Inbox store={browserB} client={fakeClient((call) => callsB.push(call))} />
+        </section>
+      </div>,
+    );
+
+    const paneA = within(screen.getByLabelText('Browser A resolution'));
+    const paneB = within(screen.getByLabelText('Browser B resolution'));
+    expect(paneA.getByTestId('resolution-summary')).toHaveTextContent(
+      /Authoritative Callisto route outcome synced to both clients/i,
+    );
+    expect(paneB.getByTestId('resolution-summary')).toHaveTextContent(
+      /Authoritative Callisto route outcome synced to both clients/i,
+    );
+    expect(paneA.getByTestId('resolution-summary')).toHaveTextContent(/approved: 1/i);
+    expect(paneB.getByTestId('resolution-summary')).toHaveTextContent(/rejected: 1/i);
+
+    fireEvent.click(paneA.getByRole('button', { name: /acknowledge resolution/i }));
+    fireEvent.click(paneB.getByRole('button', { name: /acknowledge resolution/i }));
+
+    expect(callsA).toContainEqual({ reducer: 'ack_resolution', args: { factionId: 202 } });
+    expect(callsB).toContainEqual({ reducer: 'ack_resolution', args: { factionId: 303 } });
+  });
 });

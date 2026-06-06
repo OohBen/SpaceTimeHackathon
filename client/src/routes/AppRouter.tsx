@@ -12,6 +12,7 @@ import {
   selectPersonnelRoster,
   selectPrivateFactionStateForSession,
   selectPublicGameStateForSession,
+  resetSessionStoreData,
   sessionStore,
   type EventRow,
   type FactionRow,
@@ -1418,6 +1419,7 @@ function seedLocalDemoSession(playerName: string, playerSlot: PlayerSlot): Sessi
     isResume: false,
   };
 
+  resetSessionStoreData();
   sessionStore.getState().actions.setConnection({
     status: 'connected',
     identity: selected.identity,
