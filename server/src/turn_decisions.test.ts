@@ -6,9 +6,16 @@ import { describe, expect, it } from 'vitest';
 import {
   commanderDecisionReducer,
   runDeliberationReducer,
+  setDeliberationModeReducer,
   type DecisionReducerContext,
+  type ModuleSettingsRow,
 } from './turn_decisions.js';
-import { buildTurn1Seed, type LlmRequestRow } from './turn1_seed.js';
+import {
+  buildTurn1Seed,
+  type CityRow,
+  type LlmRequestRow,
+  type PersonnelRow,
+} from './turn1_seed.js';
 import type { FactionRow, GameSessionRow } from './session_lifecycle.js';
 import type { ProposalRow } from './turn1_seed.js';
 
@@ -21,7 +28,11 @@ function makeRows(phase: 'deliberation' | 'decision' = 'deliberation') {
     sessions: seed.game_sessions.map((session) => ({ ...session, turn_phase: phase })),
     factions: seed.factions.map((faction) => ({ ...faction })),
     proposals: seed.proposals.map((proposal) => ({ ...proposal })),
+    cities: seed.cities.map((city) => ({ ...city })) as CityRow[],
+    personnel: seed.personnel.map((person) => ({ ...person })) as PersonnelRow[],
     llmRequests: [] as LlmRequestRow[],
+    moduleSettings: [] as ModuleSettingsRow[],
+    nextProposalId: seed.proposals.reduce((max, proposal) => Math.max(max, proposal.id), 0) + 1,
   };
 }
 
@@ -59,6 +70,19 @@ function makeDecisionCtx(
             return row;
           },
         },
+        iter: () => rows.proposals.values(),
+        insert: row => {
+          const inserted = { ...row, id: rows.nextProposalId };
+          rows.nextProposalId += 1;
+          rows.proposals.push(inserted);
+          return inserted;
+        },
+      },
+      cities: {
+        iter: () => rows.cities.values(),
+      },
+      personnel: {
+        iter: () => rows.personnel.values(),
       },
       llm_requests: {
         iter: () => rows.llmRequests.values(),
@@ -66,6 +90,21 @@ function makeDecisionCtx(
           const inserted = { ...row, id: rows.llmRequests.length + 1 };
           rows.llmRequests.push(inserted);
           return inserted;
+        },
+      },
+      module_settings: {
+        id: {
+          find: id => rows.moduleSettings.find(setting => setting.id === id) ?? null,
+          update: row => {
+            const idx = rows.moduleSettings.findIndex(setting => setting.id === row.id);
+            if (idx === -1) throw new Error(`module_settings ${row.id} not found`);
+            rows.moduleSettings[idx] = row;
+            return row;
+          },
+        },
+        insert: row => {
+          rows.moduleSettings.push({ ...row });
+          return row;
         },
       },
     },
@@ -300,6 +339,130 @@ describe('commander_decision reducer', () => {
     const src = readFileSync(srcPath('index.ts'), 'utf8');
     expect(src).toMatch(/export\s+const\s+run_deliberation\s*=/);
     expect(src).toMatch(/export\s+const\s+commander_decision\s*=/);
+    expect(src).toMatch(/export\s+const\s+set_deliberation_mode\s*=/);
     expect(src).toContain('allocation: t.i32()');
+  });
+});
+
+describe('run_deliberation reducer — fallback mode', () => {
+  it('inserts deterministic fallback proposals when configured mode is fallback', () => {
+    const rows = makeRows('deliberation');
+    rows.moduleSettings.push({ id: 1, deliberation_mode: 'fallback' });
+    const faction = rows.factions[0];
+    const session = rows.sessions[0];
+    const beforeProposalCount = rows.proposals.filter(
+      proposal => proposal.faction_id === faction.id && proposal.turn === session.current_turn
+    ).length;
+
+    runDeliberationReducer(makeDecisionCtx(faction.player_id, rows), {
+      faction_id: faction.id,
+    });
+
+    const fallbackProposals = rows.proposals.filter(
+      proposal => proposal.faction_id === faction.id && proposal.turn === session.current_turn
+    );
+    expect(fallbackProposals.length).toBeGreaterThan(beforeProposalCount);
+
+    expect(rows.llmRequests).toHaveLength(1);
+    const audit = rows.llmRequests[0];
+    expect(audit).toMatchObject({
+      session_id: session.id,
+      faction_id: faction.id,
+      request_type: 'proposals',
+      status: 'completed',
+      error: undefined,
+      error_code: undefined,
+      created_turn: session.current_turn,
+      updated_turn: session.current_turn,
+    });
+    expect(audit.response_json).toBeDefined();
+    const response = JSON.parse(audit.response_json!);
+    expect(response.source).toBe('deterministic_fallback');
+    expect(Array.isArray(response.proposal_ids)).toBe(true);
+    expect(response.proposal_ids.length).toBeGreaterThan(0);
+    expect(JSON.parse(audit.context_json)).toEqual({
+      faction_id: faction.id,
+      mode: 'fallback',
+      request: 'run_deliberation',
+      session_id: session.id,
+      turn: session.current_turn,
+    });
+  });
+
+  it('records failed audit row when fallback has no eligible state and does not stall the turn', () => {
+    const rows = makeRows('deliberation');
+    rows.moduleSettings.push({ id: 1, deliberation_mode: 'fallback' });
+    const faction = rows.factions[0];
+    rows.cities = rows.cities.filter(city => city.faction_id !== faction.id);
+    rows.personnel = rows.personnel.filter(person => person.faction_id !== faction.id);
+
+    expect(() =>
+      runDeliberationReducer(makeDecisionCtx(faction.player_id, rows), {
+        faction_id: faction.id,
+      })
+    ).not.toThrow();
+
+    expect(rows.llmRequests).toHaveLength(1);
+    expect(rows.llmRequests[0]).toMatchObject({
+      session_id: faction.session_id,
+      faction_id: faction.id,
+      request_type: 'proposals',
+      status: 'failed',
+      error_code: 'fallback_unavailable',
+    });
+    expect(rows.llmRequests[0].error).toBeDefined();
+  });
+
+  it('rejects unknown configured modes so secrets cannot bypass the contract', () => {
+    const rows = makeRows('deliberation');
+    rows.moduleSettings.push({ id: 1, deliberation_mode: 'live_via_secret' });
+    const faction = rows.factions[0];
+
+    expect(() =>
+      runDeliberationReducer(makeDecisionCtx(faction.player_id, rows), {
+        faction_id: faction.id,
+      })
+    ).toThrow(/deliberation_mode must be/);
+  });
+});
+
+describe('set_deliberation_mode reducer', () => {
+  it('inserts the singleton settings row when absent', () => {
+    const rows = makeRows('deliberation');
+    const faction = rows.factions[0];
+
+    setDeliberationModeReducer(makeDecisionCtx(faction.player_id, rows), {
+      mode: 'fallback',
+    });
+
+    expect(rows.moduleSettings).toHaveLength(1);
+    expect(rows.moduleSettings[0]).toMatchObject({
+      id: 1,
+      deliberation_mode: 'fallback',
+    });
+  });
+
+  it('updates an existing settings row in place', () => {
+    const rows = makeRows('deliberation');
+    rows.moduleSettings.push({ id: 1, deliberation_mode: 'queue' });
+    const faction = rows.factions[0];
+
+    setDeliberationModeReducer(makeDecisionCtx(faction.player_id, rows), {
+      mode: 'fallback',
+    });
+
+    expect(rows.moduleSettings).toHaveLength(1);
+    expect(rows.moduleSettings[0].deliberation_mode).toBe('fallback');
+  });
+
+  it('rejects unknown modes', () => {
+    const rows = makeRows('deliberation');
+    const faction = rows.factions[0];
+
+    expect(() =>
+      setDeliberationModeReducer(makeDecisionCtx(faction.player_id, rows), {
+        mode: 'live_via_secret',
+      })
+    ).toThrow(/deliberation_mode must be/);
   });
 });
