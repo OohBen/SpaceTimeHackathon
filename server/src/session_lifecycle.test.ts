@@ -245,6 +245,22 @@ function makeJoinResumeCtx(
 }
 
 function makeTurnPhaseCtx(sessions: GameSessionRow[]): WorldUpdateContext {
+  const factionIds = new Set<number>();
+  for (const session of sessions) {
+    if (session.player_a_faction_id !== undefined) factionIds.add(session.player_a_faction_id);
+    if (session.player_b_faction_id !== undefined) factionIds.add(session.player_b_faction_id);
+  }
+  const factions: FactionRow[] = Array.from(factionIds).map(id => ({
+    id,
+    session_id: sessions[0]?.id ?? 1,
+    player_id: { toHexString: () => id.toString().padStart(64, '0') } as Identity,
+    name: `Faction ${id}`,
+    credits: 0,
+    political_capital: 50,
+    doctrine_vector: '{"expansion":0.5,"security":0.5}',
+    control_score: 100,
+    ready_for_turn: false,
+  }));
   return {
     timestamp,
     db: {
@@ -261,11 +277,19 @@ function makeTurnPhaseCtx(sessions: GameSessionRow[]): WorldUpdateContext {
       },
       factions: {
         id: {
-          find: () => null,
-          update: row => row,
+          find: id => factions.find(f => f.id === id) ?? null,
+          update: row => {
+            const idx = factions.findIndex(f => f.id === row.id);
+            if (idx === -1) throw new Error(`faction ${row.id} not found`);
+            factions[idx] = row;
+            return row;
+          },
         },
       },
-      cities: { iter: () => [].values() },
+      cities: {
+        iter: () => [].values(),
+        id: { update: row => row },
+      },
       celestial_bodies: { iter: () => [].values() },
       colony_ships: {
         iter: () => [].values(),
@@ -279,6 +303,7 @@ function makeTurnPhaseCtx(sessions: GameSessionRow[]): WorldUpdateContext {
         iter: () => [].values(),
         id: { update: row => row },
       },
+      proposals: { iter: () => [].values() },
       events: { insert: row => row },
     },
   };

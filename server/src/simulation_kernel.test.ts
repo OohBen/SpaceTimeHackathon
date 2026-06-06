@@ -14,6 +14,7 @@ import type {
   EventRow,
   FleetRow,
   ProjectRow,
+  ProposalRow,
 } from './turn1_seed.js';
 import { buildTurn1Seed } from './turn1_seed.js';
 
@@ -186,6 +187,7 @@ function makeCtx(
       },
       cities: {
         iter: () => cities.values(),
+        id: { update: (row: CityRow) => row },
       },
       celestial_bodies: {
         iter: () => bodies.values(),
@@ -220,6 +222,7 @@ function makeCtx(
           },
         },
       },
+      proposals: { iter: () => ([] as ProposalRow[]).values() },
       events: {
         insert: (row: EventRow) => {
           const inserted = { ...row, id: events.length + 1 };
@@ -580,11 +583,12 @@ describe('simulation_kernel: execution ordering', () => {
             update: (row: FactionRow) => { factionMap.set(row.id, { ...row }); return row; },
           },
         },
-        cities: { iter: () => seed.cities.values() },
+        cities: { iter: () => seed.cities.values(), id: { update: (r: any) => r } },
         colony_ships: { iter: () => [].values(), id: { update: (r: any) => r } },
         celestial_bodies: { iter: () => seed.celestial_bodies.values() },
         fleets: { iter: () => seed.fleets.values(), id: { update: (r: any) => r } },
         projects: { iter: () => [].values(), id: { update: (r: any) => r } },
+        proposals: { iter: () => [].values() },
         events: { insert: (r: any) => ({ ...r, id: 1 }) },
       },
     } as WorldUpdateContext);

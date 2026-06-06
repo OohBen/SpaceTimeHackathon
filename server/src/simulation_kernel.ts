@@ -8,7 +8,9 @@ import type {
   EventRow,
   FleetRow,
   ProjectRow,
+  ProposalRow,
 } from './turn1_seed.js';
+import { applyDoctrineDrift, applyMoraleDrift, applyPoliticalCapitalDecay } from './economy_rules.js';
 
 const FLEET_MIN_STRENGTH = 0;
 const FLEET_MAX_STRENGTH = 1_000;
@@ -39,6 +41,9 @@ export interface WorldUpdateContext {
     };
     cities: {
       iter(): Iterable<CityRow>;
+      id: {
+        update(row: CityRow): CityRow;
+      };
     };
     celestial_bodies: {
       iter(): Iterable<CelestialBodyRow>;
@@ -60,6 +65,9 @@ export interface WorldUpdateContext {
       id: {
         update(row: ProjectRow): ProjectRow;
       };
+    };
+    proposals: {
+      iter(): Iterable<ProposalRow>;
     };
     events: {
       insert(row: EventRow): EventRow;
@@ -93,7 +101,9 @@ export interface WorldUpdateSnapshot {
   contested_body_ids: number[];
 }
 
-// EXECUTION ORDER: city_income -> travel_progress -> colony_arrivals -> fleet_strength -> control_pressure -> project_advancement -> world_advanced_event
+// EXECUTION ORDER: city_income -> morale_drift -> political_capital_decay -> doctrine_drift
+//                  -> travel_progress -> colony_arrivals -> fleet_strength -> control_pressure
+//                  -> project_advancement -> world_advanced_event
 // All steps iterate rows sorted by id ascending for stable, deterministic ordering.
 export function runWorldUpdate(
   ctx: WorldUpdateContext,
@@ -102,6 +112,9 @@ export function runWorldUpdate(
   const factionIds = getSessionFactionIds(session);
 
   const creditIncome = applyCityIncome(ctx, factionIds);
+  applyMoraleDrift(ctx, factionIds);
+  applyPoliticalCapitalDecay(ctx, factionIds);
+  applyDoctrineDrift(ctx, factionIds, session.current_turn - 1);
   const travelProgress = buildTravelProgress(ctx, factionIds, session.current_turn);
   const arrivedShipIds = advanceColonyShips(ctx, factionIds, session.current_turn);
   const fleetStrengthChanges = applyFleetStrengthRules(ctx, factionIds);
