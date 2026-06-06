@@ -12,6 +12,8 @@ import type { EventRow, ProposalRow, TurnSummaryRow } from './turn1_seed.js';
 
 const TURN_LIMIT = 30;
 const DOMINANCE_CONTROL_DELTA = 30;
+const CONTROL_MIN_SCORE = 0;
+const CONTROL_MAX_SCORE = 200;
 
 export interface SimulateTurnInput {
   session_id: number;
@@ -419,6 +421,7 @@ function buildSummaryPayload(
 ): Record<string, unknown> {
   const counts = countFactionProposalOutcomes(ctx, session, faction.id);
   const trigger = findEvent(ctx, session, 'simulation_triggered');
+  const simulationOutputs = readSimulationOutputs(ctx, session);
 
   return {
     acknowledged: false,
@@ -432,10 +435,76 @@ function buildSummaryPayload(
     phase: 'summary',
     proposal_outcomes: counts,
     session_id: session.id,
+    simulation_outputs: simulationOutputs,
     simulation_trigger: trigger ? parsePayload(trigger.payload).trigger : undefined,
     turn: session.current_turn,
     victory,
   };
+}
+
+function readSimulationOutputs(
+  ctx: TurnResolutionContext,
+  session: GameSessionRow
+): Record<string, unknown> | undefined {
+  const event = findEvent(ctx, session, 'world_advanced');
+  if (!event) {
+    return undefined;
+  }
+
+  const payload = parsePayload(event.payload);
+  validateSimulationOutputIdentity(payload, session);
+  validateControlScoreOutputs(payload.control_scores);
+  return payload;
+}
+
+function validateSimulationOutputIdentity(
+  payload: Record<string, unknown>,
+  session: GameSessionRow
+): void {
+  if (payload.session_id !== session.id) {
+    throw new Error(`simulation output session mismatch for session ${session.id}`);
+  }
+  if (payload.turn !== session.current_turn) {
+    throw new Error(`simulation output turn mismatch for session ${session.id}`);
+  }
+}
+
+function validateControlScoreOutputs(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!isRecord(value)) {
+    throw new Error('simulation output control_scores must be an object');
+  }
+
+  for (const [factionId, change] of Object.entries(value)) {
+    if (!isRecord(change)) {
+      throw new Error(`control score output for faction ${factionId} must be an object`);
+    }
+
+    const before = assertFiniteNumber(change.before, `control score before for faction ${factionId}`);
+    const after = assertFiniteNumber(change.after, `control score after for faction ${factionId}`);
+    const delta = assertFiniteNumber(change.delta, `control score delta for faction ${factionId}`);
+
+    if (
+      before < CONTROL_MIN_SCORE ||
+      before > CONTROL_MAX_SCORE ||
+      after < CONTROL_MIN_SCORE ||
+      after > CONTROL_MAX_SCORE
+    ) {
+      throw new Error(`control score output for faction ${factionId} out of bounds`);
+    }
+    if (after - before !== delta) {
+      throw new Error(`control score output for faction ${factionId} delta mismatch`);
+    }
+  }
+}
+
+function assertFiniteNumber(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`simulation output ${label} must be a finite number`);
+  }
+  return value;
 }
 
 function countFactionProposalOutcomes(
