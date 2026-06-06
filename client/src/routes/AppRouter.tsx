@@ -9,10 +9,10 @@ import {
   type SessionBackendResult,
 } from '../session/spacetime';
 import type { PlayerSlot, SetupParams, SetupState } from './types';
+import { usePanelStore, CORE_PANELS, type PanelId } from './panels';
 import './CommandCenterShell.css';
 
 type View = 'landing' | 'setup' | 'game';
-type ShellPanel = 'overview' | 'session-brief';
 
 interface GameRouteParams {
   sessionId: number;
@@ -162,7 +162,7 @@ function GameRoute({
   session: SessionStoreState;
   onBack: () => void;
 }) {
-  const [activePanel, setActivePanel] = useState<ShellPanel>('overview');
+  const { activePanel, setPanel } = usePanelStore();
 
   if (!hasCompleteSessionContext(session)) {
     return (
@@ -186,7 +186,7 @@ function GameRoute({
     <CommandCenterShell
       session={session}
       activePanel={activePanel}
-      onPanelChange={setActivePanel}
+      onPanelChange={setPanel}
       onBack={onBack}
     />
   );
@@ -204,11 +204,11 @@ function CommandCenterShell({
     playerSlot: PlayerSlot;
     playerName: string;
   };
-  activePanel: ShellPanel;
-  onPanelChange: (panel: ShellPanel) => void;
+  activePanel: PanelId;
+  onPanelChange: (panel: PanelId) => void;
   onBack: () => void;
 }) {
-  const panelTitle = activePanel === 'overview' ? 'Command Overview' : 'Session Brief';
+  const activeDef = CORE_PANELS.find((p) => p.id === activePanel) ?? CORE_PANELS[0];
 
   return (
     <div className="command-shell">
@@ -233,55 +233,79 @@ function CommandCenterShell({
       <div className="command-shell__body">
         <aside className="command-shell__sidebar" aria-label="Command sidebar">
           <nav className="command-shell__nav" aria-label="Command panels">
-            <button
-              type="button"
-              className="command-shell__nav-button"
-              aria-pressed={activePanel === 'overview'}
-              onClick={() => onPanelChange('overview')}
-            >
-              Command Overview
-            </button>
-            <button
-              type="button"
-              className="command-shell__nav-button"
-              aria-pressed={activePanel === 'session-brief'}
-              onClick={() => onPanelChange('session-brief')}
-            >
-              Session Brief
-            </button>
+            {CORE_PANELS.map((panel) => (
+              <button
+                key={panel.id}
+                type="button"
+                className="command-shell__nav-button"
+                aria-pressed={activePanel === panel.id}
+                onClick={() => onPanelChange(panel.id)}
+              >
+                {panel.label}
+              </button>
+            ))}
           </nav>
         </aside>
 
         <section className="command-shell__panel" aria-label="Command content panel">
           <div className="command-shell__panel-heading">
             <p className="command-shell__eyebrow">Active panel</p>
-            <h3>{panelTitle}</h3>
+            <h3>{activeDef.label}</h3>
           </div>
-          {activePanel === 'overview' ? (
-            <div className="command-shell__status-grid">
-              <div>
-                <span>Session</span>
-                <strong>{session.sessionId}</strong>
-              </div>
-              <div>
-                <span>Slot status</span>
-                <strong>Joined</strong>
-              </div>
-              <div>
-                <span>Commander</span>
-                <strong>{session.playerName}</strong>
-              </div>
-            </div>
-          ) : (
-            <div className="command-shell__brief">
-              <p>
-                Session Brief for {session.playerName}. Share Session {session.sessionId} with
-                the opposing browser and keep this shell open during panel work.
-              </p>
-            </div>
-          )}
+          <PanelContent panel={activePanel} session={session} />
         </section>
       </div>
+    </div>
+  );
+}
+
+type SessionRouteState = SessionStoreState & {
+  sessionId: number;
+  factionId: number;
+  playerSlot: PlayerSlot;
+  playerName: string;
+};
+
+function PanelContent({
+  panel,
+  session,
+}: {
+  panel: PanelId;
+  session: SessionRouteState;
+}) {
+  if (panel === 'overview') {
+    return (
+      <div className="command-shell__status-grid">
+        <div>
+          <span>Session</span>
+          <strong>{session.sessionId}</strong>
+        </div>
+        <div>
+          <span>Slot status</span>
+          <strong>Joined</strong>
+        </div>
+        <div>
+          <span>Commander</span>
+          <strong>{session.playerName}</strong>
+        </div>
+      </div>
+    );
+  }
+
+  if (panel === 'session-brief') {
+    return (
+      <div className="command-shell__brief">
+        <p>
+          Session Brief for {session.playerName}. Share Session {session.sessionId} with
+          the opposing browser and keep this shell open during panel work.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="command-shell__brief" aria-label={`${panel} panel placeholder`}>
+      <p>This panel is not yet available.</p>
     </div>
   );
 }
