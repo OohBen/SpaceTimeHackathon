@@ -21,6 +21,7 @@ import { tables } from '../module_bindings';
 import type {
   Factions,
   GameSessions,
+  IntelligenceRecords,
   LlmRequests,
   Personnel,
   Proposals,
@@ -28,6 +29,8 @@ import type {
 } from '../module_bindings/types';
 import {
   sessionStore,
+  type FactionRow,
+  type IntelligenceRecordRow,
   type LlmRequestRow,
   type PersonnelRow,
   type PlayerSlotRow,
@@ -68,6 +71,7 @@ export interface LiveTableRows {
   personnel?: readonly Personnel[];
   turnSummaries: readonly TurnSummaries[];
   llmRequests: readonly LlmRequests[];
+  intelligenceRecords?: readonly IntelligenceRecords[];
   identity: string | null;
 }
 
@@ -104,6 +108,15 @@ export function buildLiveSnapshot(rows: LiveTableRows): SubscriptionSnapshot {
   const llmRequests: LlmRequestRow[] = rows.llmRequests
     .filter(request => ownedFactionIds.has(request.factionId))
     .map(translateLlmRequest);
+  // Operational faction rows feed the tactical bundle's self/enemy faction,
+  // doctrine vector, credits, and control score (selectFactionById /
+  // selectFactionsForSession). Index every faction in the session — the enemy
+  // row is needed to derive contested bodies and the doctrine comparison.
+  const operationalFactions: FactionRow[] = factions.map(translateOperationalFaction);
+  // Intelligence the current player has gathered (observer = owned faction).
+  const intelligenceRecords: IntelligenceRecordRow[] = (rows.intelligenceRecords ?? [])
+    .filter(record => ownedFactionIds.has(record.observerFactionId))
+    .map(translateIntelligenceRecord);
 
   return {
     sessions,
@@ -114,6 +127,8 @@ export function buildLiveSnapshot(rows: LiveTableRows): SubscriptionSnapshot {
     personnel,
     turnSummaries,
     llmRequests,
+    factions: operationalFactions,
+    intelligenceRecords,
   };
 }
 
@@ -133,6 +148,7 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
   const [personnel, personnelReady] = useTable(tables.personnel);
   const [turnSummaries, turnSummariesReady] = useTable(tables.turn_summaries);
   const [llmRequests, llmRequestsReady] = useTable(tables.llm_requests);
+  const [intelligenceRecords, intelligenceRecordsReady] = useTable(tables.intelligence_records);
 
   useEffect(() => {
     store.getState().actions.setConnection({
@@ -149,7 +165,8 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
       proposalsReady &&
       personnelReady &&
       turnSummariesReady &&
-      llmRequestsReady;
+      llmRequestsReady &&
+      intelligenceRecordsReady;
     if (!ready) {
       store.getState().actions.setProposalsSubscription({ status: isActive ? 'loading' : 'idle' });
       return;
@@ -162,6 +179,7 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
       personnel,
       turnSummaries,
       llmRequests,
+      intelligenceRecords,
       identity: identityHex,
     });
     store.getState().actions.hydrateSubscription(snapshot);
@@ -170,6 +188,8 @@ export function useLiveSessionBridge(store: SessionStore = sessionStore): void {
     factions,
     factionsReady,
     identityHex,
+    intelligenceRecords,
+    intelligenceRecordsReady,
     isActive,
     llmRequests,
     llmRequestsReady,
@@ -308,6 +328,31 @@ function translateLlmRequest(request: LlmRequests): LlmRequestRow {
     attemptCount: request.attemptCount,
     createdTurn: request.createdTurn,
     updatedTurn: request.updatedTurn,
+  };
+}
+
+function translateOperationalFaction(faction: Factions): FactionRow {
+  return {
+    id: String(faction.id),
+    sessionId: String(faction.sessionId),
+    name: faction.name,
+    credits: faction.credits,
+    politicalCapital: faction.politicalCapital,
+    doctrineVector: faction.doctrineVector,
+    controlScore: faction.controlScore,
+    readyForTurn: faction.readyForTurn,
+  };
+}
+
+function translateIntelligenceRecord(record: IntelligenceRecords): IntelligenceRecordRow {
+  return {
+    id: String(record.id),
+    observerFactionId: String(record.observerFactionId),
+    targetFactionId: String(record.targetFactionId),
+    intelType: record.intelType,
+    value: record.value,
+    accuracy: record.accuracy,
+    acquiredTurn: record.acquiredTurn,
   };
 }
 
